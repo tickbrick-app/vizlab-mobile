@@ -1,4 +1,4 @@
-/* VizLab 3.69.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
+/* VizLab 3.70.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
 
 /* ===== web/data.js ===== */
 // VizLab static data
@@ -136,10 +136,13 @@ const I = {
 };
 
 window.VLD = {
-  VERSION: "3.69.0",
+  VERSION: "3.70.0",
   // v3.69 (FR20): what changed, in plain words, 2-5 lines per version. The first open after an update shows "VizLab updated:
   // see what's new" (shell.js), and the Tutorial starts with a What's new chapter. Add the new version's lines at every release.
   NEWS: {
+    "3.70.0": [
+      "Update the design: when the client changes an approved render's design, right-click the render → Update the design…, give it the new SketchUp view (or drawing), and the render is redrawn on the new design with the same materials, light, sky and camera. Only the parts that changed are new; the rest stays exactly as approved.",
+    ],
     "3.69.0": [
       "Simpler to start: a welcome card on the first day, and Render works on a bare SketchUp view with nothing typed (it adds View to render).",
       "Bigger icons, pictures and text everywhere, with a word under every toolbar button (Settings › Preferences › Show labels on toolbars turns the words off).",
@@ -3235,6 +3238,8 @@ function nodeMenu(n) {
   if (model) { T(["Use this view (a picture to render)", () => useView(n)], "dr"); T(["Send to SketchUp…", () => V.sendModel(n, "sketchup")], "save"); if (!V.hostSeen || V.hostSeen("revit")) T(["Send to Revit…", () => V.sendModel(n, "revit")], "save"); } // (v3.69 T11/D12: Revit once a Revit has connected; always in the Send dialog and Ctrl+K)
   if (img) T(["Draw on the picture", () => V.setViewerMode("draw"), "D"], "edit");
   if (img && kind === "render" && V.fixArea) T(["Fix one area…", () => V.fixArea(n)], "edit"); // D7 (draw.js V.fixArea)
+  if (img && done && V.openRedesign && V.redesignSource(n)) T(["Update the design…", () => V.openRedesign(n)], "edit"); // v3.70 redesign.js (the client changed the design)
+  else if (img && done && V.openRedesign && V.redesignMatch && V.redesignMatch(n)) g.edit.unshift([`Update ${V.nodeTitle(V.redesignMatch(n).render)} with this design…`, () => V.openRedesign(n)]);
   if (img && kind !== "view") T(["Upscale ×2", () => V.upscale2x(n)], "edit");
   if (!cap && cmpTop) T(cmpTop, "cmp");
   if (done && fam > 1) T(["Review versions", () => V.openReview(), "R"], "cmp");
@@ -5830,19 +5835,23 @@ async function protectNode(n, base) {
 // painted surfaces themselves stay whole, even where they run off the picture's edge: a canvas blur fades there). A
 // result of another shape can't be lined up, so it is kept whole. PNG in cloud mode (a stored file), so the rest of the
 // picture stays exactly as it was; JPEG 0.95 in browser-only mode, where the picture lives in the project itself.
-async function protectZones(n, base, mask) {
+// v3.70 (redesign.js, Update the design): o.type = the file type (PNG for these in every mode, so the parts that didn't
+// change stay bit-identical to the approved render); o.grow / o.soft = the margin and feather as fractions of the long side (wider, so
+// the AI's part blends into the approved render), o.done = the message when it worked, o.shape = when the shape was off
+async function protectZones(n, base, mask, o = {}) {
   try {
     const [a, b, m] = await Promise.all([V.loadImg(base), V.loadImg(n.url), V.loadImg(mask)]), W = a.naturalWidth, H = a.naturalHeight, L = Math.max(W, H);
-    if (Math.abs(b.naturalWidth / b.naturalHeight / (W / H) - 1) > 0.01) V.toast("The AI changed the picture's shape, so the painted areas couldn't be lined up: the whole result was kept", false, 8000);
+    if (Math.abs(b.naturalWidth / b.naturalHeight / (W / H) - 1) > 0.01) V.toast(o.shape || "The AI changed the picture's shape, so the painted areas couldn't be lined up: the whole result was kept", false, 8000);
     else {
       const c = mk(W, H), cx = c.getContext("2d", { willReadFrequently: true }); cx.imageSmoothingEnabled = false; cx.drawImage(m, 0, 0, W, H);
       const d = cx.getImageData(0, 0, W, H); for (let i = 0; i < d.data.length; i += 4) { d.data[i + 3] = d.data[i]; d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; } cx.putImageData(d, 0, 0); // white, alpha = the mask
-      const g = mk(W, H), gx = g.getContext("2d", { willReadFrequently: true }); gx.filter = `blur(${Math.max(3, Math.round(L * 0.006))}px)`; gx.drawImage(c, 0, 0);
+      const g = mk(W, H), gx = g.getContext("2d", { willReadFrequently: true }); gx.filter = `blur(${Math.max(3, Math.round(L * (o.grow || 0.006)))}px)`; gx.drawImage(c, 0, 0);
       const gd = gx.getImageData(0, 0, W, H); for (let i = 3; i < gd.data.length; i += 4) gd.data[i] = gd.data[i] > 10 ? 255 : 0; gx.putImageData(gd, 0, 0);
-      const f = mk(W, H), fx = f.getContext("2d"); fx.filter = `blur(${Math.max(2, Math.round(L * 0.004))}px)`; fx.drawImage(g, 0, 0);
+      const f = mk(W, H), fx = f.getContext("2d"); fx.filter = `blur(${Math.max(2, Math.round(L * (o.soft || 0.004)))}px)`; fx.drawImage(g, 0, 0);
       fx.filter = "none"; fx.drawImage(c, 0, 0); // every painted pixel kept in full
-      n.url = (await V.api("upload", { dataUrl: await V.keepChanges(base, n.url, f, V.cfg.mode === "cloud" ? "image/png" : "image/jpeg") })).url;
-      n.meta = [n.meta, "only the painted surfaces changed"].filter(Boolean).join(" · ");
+      n.url = (await V.api("upload", { dataUrl: await V.keepChanges(base, n.url, f, o.type || (V.cfg.mode === "cloud" ? "image/png" : "image/jpeg")) })).url;
+      const said = o.meta || "only the painted surfaces changed"; if (!String(n.meta || "").includes(said)) n.meta = [n.meta, said].filter(Boolean).join(" · "); // (once, after a Try again too)
+      if (o.done) V.toast(o.done, false, 4500);
     }
   } catch (e) { console.warn("protect zones", e); V.toast("Couldn't put the result back through the painted areas, so the whole AI result was kept: " + e.message, true, 0); }
   n.thumb = await V.makeThumb(n.url); V.render(); V.changed(); if (V.sel.includes(n.id)) V.selectionChanged(true);
@@ -6063,6 +6072,9 @@ async function finishCutout(n, st) {
 V.postJob = (n, st) => {
   if (st.cutout && st.key) { finishIsolate(n, st); return true; }
   if (st.cutout) { finishCutout(n, st); return true; }
+  // v3.70 Update the design: the approved render (image 2, keepFrom 1) is kept outside the parts that changed, whatever the
+  // Draw shield says (it has its own switch in the dialog)
+  if (st.redesign && st.keepMask && n.retry && n.retry.images && n.retry.images[st.keepFrom || 0]) { protectZones(n, n.retry.images[st.keepFrom || 0], st.keepMask, { grow: 0.012, soft: 0.012, type: "image/png", meta: "rest kept from the approved render", done: "Updated: only the parts that changed were redrawn; the rest is the approved render", shape: "The AI changed the picture's shape, so it couldn't be lined up with the approved render: the whole result was kept" }); return true; }
   if (st.protect && st.keepMask && V.protectOn() && n.retry && n.retry.images && n.retry.images[0]) { protectZones(n, n.retry.images[0], st.keepMask); return true; }
   if ((st.protect || st.drawing) && V.protectOn() && n.retry && n.retry.images && n.retry.images[0]) { protectNode(n, n.retry.images[0]); return true; }
   return false;
@@ -9465,10 +9477,11 @@ V.captureOf = (n) => {
   for (let x = mainUp(n), seen = new Set([n.id]); x && !seen.has(x.id); seen.add(x.id), x = mainUp(x)) if (ok(x)) return x;
   return null;
 };
+V.mainInput = mainUp; // (v3.70 redesign.js: the picture a render was made from, when it isn't a SketchUp view)
 // the render made from the view c on n's main chain: the step nearest the view that Make produced (not an elevation,
 // placing, upscale, Google 4K version, touch-up or cut-out: their prompts are captions, not the render's words)
 const isUpscale = (x) => x.kind === "upscale" || (!!x.retry && x.retry.prompt === UP_PROMPT);
-const made = (x) => x.kind === "render" || x.kind === "create" || !!(x.retry && x.retry.settings && x.retry.settings.words != null); // Make, Draw notes and Batch record the words
+const made = (x) => !(x.retry && x.retry.settings && x.retry.settings.redesign) && (x.kind === "render" || x.kind === "create" || !!(x.retry && x.retry.settings && x.retry.settings.words != null)); // Make, Draw notes and Batch record the words (v3.70: an "Update the design" result's words are for that update only)
 const renderFrom = (n, c) => {
   const chain = [];
   for (let x = n, seen = new Set(); x && x.id !== c.id && !seen.has(x.id); seen.add(x.id), x = mainUp(x)) chain.push(x);
@@ -9574,7 +9587,7 @@ const namedTexts = () => namedT || (namedT = [...D.imagePresets, ...D.videoPrese
 V.nodeSub = (n) => {
   if (!n) return "";
   const raw = String(n.prompt || ""), tag = /\[Scene: ([^\]]*)\]/.exec(raw);
-  let words = raw.replace(/\[(?:Area|Draw|Materials|Scene: [^\]]*)\]\s*/g, "").trim();
+  let words = raw.replace(/\[(?:Area|Draw|Materials|Update|Scene: [^\]]*)\]\s*/g, "").trim();
   for (const p of namedTexts()) if (words.includes(p.p)) words = tidy(words.split(p.p).join(" " + p.name + ", ")).replace(/,\s*$/, "").replace(/,\s*,/g, ","); // (A2: a preset's whole wording reads as its name, "View to render")
   const sc = (n.scene && n.scene.name) || (tag && tag[1]) || "";
   return [sc, words === "Follow annotations" ? "follows the Draw notes" : words].filter(Boolean).join(" · ").slice(0, 120);
@@ -9607,6 +9620,9 @@ V.lockState = (main = mainTarget(), text = V.promptText()) => {
   const cam = D.imagePresets.find((p) => CAMERA_IDS.has(p.id) && p.p && text.includes(p.p));
   return { kind: cam ? "geometry" : "full", mode, moving: cam ? cam.name : "" };
 };
+// v3.70 (redesign.js, Update the design): the same lock and final check wording, and the same exterior / interior test
+V.lockMode = (text) => (textsOf(INT_ONLY).some((t) => String(text || "").includes(t)) || (V.envTest && String(text || "").includes(V.envTest.MODES.int.intro)) ? "int" : "ext");
+V.lockText = (mode) => ({ geo: GEO[mode] || GEO.ext, final: FINAL[mode] || FINAL.ext });
 // extra: a sentence that goes after the lock, before the camera line (v3.68 a material render's MAT_LOCK)
 function lockPrompt(st, prompt, extra = "") {
   let p = prompt;
@@ -9702,6 +9718,7 @@ const sceneSettings = (s, words, sc) => ({ ...s, words, ...(sc ? { scene: sc.nam
 const MADE_LINES = () => [GEO.ext, GEO.int, ...(V.envKeepCamText ? [V.envKeepCamText("ext"), V.envKeepCamText("int")] : []), "Only the viewpoint changes, as described; the building's geometry stays identical.", "Image 1 is the main image to work on; the other images are references."];
 V.historyPrompt = (j) => {
   const s = j.settings || {};
+  if (s.redesign) return `[Update] ${s.words || s.redesign.what || "new design"}`.trim(); // v3.70 Update the design
   if (s.words != null) return `${s.drawing ? "[Draw] " : s.materials ? "[Materials] " : ""}${s.scene ? `[Scene: ${s.scene}] ` : ""}${s.words || (s.drawing ? "Follow annotations" : s.materials && !s.scene ? MAT_SHOWN[s.keepMask ? "change" : "capture"] : "")}`.trim();
   let t = String(j.prompt || "").replace(/\nFinal check before you finish: [^\n]*$/, "").replace(/\n\nProject (look \(every image|library \(use these exactly\))[\s\S]*$/, ""); // an older job: the AI prompt
   t = t.replace(/^Image 1 is the original[\s\S]*?(Additional instructions: |$)/, "[Draw] ").replace(/^Use the attached images? only as references? for style, materials and mood, and create a new image\.\n/, "");
@@ -13202,6 +13219,8 @@ const ACTIONS = [
   ["Quick PDF (one picture a page)", "", () => V.exportPDF(V.selNodes()), () => V.selNodes().some((x) => x.status === "done" && (x.type === "image" || x.thumb)), "Export to PDF, one page per selected picture, with names, the project and the Clarman logo", was("Export to PDF")],
   ["Prompt record PDF (for the office)", "", () => V.exportPDF(V.selNodes(), { record: true }), () => V.selNodes().some((x) => x.status === "done" && (x.type === "image" || x.thumb)), "PDF with each picture's prompt, scene and settings, a record of how it was made", P],
   ["Photomontage: put the proposal in…", "", () => V.openMontage(img()), () => !!V.openMontage && V.G.nodes.some((n) => n.type === "image" && n.status === "done"), "Photomontage, site photo, proposal, planning, verified view, wireline, ghosted massing, put the SketchUp view into a photo", { cv: true }],
+  // v3.70 (redesign.js): a render the client approved, redrawn on a changed design with everything else kept
+  ["Update the design…", "", () => V.openRedesign(img()), () => !!V.openRedesign && V.G.nodes.some((n) => n.type === "image" && n.status === "done" && V.redesignSource(n)), "Update the render with a new design, the client wants changes, design change, revised elevation, keep the approved render's look, materials, light, sky, only the changed parts redrawn", { cv: true }],
   ["Download with the Clarman logo", "", () => V.downloadNode(img(), { logo: true }), () => !!img(), "Logo stamp, download", P],
   ["Download without the logo", "", () => V.downloadNode(img(), { logo: false }), () => !!img(), "Clean download, no logo", P],
   ["Review side by side (2-4 versions)", "", () => V.openReview({ sideBySide: true }), () => !!sel(), "Compare options, grid, versions next to each other, pick the best", P],
@@ -17150,6 +17169,12 @@ const prevVersion = (n) => {
 const NEXT = (n) => {
   const out = [], k = V.pictureKind(n), L = V.G.look;
   const add = (label, sub, run, same) => { if (!out.some((o) => o[0] === label)) out.push([label, sub, run, same]); }; // (v3.69 C1: one chip per label; a saved picture with layers offered Compare twice)
+  // v3.70 (redesign.js) a result of Update the design: the approved render it updates, side by side, first
+  const rd = n.retry && n.retry.settings && n.retry.settings.redesign, rdA = rd && V.node(rd.approved);
+  if (rdA && rdA.status === "done") add("Compare with the approved render", "", () => V.compareWith(n, rdA));
+  // a new view (or picture) that matches the design an earlier render was made from: update that render with it
+  const rdM = (k === "view" || k === "photo" || k === "drawing") && V.redesignMatch ? V.redesignMatch(n) : null;
+  if (rdM) add(`Update ${V.nodeTitle(rdM.render)} with this design…`, "", () => V.openRedesign(n));
   // a favourite, in a project with a look but no reference picture yet (J-presentation-P5)
   if (n.fav && n.type === "image" && L && (L.on || L.name || L.notes || L.materials) && !L.ref && !L.refUrl && k !== "view") add("Use as the project look", "", () => STEP.lookRef(n));
   // a picture with Draw layers: keep the result, see what changed (J-photoedit-S4)
@@ -17182,6 +17207,7 @@ const NEXT = (n) => {
     const mats = par && /^\[Materials\]/.test(n.prompt || "") ? V.children(par.id).filter((m) => m.type === "image" && m.status === "done" && /^\[Materials\]/.test(m.prompt || "")) : [];
     if (mats.length > 1) add(`Compare options (${mats.length})`, "", () => V.openReview({ sideBySide: true }));
     add("Fix one area…", "", () => STEP.fixArea(n));
+    if (V.redesignSource && V.redesignSource(n)) add("Update the design…", "", () => V.openRedesign(n)); // v3.70 the client changed the design
     const prev = (k === "render" || k === "new") && prevVersion(n);
     if (prev) add(`Compare with ${V.nodeTitle(prev)}`, "", () => V.compareWith(n, prev));
     if (V.tab === "video") add("Pick a camera move", "", () => seeIt("#vidPresets", "start")); // C1 (J-video3d N4)
@@ -17201,6 +17227,7 @@ const NEXT = (n) => {
     add("Convert to CAD (DXF)…", "", () => V.openCad(n));
     add("Elevations to 3D model…", "", () => V.openElev3d([n]));
     if (preset("d-elev")) add("Render this elevation…", "", () => usePre(n, "d-elev"));
+    if (k === "elevation" && V.redesignSource && V.redesignSource(n)) add("Update the design…", "", () => V.openRedesign(n)); // v3.70
     add("Add to sheets…", "", () => V.openSheets([n]));
   } else if (k === "cutout") {
     add("Place into a picture…", "", () => V.openPlace(n, null));
@@ -17863,6 +17890,445 @@ if (fill0) V.openFill = (tpl, title, ...rest) => {
   if (p && title === p.name && tpl === (p.fill || p.p) && !modal) return V.openMontage();
   return fill0(tpl, title, ...rest);
 };
+})();
+
+;
+
+/* ===== web/redesign.js ===== */
+/* VizLab v3.70: Update the design (Stephen, 1 Nov 2026: "i want it to inherit everything about the original image apart from
+   the design"). A render the client approved, the design it was made from (found by itself: V.captureOf, else the render's
+   main input chain) and the new design (capture the SketchUp view now, a picture on the canvas, or a file / PDF page).
+   - Change preview: the two designs are compared in the page (free). Same view: lined up as they are, the new one scaled to
+     the old one's size; another shape, or a poor match: a small search for a shift and scale that lines them up (coarse at
+     128 px, then 384 px); nothing good: "The two designs don't line up, so the whole picture will be redrawn". What differs
+     (blurred colour difference, specks dropped, grown ~2.5%, holes filled) is outlined on the approved render with "These
+     parts changed: N% of the picture".
+   - The job: ONE edit job (V.submitJob) with images [1 the new design, 2 the approved render, 3 the original design]. Image 1
+     is the new design because it is the geometry truth (so panel.js's geometry lock and final check read as they do for a
+     render: "Image 1 is a view of our 3D model..."), the result's main input is the new design (V.captureOf finds it, so a
+     later update starts from it), and when the designs line up it is sent redrawn into the approved render's exact frame
+     and shape, so the AI's picture comes back the approved render's shape. Image 2 is the look to copy and the picture kept;
+     image 3 lets the AI see what changed ("do to image 1 what was done to image 3 to make image 2"). Three pictures suit
+     every engine (ChatGPT Images through Codex takes 4, in order; FLUX gets @ImageN).
+   - Keep the rest (on by default): settings.keepMask (the changed parts, at the approved render's size) + keepFrom 1, so
+     cutout.js V.postJob puts the AI's picture back only through those parts (grown and feathered 1.2% so the edges blend),
+     and everything else is the approved render's own pixels. Skipped when the designs don't line up, the approved render is
+     another shape than its design, or more than 60% changed (then the AI's whole picture is kept, and the dialog says so).
+   - Result: "<approved render> – updated design", joined to the new design and the approved render; settings.redesign
+     records what went in; History "[Update] ..."; What next offers "Compare with the approved render" first. */
+(() => {
+const V = window.V, D = V.D, { $, h } = V;
+const mk = (w, hh) => { const c = document.createElement("canvas"); c.width = Math.max(1, w); c.height = Math.max(1, hh); return c; };
+const kindOf = (n) => (n && V.pictureKind ? V.pictureKind(n) : null);
+const nameOf = (n) => (n && V.nodeTitle ? V.nodeTitle(n) : (n && n.label) || "") || "Picture";
+const pics = () => V.visibleNodes().filter((n) => n.type === "image" && n.status === "done" && n.url);
+const RENDERS = /^(render|upscale|touchup|elevation)$/, DESIGNS = /^(view|photo|drawing)$/;
+const isDesign = (n) => !!n && n.type === "image" && n.status === "done" && !!n.url && DESIGNS.test(kindOf(n));
+const KEEP_MAX = 0.6, SHAPE_TOL = 0.02, TH = 34;
+
+// the design a render was made from: its SketchUp / Revit view, else the photo or drawing (PDF page) up its main input chain
+V.redesignSource = (r) => {
+  if (!r || r.type !== "image" || r.status !== "done" || !RENDERS.test(kindOf(r))) return null;
+  const c = V.captureOf && V.captureOf(r); if (c) return c;
+  for (let x = V.mainInput && V.mainInput(r), seen = new Set([r.id]); x && !seen.has(x.id); seen.add(x.id), x = V.mainInput(x)) if (isDesign(x)) return x;
+  return null;
+};
+
+// ---------- comparing two designs ----------
+const rgb = (im, W, H, blur, T) => { // the picture drawn W x H (T: placed by a transform, on white), blurred
+  const c = mk(W, H), x = c.getContext("2d", { willReadFrequently: true });
+  if (T) { x.fillStyle = "#fff"; x.fillRect(0, 0, W, H); }
+  if (blur) x.filter = `blur(${blur}px)`;
+  if (T) place(x, im, W, H, T); else x.drawImage(im, 0, 0, W, H);
+  return x.getImageData(0, 0, W, H).data;
+};
+// T: { stretch } (the new design scaled to the old one's frame), or { s, x0, y0 }: its width as a share of the old one's,
+// its top-left corner as shares of the old one's width and height (its own shape kept)
+const place = (x, im, W, H, T) => (T.stretch ? x.drawImage(im, 0, 0, W, H) : x.drawImage(im, T.x0 * W, T.y0 * H, T.s * W, T.s * W * (im.naturalHeight / im.naturalWidth)));
+const differ = (A, i, B, j) => Math.abs(A[i] - B[j]) > TH || Math.abs(A[i + 1] - B[j + 1]) > TH || Math.abs(A[i + 2] - B[j + 2]) > TH;
+// the share of the old design's pixels that don't match (B placed at dx, dy; pixels B doesn't cover count as not matching)
+function miss(A, W, H, B, bw, bh, dx, dy, step) {
+  let bad = 0, tot = 0;
+  for (let y = 0; y < H; y += step) {
+    const by = y - dy;
+    for (let x = 0; x < W; x += step) {
+      tot++; const bx = x - dx;
+      if (by < 0 || by >= bh || bx < 0 || bx >= bw) { bad++; continue; }
+      if (differ(A, (y * W + x) * 4, B, (by * bw + bx) * 4)) bad++;
+    }
+  }
+  return bad / tot;
+}
+const frameOf = (im, L) => { const s = L / Math.max(im.naturalWidth, im.naturalHeight); return [Math.max(8, Math.round(im.naturalWidth * s)), Math.max(8, Math.round(im.naturalHeight * s))]; };
+// the best shift and scale of N over O: a coarse search, then a fine one around the best. Returns { T, m (mismatch at 384 px) }
+function register(O, N) {
+  const rN = N.naturalHeight / N.naturalWidth;
+  const best = { m: 2 };
+  // coarse: 128 px, scales 2% apart between "same width" and "same height" (+-20%), shifts +-12%
+  const [Wc, Hc] = frameOf(O, 128), A = rgb(O, Wc, Hc, 1);
+  const sW = 1, sH = Hc / rN / Wc, lo = Math.min(sW, sH) * 0.8, hi = Math.max(sW, sH) * 1.2;
+  for (let s = lo; s <= hi; s *= 1.02) {
+    const bw = Math.max(4, Math.round(s * Wc)), bh = Math.max(4, Math.round(s * Wc * rN)), B = rgb(N, bw, bh, 1);
+    const cx = Math.round((Wc - bw) / 2), cy = Math.round((Hc - bh) / 2), rx = Math.ceil(Wc * 0.12), ry = Math.ceil(Hc * 0.12);
+    for (let dy = cy - ry; dy <= cy + ry; dy++) for (let dx = cx - rx; dx <= cx + rx; dx++) {
+      const m = miss(A, Wc, Hc, B, bw, bh, dx, dy, 2);
+      if (m < best.m) Object.assign(best, { m, s, x0: dx / Wc, y0: dy / Hc });
+    }
+  }
+  // fine: 384 px, +-3% in 0.5% steps, +-4 px
+  const [Wf, Hf] = frameOf(O, 384), F = rgb(O, Wf, Hf, 1.5), fine = { m: 2 };
+  for (let k = -6; k <= 6; k++) {
+    const s = best.s * (1 + k * 0.005), bw = Math.max(4, Math.round(s * Wf)), bh = Math.max(4, Math.round(s * Wf * rN)), B = rgb(N, bw, bh, 1.5);
+    const cx = Math.round(best.x0 * Wf), cy = Math.round(best.y0 * Hf);
+    for (let dy = cy - 4; dy <= cy + 4; dy++) for (let dx = cx - 4; dx <= cx + 4; dx++) {
+      const m = miss(F, Wf, Hf, B, bw, bh, dx, dy, 2);
+      if (m < fine.m) Object.assign(fine, { m, s, x0: dx / Wf, y0: dy / Hf });
+    }
+  }
+  return { T: { s: fine.s, x0: fine.x0, y0: fine.y0 }, m: fine.m };
+}
+// the old and new design at 384 px, the new one stretched to the old one's frame: the share that doesn't match
+function sameFrameMiss(O, N, L = 384, blur = 1.5) {
+  const [W, H] = frameOf(O, L); return miss(rgb(O, W, H, blur), W, H, rgb(N, W, H, blur), W, H, 0, 0, 2);
+}
+// what changed, at 768 px in the old design's frame: a 0/1 mask grown ~2.5% with its holes filled
+function changed(O, N, T) {
+  // (the same view: 1024 px and a light blur, so a thin new line such as a glazing bar on a dark door still shows; lined up
+  // by a shift and scale: 768 px and more blur, as resampling softens every edge a little)
+  const bl = T.stretch ? 0.7 : 1.5, [W, H] = frameOf(O, T.stretch ? 1024 : 768), A = rgb(O, W, H, bl), B = rgb(N, W, H, bl, T), P = W * H, m = new Uint8Array(P);
+  for (let p = 0, i = 0; p < P; p++, i += 4) if (differ(A, i, B, i)) m[p] = 1;
+  if (!T.stretch) { // where the new design doesn't reach
+    const x0 = Math.round(T.x0 * W), y0 = Math.round(T.y0 * H), x1 = Math.round(x0 + T.s * W), y1 = Math.round(y0 + T.s * W * (N.naturalHeight / N.naturalWidth));
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (x < x0 || x >= x1 || y < y0 || y >= y1) m[y * W + x] = 1;
+  }
+  // specks (anti-aliasing, a pixel's shift) dropped: changes smaller than 0.12% of the picture. On the same view (nothing
+  // resampled, so unchanged edges match exactly) a thin change that runs 1.5% of the picture or more stays: a new
+  // glazing bar or mullion is a line, not a speck
+  const lab = new Int32Array(P), st = new Int32Array(P), minA = Math.max(12, P * 0.0012), minL = T.stretch ? Math.round(Math.max(W, H) * 0.015) : 1e9; let id = 0, raw = 0;
+  for (let p = 0; p < P; p++) {
+    if (!m[p] || lab[p]) continue;
+    id++; let top = 0; st[top++] = p; lab[p] = id; const comp = []; let bx0 = W, bx1 = 0, by0 = H, by1 = 0;
+    while (top) { const q = st[--top]; comp.push(q); const x = q % W, y = (q / W) | 0; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y;
+      if (x > 0 && m[q - 1] && !lab[q - 1]) { lab[q - 1] = id; st[top++] = q - 1; }
+      if (x < W - 1 && m[q + 1] && !lab[q + 1]) { lab[q + 1] = id; st[top++] = q + 1; }
+      if (y > 0 && m[q - W] && !lab[q - W]) { lab[q - W] = id; st[top++] = q - W; }
+      if (y < H - 1 && m[q + W] && !lab[q + W]) { lab[q + W] = id; st[top++] = q + W; } }
+    if (comp.length < minA && Math.max(bx1 - bx0, by1 - by0) < minL) comp.forEach((q) => (m[q] = 0)); else raw += comp.length;
+  }
+  // grown by 2.5% of the long side (a square), so the parts round a change are redrawn with it
+  const r = Math.max(4, Math.round(Math.max(W, H) * 0.025)), g = new Uint8Array(P), out = new Uint8Array(P);
+  for (let y = 0; y < H; y++) { let run = 0; const o = y * W;
+    for (let x = -r; x < W; x++) { if (x + r < W && m[o + x + r]) run++; if (x - r - 1 >= 0 && m[o + x - r - 1]) run--; if (x >= 0) g[o + x] = run > 0 ? 1 : 0; } }
+  for (let x = 0; x < W; x++) { let run = 0;
+    for (let y = -r; y < H; y++) { if (y + r < H && g[(y + r) * W + x]) run++; if (y - r - 1 >= 0 && g[(y - r - 1) * W + x]) run--; if (y >= 0) out[y * W + x] = run > 0 ? 1 : 0; } }
+  // holes: unchanged pockets the outside can't reach (inside a moved window) are redrawn too
+  const reach = new Uint8Array(P); let top = 0;
+  const push = (q) => { if (!out[q] && !reach[q]) { reach[q] = 1; st[top++] = q; } };
+  for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (top) { const q = st[--top], x = q % W, y = (q / W) | 0; if (x > 0) push(q - 1); if (x < W - 1) push(q + 1); if (y > 0) push(q - W); if (y < H - 1) push(q + W); }
+  let cnt = 0; for (let p = 0; p < P; p++) { if (!reach[p]) out[p] = 1; cnt += out[p]; }
+  return { W, H, mask: out, frac: cnt / P, raw: raw / P };
+}
+// the mask as a picture: white where changed, black elsewhere, at w x h
+function maskPng(A, w, hh) {
+  const c = mk(A.W, A.H), x = c.getContext("2d"), im = x.createImageData(A.W, A.H);
+  for (let p = 0; p < A.W * A.H; p++) { const v = A.mask[p] ? 255 : 0, i = p * 4; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+  x.putImageData(im, 0, 0);
+  const o = mk(w, hh), ox = o.getContext("2d"); ox.imageSmoothingEnabled = false; ox.drawImage(c, 0, 0, w, hh);
+  return o.toDataURL("image/png");
+}
+// amber outlines (and a faint fill) of the changed parts, at the mask's size
+function outline(A) {
+  const { W, H, mask } = A, c = mk(W, H), x = c.getContext("2d"), im = x.createImageData(W, H), edge = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
+    const p = y * W + xx; if (!mask[p]) continue;
+    if ((xx > 0 && !mask[p - 1]) || (xx < W - 1 && !mask[p + 1]) || (y > 0 && !mask[p - W]) || (y < H - 1 && !mask[p + W])) edge[p] = 1;
+  }
+  const t = Math.max(1, Math.round(Math.max(W, H) / 300));
+  for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
+    const p = y * W + xx, i = p * 4; let e = 0;
+    for (let k = -t; k <= t && !e; k++) for (let j = -t; j <= t && !e; j++) { const yy = y + k, x2 = xx + j; if (yy >= 0 && yy < H && x2 >= 0 && x2 < W && edge[yy * W + x2]) e = 1; }
+    if (e) { im.data[i] = 250; im.data[i + 1] = 175; im.data[i + 2] = 41; im.data[i + 3] = 255; }
+    else if (mask[p]) { im.data[i] = 250; im.data[i + 1] = 175; im.data[i + 2] = 41; im.data[i + 3] = 60; }
+  }
+  x.putImageData(im, 0, 0); return c;
+}
+// everything the dialog needs. O: the original design, N: the new design, R: the approved render (images)
+async function analyse(o, n, r) {
+  const [O, N, R] = await Promise.all([V.loadImg(o.url), V.loadImg(n.url), V.loadImg(r.url)]);
+  const asp = (im) => im.naturalWidth / im.naturalHeight;
+  const sameShape = Math.abs(asp(N) / asp(O) - 1) <= SHAPE_TOL, renderShape = Math.abs(asp(R) / asp(O) - 1) <= SHAPE_TOL;
+  let T = { stretch: true }, state = "same", m0 = sameShape ? sameFrameMiss(O, N) : 2;
+  if (!sameShape || m0 > 0.02) { // not the same shape, or not a near-perfect match: try lining them up
+    const reg = register(O, N);
+    if (sameShape && m0 <= reg.m + 0.01) state = "same";
+    else if (reg.m <= KEEP_MAX) { T = reg.T; state = "moved"; }
+    else { state = "nomatch"; const rN = N.naturalHeight / N.naturalWidth, rO = O.naturalHeight / O.naturalWidth, s = Math.min(1, rO / rN); T = { s, x0: (1 - s) / 2, y0: (1 - (s * rN) / rO) / 2 }; } // (fitted inside, centred)
+    if (sameShape && state === "same" && m0 > KEEP_MAX) state = "nomatch";
+  }
+  const A = state === "nomatch" ? null : changed(O, N, T);
+  const frac = A ? A.frac : 1, keepOk = !!A && renderShape && frac <= KEEP_MAX && A.raw > 0.0004;
+  return { O, N, R, T, state, A, frac, keepOk, renderShape, same: !!A && A.raw <= 0.0004, size: [R.naturalWidth, R.naturalHeight] };
+}
+// the new design redrawn into the approved render's frame and shape (image 1), when the two designs line up
+function prepared(X) {
+  const [w, hh] = X.size, c = mk(w, hh), x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0, 0, w, hh); x.imageSmoothingQuality = "high"; place(x, X.N, w, hh, X.T);
+  return c.toDataURL("image/png");
+}
+const pct = (f) => (f < 0.01 ? "less than 1" : String(Math.round(f * 100)));
+V.redesignTest = { analyse, register, changed, maskPng, prepared, sameFrameMiss };
+
+// ---------- the brief ----------
+const CODEX_FIRST = "When you call the image tool, give it this whole instruction word for word, with the three attached pictures in their order: image 1 the new design, image 2 the approved render, image 3 the original design.";
+const CODEX_SCOPE = "Change only: the parts where image 1 differs from image 3.\nKeep unchanged: everything else in image 2, its camera and its framing.\nExclude: the design views' line style, flat colours and background, text, labels, dimensions and watermarks.";
+// o: { mode, capture (the new design is a SketchUp / Revit view), lines (the designs line up), keep, frac, words, codex, flux }
+function brief(o) {
+  const L = V.lockText ? V.lockText(o.mode || "ext") : { geo: "", final: "Final check before you finish: the building's edges, roofline and openings line up with image 1 exactly" };
+  // (a drawing or picture rather than a SketchUp view: the lock without its "a view of our 3D model" sentence, after the intro)
+  const geo = o.capture ? L.geo : L.geo.replace(/^Image 1 is a view of our 3D model( of this room)?\.\s*/, "");
+  const words = String(o.words || "").trim().replace(/([^.!?])$/, "$1.");
+  const fin = (o.lines ? L.final : L.final.replace("line up with image 1 exactly", "follow the new design in image 1"))
+    + ", the camera and framing are as in image 2, and everything that is the same in images 1 and 3 looks exactly as it does in image 2.";
+  const t = [
+    o.codex ? CODEX_FIRST : "",
+    o.capture ? geo : "",
+    "Image 1 is the new design. Image 2 is the approved render, made from the original design in image 3. The client approved image 2; since then the design has changed from image 3 to image 1.",
+    o.capture ? "" : geo,
+    "Render the new design exactly as the approved render was rendered: do to image 1 what was done to image 3 to make image 2.",
+    "The new design is the truth for the geometry: take every wall, roof, window, door, opening and other part from image 1, in the same place, shape and size.",
+    "From image 2, reproduce exactly: the materials, colours, light, sky, weather, season, planting, people, vehicles, camera, lens, framing, colour grade and level of detail.",
+    "Change only what differs between image 3 and image 1. Where they are the same, keep image 2 exactly as it is. Where a part is new or has changed, give it the materials and finish image 2 uses for the same kind of part (the same walling, roofing, glazing and frames), lit by image 2's light with matching shadows and reflections.",
+    o.lines ? "" : "Images 1 and 3 may be framed a little differently: keep image 2's camera, lens and framing, with the new design standing where the original design stands in image 2.",
+    o.keep && o.frac != null ? `The changes cover about ${pct(o.frac)}% of the picture; everything else stays as in image 2.` : "",
+    "Images 1 and 3 are design views only: their line style, flat colours, background and any text, labels or dimensions are not part of the result.",
+    words ? "Also: " + words : "",
+    o.codex ? CODEX_SCOPE : "",
+    fin,
+  ].filter(Boolean).join("\n");
+  return o.flux ? t.replace(/\bimages? (\d)\b/gi, (m, d) => "@Image" + d).replace(/@Image(\d) and (\d)\b/g, "@Image$1 and @Image$2") : t;
+}
+V.redesignBrief = brief;
+const modeOf = (r) => (r && r.scene && r.scene.mode === "int") || (V.lockMode && V.lockMode([r && r.prompt, r && r.retry && r.retry.prompt].filter(Boolean).join("\n")) === "int") ? "int" : "ext";
+
+// ---------- What next on a new view: "Update <render> with this design" ----------
+// a new SketchUp view (or picture / PDF page) that matches the shape and layout of the design an earlier render was made
+// from; worked out in the background (cached), then What next is painted again
+const sims = new Map();
+let paintT = 0;
+const soon = () => { clearTimeout(paintT); paintT = setTimeout(() => V.paintNext && V.paintNext(), 30); };
+const simOf = (s, n) => {
+  const k = `${s.id}|${n.id}|${String(s.url).length}|${String(n.url).length}`, v = sims.get(k);
+  if (v !== undefined) return v; // a number, or null while it works
+  sims.set(k, null);
+  Promise.all([V.loadImg(s.thumb || s.url), V.loadImg(n.thumb || n.url)]).then(([a, b]) => {
+    const same = Math.abs(a.naturalWidth / a.naturalHeight / (b.naturalWidth / b.naturalHeight) - 1) <= SHAPE_TOL;
+    sims.set(k, same ? sameFrameMiss(a, b, 128, 1) : 2); soon();
+  }).catch(() => sims.set(k, 2));
+  return null;
+};
+const family = (k) => (k === "view" ? "view" : "flat");
+V.redesignMatch = (n) => {
+  if (!isDesign(n) || V.children(n.id).some((c) => RENDERS.test(kindOf(c)))) return null;
+  const at = V.G.nodes.indexOf(n), bySrc = new Map();
+  pics().filter((r) => RENDERS.test(kindOf(r)) && V.G.nodes.indexOf(r) < at).forEach((r) => {
+    const s = V.redesignSource(r); if (!s || s.id === n.id || family(kindOf(s)) !== family(kindOf(n))) return;
+    (bySrc.get(s) || bySrc.set(s, []).get(s)).push(r);
+  });
+  const srcs = [...bySrc.keys()].sort((a, b) => V.G.nodes.indexOf(b) - V.G.nodes.indexOf(a)).slice(0, 6);
+  for (const s of srcs) {
+    const m = simOf(s, n); if (m == null || m > KEEP_MAX) continue;
+    const rs = bySrc.get(s), fav = rs.filter((r) => r.fav), r = (fav.length ? fav : rs).slice(-1)[0];
+    return { render: r, source: s };
+  }
+  return null;
+};
+
+// ---------- the dialog ----------
+let modal = null;
+const closeM = () => { if (modal) modal.remove(); modal = null; };
+V.openRedesign = (n0, o0 = {}) => {
+  if (V.setView) V.setView("canvas");
+  const n = n0 || (V.selImages ? V.selImages()[0] : null);
+  let approved = null, original = null, design = null;
+  if (n && RENDERS.test(kindOf(n))) { approved = n; original = V.redesignSource(n); }
+  else if (isDesign(n)) {
+    design = n; const m = V.redesignMatch(n);
+    if (m) { approved = m.render; original = m.source; }
+  }
+  if (o0.render) { approved = o0.render; original = o0.source || V.redesignSource(approved); }
+  if (!approved) { // the newest render made from a design
+    const rs = pics().filter((r) => RENDERS.test(kindOf(r)) && V.redesignSource(r) && r !== design);
+    approved = rs.slice(-1)[0] || null; original = approved ? V.redesignSource(approved) : null;
+  }
+  const o = { keep: true, words: "", strip: approved && original && !design ? "new" : !approved ? "appr" : null };
+  let X = null, busy = false, tok = 0, prev = null, go = null, foot = null;
+  closeM();
+  const body = h("div", { class: "mtgbody rdbody" });
+  const words = h("textarea", { rows: 2, placeholder: "e.g. make the new door oak, the same as the garage door" });
+  words.oninput = () => { o.words = words.value; paintFoot(); };
+  const file = h("input", { type: "file", accept: "image/*,.pdf,application/pdf", hidden: true, onchange: (ev) => { const f = ev.target.files[0]; ev.target.value = ""; if (f) addFile(f); } });
+  const addFile = async (f) => {
+    const name = f.name.replace(/\.[^.]+$/, "").slice(0, 30);
+    try {
+      if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+        V.toast(`Reading ${f.name}…`, false, 2500);
+        const { pages, total } = await V.pdfPages(f);
+        const ns = await Promise.all(pages.map((p) => V.addImageNode(p.dataUrl, null, total > 1 ? `${name} p${p.page}` : name, { pdf: true })));
+        // the page whose shape is nearest the original design's
+        let pick = ns[0];
+        if (original && ns.length > 1) try { const a = await V.loadImg(original.url), ra = a.naturalWidth / a.naturalHeight; let bd = 9; for (const x of ns) { const b = await V.loadImg(x.url), d = Math.abs(Math.log(b.naturalWidth / b.naturalHeight / ra)); if (d < bd) { bd = d; pick = x; } } } catch {}
+        design = pick;
+      } else if (f.type.startsWith("image/")) design = await V.addImageNode(await V.fileToDataUrl(f), null, name);
+      else return V.toast("Choose a picture or a PDF for the new design", true);
+      if (!modal) return;
+      o.strip = null; check(); paint();
+    } catch (e) { V.toast("Couldn't add the new design: " + e.message, true); }
+  };
+  const capNow = async (b) => {
+    if (!V.bridgeCapture) return;
+    b.disabled = true; b.textContent = "Capturing…";
+    const before = V.G.nodes.length, c = await V.bridgeCapture();
+    if (!modal) return;
+    const got = c && c.id ? c : V.G.nodes.slice(before).find((x) => V.isCapture(x));
+    if (got) { design = got; o.strip = null; check(); }
+    paint();
+  };
+  // the comparison, again whenever a picture changes (the newest one wins)
+  const check = async () => {
+    X = null; const t = ++tok;
+    if (!(approved && original && design) || design === original || design === approved) return paint();
+    busy = true; paint();
+    try { const r = await analyse(original, design, approved); if (t !== tok) return; X = r; }
+    catch (e) { if (t !== tok) return; console.warn("redesign", e); X = { err: e.message }; }
+    busy = false; if (modal) paint();
+  };
+  const say = () => {
+    if (!approved) return ["Choose the approved render", true];
+    if (!original) return ["Choose the original design the approved render was made from", true];
+    if (!design) return ["Choose the new design: capture the SketchUp view, pick a picture or add a file", false];
+    if (design === original) return ["The new design is the same picture as the original design: choose the new one", true];
+    if (design === approved) return ["The new design can't be the approved render itself", true];
+    if (busy || !X) return ["Comparing the two designs…", false];
+    if (X.err) return ["Couldn't compare the two designs (" + X.err + "): the whole picture will be redrawn", true];
+    if (X.state === "nomatch") return ["The two designs don't line up, so the whole picture will be redrawn", true];
+    if (X.same) return ["The two designs look the same. Choose another new design, or say below what to change", true];
+    const moved = X.state === "moved" ? " (the new design was lined up with the original first)" : "";
+    if (X.frac > KEEP_MAX) return [`These parts changed: ${pct(X.frac)}% of the picture${moved}. That is most of it, so the whole picture will be redrawn in the approved render's style`, true];
+    if (!X.renderShape) return [`These parts changed: ${pct(X.frac)}% of the picture${moved}. The approved render isn't the same shape as its design, so the whole picture will be redrawn`, true];
+    return [`These parts changed: ${pct(X.frac)}% of the picture${moved}`, false];
+  };
+  const keepNow = () => !!(o.keep && X && X.keepOk);
+  const briefNow = () => { const e = V.aiEngine(); return brief({ mode: modeOf(approved), capture: V.isCapture(design), lines: !X || X.state !== "nomatch", keep: keepNow(), frac: X && X.A ? X.frac : null, words: o.words, codex: !!e.codex, flux: !!e.flux }); };
+  const paintFoot = () => {
+    if (!go) return;
+    const [msg, bad] = say(), need = !approved || !original || !design || design === original || design === approved ? msg : busy || !X ? "Comparing the two designs…" : X.same && !o.words.trim() ? "The two designs look the same" : "";
+    go.disabled = !!need; if (need) go.title = need; else go.removeAttribute("title");
+    const why = modal && modal.querySelector(".mtgwhy"); if (why) why.textContent = need && need !== msg ? need : "";
+    if (prev) prev.textContent = design && approved && original ? briefNow() : "";
+    if (foot && foot.repaint) foot.repaint();
+    void bad;
+  };
+  const strip = (list, cur, pick, empty) => (list.length
+    ? h("div", { class: "mtgstrip rdstrip" }, ...list.map((x) => h("button", { type: "button", class: "mtgpick" + (x === cur ? " on" : ""), title: nameOf(x), onclick: () => { pick(x); o.strip = null; check(); } }, h("img", { src: x.thumb || x.url, alt: "" }), h("small", {}, nameOf(x)))))
+    : h("p", { class: "hint" }, empty));
+  const bigImg = (x, empty) => (x ? h("img", { class: "mtgbig rdbig", src: x.thumb || x.url, alt: "" }) : h("div", { class: "mtgbig rdbig empty" }, empty));
+  // the approved render with the changed parts outlined
+  const preview = () => {
+    if (!approved) return bigImg(null, "No render chosen");
+    if (!(X && X.A && X.renderShape)) return bigImg(approved, "");
+    // one canvas (object-fit keeps its shape in the box): the render, then the outlines stretched over it
+    const c = h("canvas", { class: "mtgbig rdbig rdlines", role: "img", "aria-label": "The approved render with the changed parts outlined" }), ap = approved, ol = X.ol || (X.ol = outline(X.A));
+    V.loadImg(ap.thumb || ap.url).then((im) => {
+      const s = Math.min(1, 1200 / Math.max(im.naturalWidth, im.naturalHeight)); c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+      const x = c.getContext("2d"); x.drawImage(im, 0, 0, c.width, c.height); x.drawImage(ol, 0, 0, c.width, c.height);
+    }).catch(() => {});
+    return c;
+  };
+  const paint = () => {
+    if (!modal) return;
+    const connected = V.canCapture ? V.canCapture() : !!(V.bridge && V.bridge.ok);
+    const [msg, warn] = say();
+    const renders = pics().filter((r) => RENDERS.test(kindOf(r)) && r !== approved).slice(-14).reverse();
+    const designs = pics().filter((x) => isDesign(x) && x !== design && x !== original);
+    body.innerHTML = "";
+    body.append(...[
+      h("div", { class: "rdcols" },
+        h("div", { class: "mtgcol" }, h("label", { class: "fl" }, "Original design"), bigImg(original, "Not found: choose it"),
+          original ? h("small", { class: "mtgname" }, h("b", {}, nameOf(original))) : null,
+          h("div", { class: "row wrap" }, h("button", { class: "mini" + (o.strip === "orig" ? " on" : ""), type: "button", title: "The design the approved render was made from (found by itself)", onclick: () => { o.strip = o.strip === "orig" ? null : "orig"; paint(); } }, "Change…"))),
+        h("div", { class: "mtgcol" }, h("label", { class: "fl" }, "Approved render"), preview(),
+          approved ? h("small", { class: "mtgname" }, h("b", {}, nameOf(approved))) : null,
+          h("div", { class: "row wrap" }, h("button", { class: "mini" + (o.strip === "appr" ? " on" : ""), type: "button", title: "The render the client approved", onclick: () => { o.strip = o.strip === "appr" ? null : "appr"; paint(); } }, "Change…"))),
+        h("div", { class: "mtgcol rddrop" }, h("label", { class: "fl" }, "New design"), bigImg(design, "Capture the SketchUp view, choose a picture, or drop a file here"),
+          design ? h("small", { class: "mtgname" }, h("b", {}, nameOf(design))) : null,
+          h("div", { class: "row wrap" },
+            h("button", { class: "mini" + (design ? "" : " primary"), type: "button", disabled: !connected, title: connected ? "Bring in the view you see in SketchUp now, with the changed model" : "Open SketchUp with the Clarman VizLab plugin to capture a view", onclick: (ev) => capNow(ev.currentTarget) }, "Capture SketchUp view"),
+            h("button", { class: "mini" + (o.strip === "new" ? " on" : ""), type: "button", onclick: () => { o.strip = o.strip === "new" ? null : "new"; paint(); } }, "Choose a picture…"),
+            h("button", { class: "mini", type: "button", title: "A picture or a PDF drawing from your computer", onclick: () => file.click() }, "Add a file…"), file))),
+      o.strip === "orig" ? h("div", { class: "rdpick" }, h("small", { class: "fl" }, "Choose the original design"), strip(pics().filter((x) => x !== approved && x !== design && x !== original && isDesign(x)).slice(-14).reverse(), original, (x) => (original = x), "No other designs on the canvas")) : null,
+      o.strip === "appr" ? h("div", { class: "rdpick" }, h("small", { class: "fl" }, "Choose the approved render"), strip(renders, approved, (x) => { approved = x; original = V.redesignSource(x) || original; }, "No renders on the canvas yet")) : null,
+      o.strip === "new" ? h("div", { class: "rdpick" }, h("small", { class: "fl" }, "Choose the new design"), strip(designs.slice(-14).reverse(), design, (x) => (design = x), "No other views or pictures on the canvas: capture the SketchUp view or add a file")) : null,
+      h("p", { class: "rdsay" + (warn ? " warn" : "") + (busy ? " busy" : "") }, msg),
+      (() => {
+        const can = !X || X.keepOk, inp = h("input", { type: "checkbox" }); inp.checked = o.keep && can; inp.disabled = !!X && !X.keepOk;
+        inp.onchange = () => { o.keep = inp.checked; paint(); };
+        return h("div", { class: "rdkeep" + (inp.disabled ? " off" : "") }, h("label", { class: "switch" }, inp, h("span")),
+          h("div", {}, h("b", {}, "Keep everything else exactly as the approved render"),
+            h("span", { class: "hint" }, !can ? "Not possible for this pair: the AI's whole picture is kept." : o.keep ? "Only the outlined parts come from the AI; the rest stays the approved render's own pixels." : "Off: the AI's whole picture is kept (it is told to keep the rest, but may drift a little).")));
+      })(),
+      h("label", { class: "fl" }, "Anything else to change? (optional)"), words,
+      keepNow() ? h("p", { class: "hint" }, "With Keep everything else on, only the outlined parts change: switch it off for a change anywhere else.") : null,
+      h("details", { class: "envprev" }, h("summary", {}, "See the brief sent to the AI"), (prev = h("pre", {})))].filter(Boolean));
+    words.value = o.words;
+    paintFoot();
+  };
+  const make = async () => {
+    if (go.disabled) return;
+    const e = V.aiEngine(), res = $("#resImage") ? $("#resImage").value : "2K";
+    go.disabled = true; go.textContent = "Sending…";
+    try {
+      const keep = keepNow();
+      const firstUrl = X && X.N ? await V.uploadDataUrl(prepared(X)) : null; // image 1 in the approved render's frame and shape (fitted inside it when the designs don't line up)
+      const keepMask = keep ? (await V.api("upload", { dataUrl: maskPng(X.A, X.size[0], X.size[1]) })).url : null;
+      const origUrl = await V.ensureUploaded(original);
+      const prompt = briefNow(), what = "new design: " + nameOf(design), mine = o.words.trim();
+      const base = nameOf(approved).replace(/ – updated design(?: \d+)?$/, ""), same = V.G.nodes.filter((x) => String(x.label || "").indexOf(base + " – updated design") === 0).length;
+      const name = `${base} – updated design${same ? " " + (same + 1) : ""}`;
+      const settings = { resolution: res, aspect_ratio: "auto", num_images: 1, ...(V.viaGoogle(e.id) ? { provider: "google", fallback: V.cfg.gFallback !== false } : {}),
+        words: mine, lock: "full", redesign: { approved: approved.id, original: original.id, design: design.id, what, frac: X && X.A ? Math.round(X.frac * 1000) / 1000 : null, keep, lined: X ? X.state || "error" : "error" },
+        ...(keep ? { keepMask, keepFrom: 1 } : {}) };
+      const ap = approved; closeM();
+      const ok = await V.submitJob({ kind: "edit", engine: e.id, prompt, shownPrompt: "[Update] " + (mine || what), inputs: [design, ap], extraUrls: [origUrl], firstUrl, settings, count: 1, name });
+      if (ok) V.toast(keep ? "Updating the render: only the outlined parts will change" : "Updating the render: the whole picture is redrawn in the approved render's style", false, 4500);
+    } catch (er) { V.toast("Couldn't send the update: " + er.message, true, 0); if (go) { go.disabled = false; go.textContent = "Update the render"; } }
+  };
+  go = h("button", { class: "mini primary", type: "button", onclick: make }, "Update the render");
+  foot = V.aiFoot ? V.aiFoot({ images: 3, onPick: () => paintFoot() }) : h("span");
+  modal = h("div", { class: "modal" }, h("div", { class: "mbox mtgbox rdbox", role: "dialog", "aria-label": "Update the design" },
+    h("button", { class: "mclose", onclick: closeM }, "×"),
+    h("h3", {}, "Update the design"),
+    h("p", { class: "hint" }, "The client wants changes after approving a render? Give VizLab the new design: the AI redraws the approved render on it, with the same materials, light, sky, planting, people and camera, and only the parts that changed are new."),
+    body,
+    h("div", { class: "row end mt mtgfoot" }, foot, h("span", { class: "hint warn mtgwhy" }), h("button", { class: "mini", type: "button", onclick: closeM }, "Cancel"), go)));
+  // drop a picture or PDF anywhere on the window: the new design
+  modal.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.stopPropagation(); modal.classList.add("rddragging"); });
+  modal.addEventListener("dragleave", (ev) => { if (ev.target === modal) modal.classList.remove("rddragging"); });
+  modal.addEventListener("drop", (ev) => { ev.preventDefault(); ev.stopPropagation(); modal.classList.remove("rddragging"); const f = ev.dataTransfer && ev.dataTransfer.files[0]; if (f) addFile(f); });
+  const me = modal, onKey = (ev) => {
+    if (!me.isConnected) return document.removeEventListener("keydown", onKey, true);
+    if (ev.key !== "Escape" || (V.isTopPopup && !V.isTopPopup(me))) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    const m = me.querySelector(".eng-menu"); if (m) { m.remove(); return; }
+    closeM();
+  };
+  document.addEventListener("keydown", onKey, true);
+  document.body.append(modal); check();
+  setTimeout(() => { const b = modal && (design ? go : modal.querySelector(".rddrop .mini")); if (b && !b.disabled) b.focus(); else if (modal) words.focus(); }, 30);
+};
+// the right-click menu, What next and Ctrl+K: is there a render to update from this picture?
+V.canRedesign = (n) => !!(n && (V.redesignSource(n) || V.redesignMatch(n)));
 })();
 
 ;
