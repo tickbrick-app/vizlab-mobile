@@ -1,4 +1,4 @@
-/* VizLab 3.71.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
+/* VizLab 3.71.1: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
 
 /* ===== web/data.js ===== */
 // VizLab static data
@@ -136,7 +136,7 @@ const I = {
 };
 
 window.VLD = {
-  VERSION: "3.71.0",
+  VERSION: "3.71.1",
   // v3.69 (FR20): what changed, in plain words, 2-5 lines per version. The first open after an update shows "VizLab updated:
   // see what's new" (shell.js), and the Tutorial starts with a What's new chapter. Add the new version's lines at every release.
   NEWS: {
@@ -160,7 +160,7 @@ window.VLD = {
   API_URL: "https://ypdtizzmoujafeyrjxzo.supabase.co/functions/v1/api",
   // Save to Google Drive (drive.js, code/DRIVE-SETUP.md): the practice's OAuth client ID of type "Web application". Not a
   // secret (Google shows it to every browser that signs in). Empty until IT makes it; Settings › Advanced can hold one too.
-  driveClientId: "",
+  driveClientId: "53869616082-dvedu2ibtlt7og0ha7ehk5vm9dgqbfhp.apps.googleusercontent.com", // Web client (not secret), Gemini API project, registered 3 Nov 2026, app In production (drive.file only)
   ANON: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwZHRpenptb3VqYWZleXJqeHpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1ODQ2NzAsImV4cCI6MjEwODE2MDY3MH0.J5IRBRtcCUfDfBGZ83qo06f_aTtryuUcUKCIVrmaBRo",
   icons: I,
 
