@@ -1,4 +1,4 @@
-/* VizLab 3.71.2: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
+/* VizLab 3.72.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
 
 /* ===== web/data.js ===== */
 // VizLab static data
@@ -136,10 +136,11 @@ const I = {
 };
 
 window.VLD = {
-  VERSION: "3.71.2",
+  VERSION: "3.72.0",
   // v3.69 (FR20): what changed, in plain words, 2-5 lines per version. The first open after an update shows "VizLab updated:
   // see what's new" (shell.js), and the Tutorial starts with a What's new chapter. Add the new version's lines at every release.
   NEWS: {
+    "3.72.0": ["With Google Drive connected, the office catalogue (furniture, materials, collections, saved scenes and presets, with their pictures) and your keys and settings come to every PC and phone you connect: no key to paste on a new device (Settings › Google Drive can switch the keys off)", "VizLab.exe on a new PC: Sign in to ChatGPT in one click from the welcome card or Settings › At a glance"],
     "3.71.0": ["Save to Google Drive: connect your Drive in Settings and your projects and pictures follow you to every device, iPhone included (a copy stays on each device for offline work)"],
     "3.70.0": [
       "Update the design: when the client changes an approved render's design, right-click the render → Update the design…, give it the new SketchUp view (or drawing), and the render is redrawn on the new design with the same materials, light, sky and camera. Only the parts that changed are new; the rest stays exactly as approved.",
@@ -10336,8 +10337,12 @@ const loadCat = () => CAT.loaded || (CAT.loaded = (async () => {
   CAT.items = (await store("items", "readonly", (s) => s.getAll())) || []; CAT.sets = (await store("sets", "readonly", (s) => s.getAll())) || []; CAT.done = true;
   setTimeout(async () => { for (const it of CAT.items) if (/^data:image\/jpe?g/.test(it.img || "")) { it.img = await toPng(it.img); putCat(it); } }, 500); // older pictures saved as JPEG
 })().catch((e) => { console.warn("catalogue", e); }));
-const putCat = (it) => store(it.kind === "set" ? "sets" : "items", "readwrite", (s) => s.put(it)).catch((e) => V.toast("Couldn't save to the catalogue: " + e.message, true, 0));
-const delCat = (it) => store(it.kind === "set" ? "sets" : "items", "readwrite", (s) => s.delete(it.id));
+// v3.72: every change is also copied to Google Drive (drive.js V.onCatalogueChange, VizLab/Library in the user's Drive)
+const catNote = () => { try { if (V.onCatalogueChange) V.onCatalogueChange(); } catch (e) { console.warn(e); } };
+const putRaw = (it) => store(it.kind === "set" ? "sets" : "items", "readwrite", (s) => s.put(it));
+const delRaw = (it) => store(it.kind === "set" ? "sets" : "items", "readwrite", (s) => s.delete(it.id));
+const putCat = (it) => putRaw(it).then(catNote, (e) => V.toast("Couldn't save to the catalogue: " + e.message, true, 0));
+const delCat = (it) => delRaw(it).then(catNote);
 const saveSoon = (() => { const t = new Map(); return (it) => { clearTimeout(t.get(it.id)); t.set(it.id, setTimeout(() => putCat(it), 400)); }; })();
 loadCat();
 
@@ -10614,7 +10619,7 @@ function paint() {
   const sc = root.querySelector(".libscope"); sc.innerHTML = "";
   [["project", "This project"], ["office", "Office catalogue"]].forEach(([k, l]) => sc.append(h("button", { class: scope === k ? "on" : "", onclick: () => { scope = k; view = VIEWS[k][0]; selId = null; paint(); } }, l)));
   root.querySelectorAll(".libofc").forEach((b) => (b.hidden = scope !== "office"));
-  const pj = root.querySelector(".libproj"); pj.textContent = scope === "office" ? "shared by every project on this PC" : V.project.name && V.project.name !== "unsaved" ? `for ${V.project.name}` : "for this project"; pj.title = pj.textContent;
+  const pj = root.querySelector(".libproj"); pj.textContent = scope === "office" ? (V.drive && V.drive.on && V.drive.on() ? "shared by every project, on every device you connect" : "shared by every project on this PC") : V.project.name && V.project.name !== "unsaved" ? `for ${V.project.name}` : "for this project"; pj.title = pj.textContent;
   const tabs = root.querySelector(".libtabs"); tabs.innerHTML = "";
   VIEWS[scope].forEach((k) => tabs.append(h("button", { class: "libtab" + (view === k ? " on" : ""), onclick: () => { view = k; selId = null; paint(); } }, KINDS[k].name, h("small", {}, String(items(k).length)))));
   if (scope === "office" && view !== "sets") tabs.append(h("span", { class: "shgap" }), h("span", { class: "hint" }, ticked.size ? `${ticked.size} ticked` : "Tick items to make a collection"),
@@ -10848,7 +10853,7 @@ V.libraryAdd = async (n) => {
 // Esc closes the Furniture & materials window (a pop-up on top of it closes first)
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picker && (!V.isTopPopup || V.isTopPopup(picker))) { e.preventDefault(); e.stopImmediatePropagation(); picker.remove(); picker = null; } }, true);
 // for starter.js: the catalogue, adding to it, PNG helpers
-V.catalogue = { loadCat, CAT, put: putCat, toPng, blankItem, refresh: () => paint(), add: (it) => { CAT.items.push(it); return putCat(it); }, useSet: (st, o) => useSet(st, true, o), undoUse, sceneOff,
+V.catalogue = { loadCat, CAT, put: putCat, toPng, blankItem, refresh: () => { paint(); paintPicker(); paintChip(); }, raw: { put: putRaw, del: delRaw }, add: (it) => { CAT.items.push(it); return putCat(it); }, useSet: (st, o) => useSet(st, true, o), undoUse, sceneOff,
   MAX_USE, inUseCount: () => inUse().length, ownProducts, ownItems, addable, setState: (st) => { const l = st.ids.map((id) => CAT.items.find((i) => i.id === id)).filter(Boolean); return { total: l.length, on: l.filter(inScene).length }; }, remove: async (it) => { CAT.items = CAT.items.filter((x) => x !== it); await delCat(it); for (const st of CAT.sets) if (st.ids.includes(it.id)) { st.ids = st.ids.filter((x) => x !== it.id); await putCat(st); } }, addSet: (st) => { CAT.sets.push(st); return putCat(st); } };
 // v3.68 for sumat.js (SketchUp materials) and the material bucket: Library materials, an item by id, a project copy's
 // catalogue twin, and a catalogue material adopted into this project (switched off for "every render", no tile copied)
@@ -16980,7 +16985,7 @@ const suLine = () => {
   if (V.SU && !V.desk) return [true, "You're inside SketchUp: Capture brings in its view"];
   return [false, "Not connected yet: open SketchUp with the VizLab plugin and it connects by itself"];
 };
-V.paintWelcomeSU = () => { if (!wel || wel.hidden) return; const [ok, t] = suLine(), el = wel.querySelector(".wsu"); el.className = "wsu" + (ok ? " on" : ""); el.textContent = t; };
+V.paintWelcomeSU = () => { if (!wel || wel.hidden) return; const [ok, t] = suLine(), el = wel.querySelector(".wsk"); el.className = "wsu wsk" + (ok ? " on" : ""); el.textContent = t; };
 V.welcomeOpen = () => !!(wel && !wel.hidden);
 function closeWelcome() { if (wel) wel.hidden = true; }
 V.openWelcome = () => {
@@ -17003,15 +17008,42 @@ V.openWelcome = () => {
   inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); check.click(); } });
   const keyBox = h("div", { class: "wkey" }, h("div", { class: "row" }, inp, eye), h("div", { class: "row" }, check, stat),
     cloud ? null : h("details", { class: "more" }, h("summary", {}, "Where do I get the key?"), h("p", { class: "hint" }, "Your office gives you the VizLab key: ask Stephen. IT can make one at aistudio.google.com → Get API key.")));
-  const ready = h("div", { class: "wready" }, h("span", { class: "wok" }, cloud ? "✓ Connected to the cloud server. You're ready to render." : "✓ The key is in. You're ready to render."), h("button", { class: "linkbtn", type: "button", onclick: () => { ready.hidden = true; keyBox.hidden = false; inp.focus(); } }, "Change it"));
-  const paint = () => { const ok = V.aiReady() && keyOk !== false; start.disabled = !ok; start.title = ok ? "" : keyOk === false ? (cloud ? "The passcode wasn't accepted: check it and try again" : "Google didn't accept the key: check it and try again") : cloud ? "Type the passcode first" : "Paste the key first"; if (ok && !stat.textContent) { ready.hidden = false; keyBox.hidden = true; } else ready.hidden = true; if (!ok) keyBox.hidden = false; };
+  const okText = h("span", { class: "wok" }, cloud ? "✓ Connected to the cloud server. You're ready to render." : "✓ The key is in. You're ready to render.");
+  const ready = h("div", { class: "wready" }, okText, h("button", { class: "linkbtn", type: "button", onclick: () => { ready.hidden = true; keyBox.hidden = false; inp.focus(); } }, "Change it"));
+  // v3.72: VizLab used on another device already: Google Drive brings the keys, settings, catalogue and projects
+  const di = !cloud && V.drive ? V.drive.info() : null, canDrive = !!(di && !di.why && !di.on);
+  if (canDrive) V.drive.preload();
+  const dstat = h("span", { class: "hint wstat", "aria-live": "polite" });
+  const dbtn = h("button", { class: "mini", type: "button", onclick: async () => {
+    dbtn.disabled = true; dbtn.textContent = "Connecting…"; dstat.className = "hint wstat"; dstat.textContent = "";
+    try { await V.drive.connect(); } catch (e) { dstat.className = "hint wstat bad"; dstat.textContent = e.message; dbtn.disabled = false; dbtn.textContent = "Connect Google Drive"; return; }
+    dbtn.hidden = true;
+    if (V.cfg.gkey || V.aiReady()) { keyOk = null; stat.textContent = ""; okText.textContent = "✓ Your key came from your Google Drive. You're ready to render."; }
+    else { dstat.className = "hint wstat"; dstat.textContent = V.drive.keys() ? "Connected. No key was found in your Drive yet: paste it once above and your other devices get it too." : "Connected. Bringing keys to other devices is switched off, so paste the key above."; }
+    paint();
+  } }, "Connect Google Drive");
+  const driveBox = canDrive ? h("div", { class: "wdrive" }, h("span", { class: "hint" }, "Already use VizLab on another PC or phone? Connect your Google Drive and your keys, settings, office catalogue and projects come over."), h("div", { class: "row" }, dbtn, dstat)) : null;
+  // v3.72: ChatGPT (VizLab.exe only): signed in once on each PC
+  const cxLine = h("span", { class: "wsu" }, "Checking…"), cxBtn = h("button", { class: "mini", type: "button", hidden: true, onclick: () => { cxBtn.disabled = true; cxBtn.textContent = "Finish in the browser…"; V.codexSignIn().then(paintCodex); } }, "Sign in to ChatGPT");
+  const cxHow = h("details", { class: "more", hidden: true }, h("summary", {}, "How to install it"), h("p", { class: "hint" }, "ChatGPT Images in VizLab uses OpenAI's own Codex app on this PC. Ask IT to install it (Node.js, then in a command window: npm install -g @openai/codex), then press Check again."), h("button", { class: "mini", type: "button", onclick: () => { cxLine.textContent = "Checking…"; V.codexState().then(paintCodex); } }, "Check again"));
+  async function paintCodex() {
+    const cx = V.codexState ? await V.codexState() : null; if (!wel || wel.hidden) return;
+    cxBtn.disabled = false; cxBtn.textContent = "Sign in to ChatGPT";
+    if (!cx) { cxLine.className = "wsu"; cxLine.textContent = "Couldn't check: see Settings › More AI services"; cxBtn.hidden = true; cxHow.hidden = true; return; }
+    cxLine.className = "wsu" + (cx.signedIn ? " on" : "");
+    cxLine.textContent = !cx.installed ? "The Codex app isn't on this PC yet, so ChatGPT Images can't be used here" : cx.signedIn ? "Signed in to ChatGPT on this PC" : cx.busy ? "Finish signing in in the browser…" : "Not signed in on this PC yet (each PC signs in once)";
+    cxBtn.hidden = !cx.installed || !!cx.signedIn; cxHow.hidden = !!cx.installed;
+  }
+  V.paintWelcomeCodex = () => { if (wel && !wel.hidden && V.desk) paintCodex(); };
+  const paint = () => { const ok = V.aiReady() && keyOk !== false; start.disabled = !ok; start.title = ok ? "" : keyOk === false ? (cloud ? "The passcode wasn't accepted: check it and try again" : "Google didn't accept the key: check it and try again") : cloud ? "Type the passcode first" : "Paste the key first"; if (ok && !stat.textContent) { ready.hidden = false; keyBox.hidden = true; } else ready.hidden = true; if (!ok) keyBox.hidden = false; if (driveBox) driveBox.hidden = !!(ok && V.drive.info().on && !dstat.textContent); };
   wel = h("div", { class: "modal welcome", hidden: true, role: "dialog", "aria-label": "Welcome to Clarman VizLab" },
     h("div", { class: "mbox wbox" },
       h("button", { class: "mclose", type: "button", onclick: () => closeWelcome() }, "×"),
       h("h3", {}, "Welcome to Clarman VizLab"),
       h("p", { class: "hint wsub" }, "Two quick checks, then you're rendering."),
-      h("div", { class: "wstep" }, h("span", { class: "wnum" }, "1"), h("div", {}, h("b", {}, cloud ? "Cloud server passcode" : "Office Google key"), ready, keyBox)),
-      h("div", { class: "wstep" }, h("span", { class: "wnum" }, "2"), h("div", {}, h("b", {}, "SketchUp"), h("span", { class: "wsu" }))),
+      h("div", { class: "wstep" }, h("span", { class: "wnum" }, "1"), h("div", {}, h("b", {}, cloud ? "Cloud server passcode" : "Office Google key"), ready, keyBox, driveBox)),
+      h("div", { class: "wstep" }, h("span", { class: "wnum" }, "2"), h("div", {}, h("b", {}, "SketchUp"), h("span", { class: "wsu wsk" }))),
+      V.desk && !cloud ? h("div", { class: "wstep" }, h("span", { class: "wnum" }, "3"), h("div", {}, h("b", {}, "ChatGPT (optional)"), cxLine, h("div", { class: "row" }, cxBtn), cxHow)) : null,
       h("div", { class: "row wfoot" },
         h("button", { class: "linkbtn", type: "button", onclick: () => { closeWelcome(); V.openSettings(V.desk && !cloud ? "#setGAuth" : "#sAdv"); } }, "Other ways to connect (Google sign-in, cloud server)…"),
         h("span", { class: "wsp" }),
@@ -17019,8 +17051,11 @@ V.openWelcome = () => {
         start)));
   document.body.append(wel); paint();
   wel.hidden = false; V.paintWelcomeSU();
+  wel._paint = (got) => { if (got && got.includes("gkey") && V.cfg.gkey) { keyOk = null; stat.textContent = ""; okText.textContent = "✓ Your key came from your Google Drive. You're ready to render."; if (dbtn) dbtn.hidden = true; } paint(); };
+  if (V.desk && !cloud) paintCodex();
   requestAnimationFrame(() => (!start.disabled ? start : inp).focus({ preventScroll: true }));
 };
+document.addEventListener("vl-settings", (e) => { if (wel && !wel.hidden && wel._paint) wel._paint((e.detail && e.detail.keys) || []); }); // (v3.72: keys from Google Drive)
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && V.welcomeOpen() && (!V.isTopPopup || V.isTopPopup(wel))) { e.preventDefault(); e.stopImmediatePropagation(); closeWelcome(); } }, true);
 
 // ---------- v3.69 B5 First render guide (D11, J-firstday-S2) ----------
@@ -18353,7 +18388,10 @@ V.canRedesign = (n) => !!(n && (V.redesignSource(n) || V.redesignMatch(n)));
    Sync: each project has a revision on Drive (appProperties rev). A device that saved revision N and finds N on Drive uploads
    N+1. If Drive has moved on and this device has changes of its own, both are kept: this device's copy becomes
    "<name> (from <device>, 3 Nov 14:05)" and the other device's version comes in under the original name; a message says so.
-   Nothing on Drive is ever deleted outright: removed projects and pictures go to the Drive bin. */
+   Nothing on Drive is ever deleted outright: removed projects and pictures go to the Drive bin.
+   v3.72: the office catalogue (VizLab/Library: one "VizLab catalogue.json" plus one PNG per picture, the same revisions and
+   keep-both rule per record) and, unless switched off, the keys and settings ("VizLab settings (private).json", newest
+   wins key by key) come to every device that connects. A sync round: settings, catalogue, then projects. */
 (() => {
 const V = window.V, D = V.D, { $, h } = V;
 const L = V.localDB;
@@ -18492,10 +18530,10 @@ const toDataUrl = (b) => new Promise((res, rej) => { const r = new FileReader();
 const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "model/gltf-binary": "glb", "application/pdf": "pdf" };
 const mimeOf = (u) => u.slice(5, u.indexOf(",")).split(";")[0] || "application/octet-stream";
 const hcache = new Map();
+const digest = async (s) => { const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))); return Array.prototype.map.call(d, (x) => (x < 16 ? "0" : "") + x.toString(16)).join("").slice(0, 40); };
 async function hashOf(s) {
   let v = hcache.get(s); if (v) return v;
-  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
-  v = Array.prototype.map.call(d, (x) => (x < 16 ? "0" : "") + x.toString(16)).join("").slice(0, 40);
+  v = await digest(s);
   if (hcache.size > 400) hcache.delete(hcache.keys().next().value);
   hcache.set(s, v); return v;
 }
@@ -18555,17 +18593,19 @@ async function init() {
       if (/^drive:/.test(r.id) && r.pid) metas.set(r.pid, r);
       if (r.id === "driveinfo:remote" && st.on) remote = new Map((r.list || []).map((x) => [x.pid, x]));
       if (/^drivecover:/.test(r.id)) covers.set(r.id.slice(11), { id: r.cid, url: r.url });
+      if (/^drivecat:/.test(r.id) && r.rid) cm.set(r.rid, r);
+      if (r.id === "drivecatinfo") catInfo = r;
     });
   } catch (e) { console.warn("drive init", e); }
 }
 const keepRemote = () => L.put("kv", { id: "driveinfo:remote", list: [...remote.values()] }).catch(() => {});
 
 // ---------- root folder ----------
-let rootId = null;
+let rootId = null, rootAp = {}; // rootAp: the VizLab folder's own notes (v3.72: keysync on/off, set on any device)
 async function ensureRoot() {
   if (rootId) return rootId;
-  const f = await list("appProperties has { key='vizlab' and value='root' } and trashed=false", "id");
-  rootId = f.length ? f[0].id : (await mkFolder("VizLab", null, { vizlab: "root" })).id;
+  const f = await list("appProperties has { key='vizlab' and value='root' } and trashed=false", "id,appProperties");
+  if (f.length) { rootId = f[0].id; rootAp = f[0].appProperties || {}; } else { rootId = (await mkFolder("VizLab", null, { vizlab: "root" })).id; rootAp = {}; }
   return rootId;
 }
 
@@ -18685,6 +18725,294 @@ async function goneRemote(m) {
   if (row) V.toast(`"${row.name}" was deleted from Google Drive on another device. The copy on this ${deviceName()} is kept; it goes back to Drive if you change it.`, false, 0, { key: "drivegone" + m.pid });
 }
 
+// ---------- v3.72: the office catalogue (Library) on Drive ----------
+// VizLab/Library/VizLab catalogue.json lists every record of the office catalogue: furniture & products and materials (with
+// their SketchUp material fields and tile), collections, the practice's saved scenes and saved presets, each with every
+// picture replaced by "vlblob:<hash>". Each picture is its own file in Library/Furniture & products, Materials or Scenes.
+// Every record has its own revision. What changed on this device is found by comparing each record with what it was when
+// last copied (so changes made offline go up by themselves later): changed here only -> written as revision N+1; changed on
+// another device only -> brought here; changed on both -> both kept (this device's copy becomes "<name> (from PC, 3 Nov
+// 14:05)" with a new id, the original id gets the other device's version, so collections and projects keep pointing at
+// it). Deleted: the record stays in the file as deleted (other devices delete it too) and its pictures go to the Drive
+// bin. A project's own Library copies (V.G.library) travel inside the project; their catId finds the same catalogue item
+// on every device, as the ids are the same everywhere.
+const CATN = "VizLab catalogue.json";
+const cm = new Map(); // rid -> {rid, baseRev, sig, pics {hash: fileId}}
+let catInfo = { id: "drivecatinfo" }, libOk = false; // {libId, subs {sub: folder id}, fileId, rev, doc}
+const putCM = (m) => { cm.set(m.rid, m); return L.put("kv", Object.assign({}, m, { id: "drivecat:" + m.rid })).catch(() => {}); };
+const dropCM = (rid) => { cm.delete(rid); return L.del("kv", "drivecat:" + rid).catch(() => {}); };
+const keepCatInfo = () => L.put("kv", Object.assign({}, catInfo, { id: "drivecatinfo" })).catch(() => {});
+const SUBS = { furniture: "Furniture & products", material: "Materials", scene: "Scenes", other: "Other pictures" };
+const subOf = (r) => (r.type === "scene" ? "scene" : r.type === "item" && SUBS[r.obj.kind] ? r.obj.kind : "other");
+const PICN = { img: "", tile: " (SketchUp tile)", flat: " (flat)" };
+const bigHash = new Map(); // catalogue picture -> hash (worked out once per picture)
+async function picHash(s) { let v = bigHash.get(s); if (!v) { v = await digest(s); bigHash.set(s, v); } return v; }
+// everything this device has, as records
+async function catRecords() {
+  const C = V.catalogue, out = new Map(); if (!C) return out;
+  await C.loadCat();
+  for (const it of C.CAT.items) if (it && it.id) out.set(it.id, { rid: it.id, type: "item", name: it.name || (it.kind === "material" ? "Material" : "Product"), obj: it });
+  for (const s of C.CAT.sets) if (s && s.id) out.set(s.id, { rid: s.id, type: "set", name: s.name || "Collection", obj: s });
+  for (const e of V.store.get("envs", []) || []) if (e && e.name) out.set("scene:" + e.name, { rid: "scene:" + e.name, type: "scene", name: e.name, obj: e });
+  if (V.cfg.mode !== "cloud") { try { for (const p of await L.all("presets")) if (p && p.id) out.set("preset:" + p.id, { rid: "preset:" + p.id, type: "preset", name: p.name || "Preset", obj: p }); } catch (e) {} }
+  return out;
+}
+// a record with its pictures taken out (have: hash -> picture, for the pictures already on this device)
+async function stripRec(r, have) {
+  const found = new Map();
+  const walk = async (v, key) => {
+    if (typeof v === "string") {
+      if (v.length <= 200 || !v.startsWith("data:")) return v;
+      const k = await picHash(v); if (have) have.set(k, v);
+      if (!found.has(k)) found.set(k, { url: v, label: clean(r.name) + (key in PICN ? PICN[key] : " (" + key + ")") });
+      return "vlblob:" + k;
+    }
+    if (Array.isArray(v)) { const o = []; for (const x of v) o.push(await walk(x, key)); return o; }
+    if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = await walk(v[k], k); return o; }
+    return v;
+  };
+  const top = {}; for (const k of Object.keys(r.obj || {})) if (!(r.type === "item" && k === "use")) top[k] = await walk(r.obj[k], k);
+  return { data: top, found, sig: await hashOf(JSON.stringify([r.type, top])) };
+}
+const picIds = (R) => { const o = {}; for (const k of Object.keys(R.pics || {})) o[k] = R.pics[k].id; return o; };
+// put a record from Drive in this device's catalogue, scenes or presets (never through the catalogue's own save, which
+// would count it as a change made here)
+async function applyRec(type, rid, obj) {
+  const C = V.catalogue;
+  if (type === "item" || type === "set") {
+    obj.id = rid; if (type === "set") { obj.kind = "set"; obj.ids = Array.isArray(obj.ids) ? obj.ids : []; }
+    const arr = type === "set" ? C.CAT.sets : C.CAT.items, i = arr.findIndex((x) => x.id === rid);
+    if (i >= 0) arr[i] = obj; else arr.push(obj);
+    await C.raw.put(obj);
+  } else if (type === "scene") {
+    const all = (V.store.get("envs", []) || []).slice(), i = all.findIndex((x) => x && "scene:" + x.name === rid);
+    if (i >= 0) all[i] = obj; else all.unshift(obj);
+    setApplying++; try { V.store.set("envs", all); } finally { setApplying--; }
+  } else if (type === "preset") { obj.id = rid.slice(7); await L.put("presets", obj); }
+}
+async function removeRec(r) {
+  const C = V.catalogue;
+  if (r.type === "item") { C.CAT.items = C.CAT.items.filter((x) => x.id !== r.rid); await C.raw.del(r.obj); }
+  else if (r.type === "set") { C.CAT.sets = C.CAT.sets.filter((x) => x.id !== r.rid); await C.raw.del(r.obj); }
+  else if (r.type === "scene") { setApplying++; try { V.store.set("envs", (V.store.get("envs", []) || []).filter((x) => !x || "scene:" + x.name !== r.rid)); } finally { setApplying--; } }
+  else if (r.type === "preset") await L.del("presets", r.rid.slice(7));
+}
+// changed on two devices: this device's version is kept as a new record beside it
+async function keepMine(l, name) {
+  const C = V.catalogue, obj = Object.assign({}, l.obj, { name });
+  if (l.type === "item" || l.type === "set") { obj.id = V.uid(); (l.type === "set" ? C.CAT.sets : C.CAT.items).push(obj); await C.raw.put(obj); return { rid: obj.id, type: l.type, name, obj }; }
+  if (l.type === "scene") { const all = (V.store.get("envs", []) || []).slice(); all.unshift(obj); setApplying++; try { V.store.set("envs", all); } finally { setApplying--; } return { rid: "scene:" + name, type: "scene", name, obj }; }
+  obj.id = L.uuid(); await L.put("presets", obj); return { rid: "preset:" + obj.id, type: "preset", name, obj };
+}
+async function libFolder(key) {
+  if (!libOk) {
+    const root = await ensureRoot();
+    const f = await list(`appProperties has { key='vizlab' and value='library' } and '${qs(root)}' in parents and trashed=false`, "id");
+    catInfo.libId = f.length ? f[0].id : (await mkFolder("Library", root, { vizlab: "library" })).id; catInfo.subs = {}; libOk = true; keepCatInfo();
+  }
+  if (!key) return catInfo.libId;
+  if (catInfo.subs[key]) return catInfo.subs[key];
+  const f = await list(`appProperties has { key='vizlab' and value='libsub' } and appProperties has { key='sub' and value='${key}' } and '${qs(catInfo.libId)}' in parents and trashed=false`, "id");
+  catInfo.subs[key] = f.length ? f[0].id : (await mkFolder(SUBS[key], catInfo.libId, { vizlab: "libsub", sub: key })).id; keepCatInfo();
+  return catInfo.subs[key];
+}
+let catTold = 0; // (the first time the catalogue comes down to a device, one message says what came)
+async function catSync() {
+  if (!V.catalogue || !V.catalogue.raw) return;
+  await libFolder();
+  for (let i = 0; i < 3; i++) if (await catRound()) return;
+}
+// one pass: true when done, false when another device wrote the file meanwhile (then it starts again)
+async function catRound() {
+  const files = await list("appProperties has { key='vizlab' and value='catalogue' } and trashed=false", "id,appProperties");
+  const f = files[0] || null, rev = f ? Number((f.appProperties || {}).rev) || 0 : 0;
+  let doc = f && f.id === catInfo.fileId && rev === catInfo.rev && catInfo.doc ? JSON.parse(JSON.stringify(catInfo.doc)) : f ? JSON.parse(await (await download(f.id)).text()) : null;
+  if (!doc || !doc.records) doc = { vizlab: "catalogue", v: 1, records: {}, gone: {} };
+  doc.gone = doc.gone || {};
+  const extra = files.slice(1).map((x) => x.id); // (two devices made the file at the same moment: one is kept, the other's records merged in)
+  for (const id of extra) { try { const d = JSON.parse(await (await download(id)).text()); for (const k of Object.keys(d.records || {})) if (!doc.records[k] || doc.records[k].rev < d.records[k].rev) doc.records[k] = d.records[k]; } catch (e) { if (e.kind) throw e; } }
+  const local = await catRecords(), have = new Map(), sl = new Map();
+  const hadAny = local.size > 0;
+  for (const r of local.values()) sl.set(r.rid, await stripRec(r, have));
+  const onDrive = new Map(); for (const R of Object.values(doc.records)) for (const k of Object.keys(R.pics || {})) onDrive.set(k, R.pics[k].id);
+  const push = [], take = [], drop = [], clash = [], gone = [], after = [];
+  let changed = extra.length > 0;
+  for (const rid of new Set([...local.keys(), ...Object.keys(doc.records), ...Object.keys(doc.gone), ...cm.keys()])) {
+    const l = local.get(rid), s = sl.get(rid), R = doc.records[rid], G = doc.gone[rid], m = cm.get(rid);
+    if (R) {
+      if (!l) { if (m && m.baseRev === R.rev) gone.push(R); else take.push(R); continue; } // deleted here / new from another device
+      if (s.sig === R.sig) { if (!m || m.baseRev !== R.rev || m.sig !== s.sig) await putCM(Object.assign({ rid, pics: {} }, m, { baseRev: R.rev, sig: s.sig, pics: Object.assign({}, m && m.pics, picIds(R)) })); continue; }
+      if (m && m.baseRev === R.rev) { if (s.sig !== m.sig) push.push([l, s, R.rev + 1]); continue; } // changed here only
+      if (m && m.baseRev > R.rev) { push.push([l, s, m.baseRev + 1]); continue; } // (Drive lost this device's last copy: written again)
+      if (m && s.sig === m.sig) { take.push(R); continue; } // changed on another device only
+      clash.push([l, R]); continue; // changed on both (or here and on Drive, never copied from here, and different)
+    }
+    if (G) {
+      if (!l) { if (m) await dropCM(rid); continue; }
+      if (m && s.sig === m.sig && (m.baseRev || 0) <= (G.rev || 0)) { drop.push(l); continue; } // deleted on another device
+      push.push([l, s, (G.rev || 0) + 1]); continue; // changed here after another device deleted it: kept, and copied again
+    }
+    if (l) push.push([l, s, (m ? m.baseRev || 0 : 0) + 1]); else if (m) await dropCM(rid);
+  }
+  const dev = deviceName(), iso = new Date().toISOString(), names = { added: 0, changed: 0, removed: 0, from: new Set() };
+  // both kept: this device's version under a new name and id, the original id takes the other device's version
+  const clashNames = [];
+  for (const [l, R] of clash) {
+    const nm = `${l.name} (from ${dev}, ${dayTime(Date.now())})`.slice(0, 120), mine = await keepMine(l, nm);
+    push.push([mine, await stripRec(mine, have), 1]); take.push(R); clashNames.push([l.name, nm, R.dev]);
+  }
+  for (const R of take) {
+    const urls = {}, pics = R.pics || {};
+    for (const k of Object.keys(pics)) {
+      if (have.has(k)) { urls[k] = have.get(k); continue; }
+      try { const b = await download(pics[k].id); urls[k] = await toDataUrl(b.type ? b : new Blob([b], { type: pics[k].mime })); } catch (e) { if (e.kind) throw e; }
+    }
+    const obj = restore(R.data || {}, urls, { n: 0 });
+    if (local.has(R.id)) names.changed++; else names.added++;
+    names.from.add(R.dev || "another device");
+    await applyRec(R.type, R.id, obj);
+    const s = await stripRec({ rid: R.id, type: R.type, name: R.name, obj }, have);
+    await putCM({ rid: R.id, baseRev: R.rev, sig: s.sig, pics: picIds(R) });
+  }
+  for (const l of drop) { await removeRec(l); await dropCM(l.rid); names.removed++; }
+  for (const R of gone) { doc.gone[R.id] = { rev: R.rev + 1, at: iso, dev, name: R.name, type: R.type }; delete doc.records[R.id]; changed = true; after.push(() => dropCM(R.id)); }
+  for (const [l, s, rev] of push) {
+    const m = Object.assign({ rid: l.rid, baseRev: 0, sig: "" }, cm.get(l.rid)); m.pics = Object.assign({}, m.pics);
+    for (const [k, b] of s.found) {
+      if (m.pics[k]) continue;
+      if (onDrive.has(k)) { m.pics[k] = onDrive.get(k); continue; } // (the same picture is already there, e.g. a copied item)
+      const mime = mimeOf(b.url);
+      m.pics[k] = (await upload({ name: b.label + "." + (EXT[mime] || "png"), parents: [await libFolder(subOf(l))], mimeType: mime, appProperties: { vizlab: "libpic", rid: fitAp("rid", l.rid) } }, toBlob(b.url))).id;
+      onDrive.set(k, m.pics[k]); await putCM(m); // (kept as it goes: a broken connection carries on from the next picture)
+    }
+    const pics = {}; for (const k of s.found.keys()) pics[k] = { id: m.pics[k], mime: mimeOf(s.found.get(k).url) };
+    doc.records[l.rid] = { id: l.rid, type: l.type, rev, at: iso, dev, name: l.name, sig: s.sig, data: s.data, pics };
+    delete doc.gone[l.rid]; changed = true;
+    after.push(() => putCM(Object.assign(m, { baseRev: rev, sig: s.sig })));
+  }
+  if (changed) {
+    if (f) { const now = await fileMeta(f.id, "id,trashed,appProperties"); if (now.trashed || (Number((now.appProperties || {}).rev) || 0) !== rev) return false; } // another device wrote it meanwhile
+    doc.rev = rev + 1; doc.saved = iso; doc.device = dev;
+    doc.about = "Clarman VizLab's office catalogue (furniture, materials, collections, saved scenes and presets). Its pictures are the files in this Library folder. VizLab keeps it up to date: edit it in VizLab.";
+    const fm = { name: CATN, mimeType: "application/json", appProperties: { vizlab: "catalogue", rev: String(rev + 1), dev, n: String(Object.keys(doc.records).length) } };
+    const body = new Blob([JSON.stringify(doc)], { type: "application/json" });
+    let id = f && f.id;
+    if (f) await upload(fm, body, f.id); else id = (await upload(Object.assign({ parents: [catInfo.libId] }, fm), body)).id;
+    for (const a of after) await a();
+    // pictures no record uses any more go to the Drive bin (never deleted outright)
+    const used = new Set(); Object.values(doc.records).forEach((R) => Object.values(R.pics || {}).forEach((p) => used.add(p.id)));
+    const was = catInfo.doc && catInfo.fileId === id ? catInfo.doc : null, old = new Set();
+    if (was) Object.values(was.records || {}).forEach((R) => Object.values(R.pics || {}).forEach((p) => old.add(p.id)));
+    for (const R of gone) Object.values(R.pics || {}).forEach((p) => old.add(p.id));
+    for (const pid of old) if (!used.has(pid)) { try { await patch(pid, { trashed: true }); } catch (e) { if (e.kind) throw e; } }
+    for (const x of extra) { try { await patch(x, { trashed: true }); } catch (e) { if (e.kind) throw e; } }
+    Object.assign(catInfo, { fileId: id, rev: rev + 1, doc });
+  } else Object.assign(catInfo, { fileId: f ? f.id : null, rev, doc });
+  keepCatInfo();
+  const came = names.added + names.changed + names.removed;
+  if (came || clash.length) {
+    V.catalogue.refresh(); if (V.envRepaint) V.envRepaint(); if (V.paintScenePanel) V.paintScenePanel();
+    if (take.concat(drop).some((x) => x.type === "preset") && V.loadMyPresets) V.loadMyPresets();
+    try { document.dispatchEvent(new CustomEvent("vl-catalogue")); } catch (e) {}
+  }
+  if (came && !clash.length) {
+    const n = Object.values(doc.records), what = [plural(n.filter((R) => R.type === "item").length, "item"), plural(n.filter((R) => R.type === "set").length, "collection")].join(", ");
+    const parts = [names.added ? names.added + " added" : "", names.changed ? names.changed + " changed" : "", names.removed ? names.removed + " deleted" : ""].filter(Boolean).join(", ");
+    V.toast(!hadAny && !catTold++ ? `Your office catalogue came from Google Drive: ${what}` : `Office catalogue brought up to date from Google Drive (${parts}, on ${[...names.from].join(" and ") || "another device"})`, false, 6000, { key: "drivecat" });
+  }
+  for (const [nm, newName, other] of clashNames) {
+    V.toast(`"${nm}" in the office catalogue was also changed on ${other === dev ? "another " + dev : "the " + (other || "other device")} before this ${dev} had copied its own change to Google Drive. Both are kept: this ${dev}'s version is now "${newName}", and "${nm}" has the other change.`, false, 0,
+      { key: "drivecatconflict" + nm, action: { label: "Open the Library", run: () => (V.openLibraryAt ? V.openLibraryAt("office") : V.setView("library")) } });
+  }
+  return true;
+}
+
+// ---------- v3.72: keys and settings on Drive ----------
+// "VizLab settings (private).json" in the VizLab folder holds the keys and preferences below, each with the time it was
+// last changed: the newest wins, key by key, so a key changed on one device reaches the others. Never in it: the Google
+// Drive sign-in, ChatGPT / Codex and Gemini CLI sign-ins (VizLab never reads their saved logins), Google sign-in for
+// Gemini, the cloud passcode and server, and what belongs to one machine (save folder, last project, window). Switched off
+// (Settings › Google Drive, on any device): the file goes to the Drive bin and every device stops (the VizLab folder
+// remembers it: appProperties keysync / keysyncAt).
+const SETN = "VizLab settings (private).json";
+const SYNCK = ["gkey", "fkey", "tkey", "google", "gFallback", "textAI", "engines", "logo", "motion", "nextBar", "keepModel", "toolbarLabels", "showCosts", "favPresets", "combos"];
+const KEYK = { gkey: "Google key", fkey: "fal.ai key", tkey: "Tripo key" };
+let setApplying = 0;
+const rawGet = (k) => { try { return localStorage.getItem("vl_" + k); } catch (e) { return null; } };
+const set0 = V.store.set;
+V.store.set = function (k, v) {
+  if (setApplying || (SYNCK.indexOf(k) < 0 && k !== "envs")) return set0.call(V.store, k, v);
+  const was = rawGet(k); set0.call(V.store, k, v);
+  if (rawGet(k) === was) return;
+  if (k === "envs") { if (st.on) soon(2500); return; } // (saved scenes travel with the office catalogue)
+  const at = V.store.get("driveSetAt", {}) || {}; at[k] = Math.max(Date.now(), (Number(st.setMax) || 0) + 1); set0.call(V.store, "driveSetAt", at);
+  if (st.on && st.keys !== false) soon(2500);
+};
+function applySet(k, v) {
+  setApplying++;
+  try {
+    if (v == null) { try { localStorage.removeItem("vl_" + k); } catch (e) {} } else set0.call(V.store, k, v);
+    if (k in KEYK || k === "google" || k === "gFallback" || k === "textAI") V.cfg[k] = v == null ? (k === "gFallback" ? true : k === "textAI" ? "google" : k === "google" ? false : "") : v;
+    else if (k === "logo") V.cfg.logo = Object.assign({ on: false, size: "s", corner: "br", backing: "auto" }, v || {});
+    else if (k === "motion" && V.setMotion) V.setMotion(v !== false);
+    else if (k === "toolbarLabels" && V.setToolbarLabels) V.setToolbarLabels(v !== false);
+    else if (k === "engines" && V.engines) Object.assign(V.engines, v || {});
+  } finally { setApplying--; }
+}
+const setQ = "appProperties has { key='vizlab' and value='settings' } and trashed=false";
+async function setSync() {
+  const root = await ensureRoot();
+  try { rootAp = (await fileMeta(root, "id,appProperties")).appProperties || {}; } catch (e) { if (e.kind) throw e; }
+  // switched on or off: here (sent now), or on another device (the newest choice wins)
+  if (st.keysDirty) { await patch(root, { appProperties: { keysync: st.keys === false ? "off" : "on", keysyncAt: String(st.keysAt || Date.now()) } }); rootAp = Object.assign({}, rootAp, { keysync: st.keys === false ? "off" : "on", keysyncAt: String(st.keysAt) }); st.keysDirty = false; saveSt(); }
+  const ra = Number(rootAp.keysyncAt) || 0;
+  if (ra > (Number(st.keysAt) || 0)) {
+    const on = rootAp.keysync !== "off", was = st.keys !== false; st.keysAt = ra; st.keys = on; saveSt();
+    if (on !== was) V.toast(on ? "Bringing keys and settings to your other devices was switched on on another device: this device now gets them too." : "Bringing keys and settings to your other devices was switched off on another device. The keys already on this device stay here.", false, 9000, { key: "drivekeys" });
+  }
+  if (st.keys === false) { if (st.keysTrash) { for (const x of await list(setQ, "id")) await patch(x.id, { trashed: true }); st.keysTrash = false; saveSt(); } return; }
+  for (let i = 0; i < 2; i++) {
+    const fs = await list(setQ, "id,appProperties"), f = fs[0] || null, rev = f ? Number((f.appProperties || {}).rev) || 0 : 0;
+    let doc = null; if (f) { try { doc = JSON.parse(await (await download(f.id)).text()); } catch (e) { if (e.kind) throw e; } }
+    if (!doc || !doc.values) doc = { values: {}, at: {} };
+    doc.at = doc.at || {};
+    const at = V.store.get("driveSetAt", {}) || {}, out = { values: Object.assign({}, doc.values), at: Object.assign({}, doc.at) }, got = [];
+    let dirty = false, max = Number(st.setMax) || 0;
+    for (const k of SYNCK) {
+      const rAt = Number(doc.at[k]) || 0, lAt = Number(at[k]) || 0, mine = rawGet(k), there = Object.prototype.hasOwnProperty.call(doc.values, k);
+      max = Math.max(max, rAt);
+      if (there && rAt > lAt) { if (JSON.stringify(doc.values[k]) !== mine) { applySet(k, doc.values[k]); got.push(k); } at[k] = rAt; }
+      else if (mine != null && (lAt > rAt || !there)) { out.values[k] = V.store.get(k); out.at[k] = at[k] = lAt || 1; dirty = true; } // (never changed on any device yet: the oldest time, so any real change wins)
+    }
+    st.setMax = max; saveSt(); set0.call(V.store, "driveSetAt", at);
+    if (got.length) tellSettings(got, doc.device);
+    if (!dirty) { st.setLast = new Date().toISOString(); saveSt(); return; }
+    if (f) { const now = await fileMeta(f.id, "id,appProperties"); if ((Number((now.appProperties || {}).rev) || 0) !== rev) continue; } // written by another device meanwhile: once more
+    const dev = deviceName();
+    const body = new Blob([JSON.stringify({ vizlab: "settings", v: 1,
+      about: "Clarman VizLab: your keys and settings, brought to every PC and phone you connect to this Google Drive. The keys are readable text: anyone who can open this file can use them. To stop: VizLab › Settings › Google Drive, switch off 'Bring my keys and settings to my other devices' (this file then goes to the bin).",
+      device: dev, saved: new Date().toISOString(), values: out.values, at: out.at }, null, 1)], { type: "application/json" });
+    const fm = { name: SETN, mimeType: "application/json", appProperties: { vizlab: "settings", rev: String(rev + 1), dev } };
+    if (f) await upload(fm, body, f.id); else await upload(Object.assign({ parents: [root] }, fm), body);
+    st.setLast = new Date().toISOString(); saveSt();
+    return;
+  }
+}
+function tellSettings(got, dev) {
+  if (V.engRedraw) V.engRedraw();
+  if ((got.includes("favPresets") || got.includes("combos")) && V.loadMyPresets) V.loadMyPresets();
+  const keys = got.filter((k) => k in KEYK && V.cfg[k]).map((k) => KEYK[k].replace(/ key$/, ""));
+  const said = keys.length === 1 ? keys[0] + " key" : keys.slice(0, -1).join(", ") + " and " + keys[keys.length - 1] + " keys";
+  V.toast(keys.length ? `${said} brought from your Google Drive (saved on ${dev || "another device"}): ready to use on this ${deviceName()}` : `Settings brought up to date from your other device (${dev || "Google Drive"})`, false, 6000, { key: "drivesettings" });
+  try { document.dispatchEvent(new CustomEvent("vl-settings", { detail: { keys: got } })); } catch (e) {}
+}
+async function setKeys(on) {
+  st.keys = !!on; st.keysAt = Date.now(); st.keysDirty = true; st.keysTrash = !on; saveSt(); paintSettings();
+  if (!st.on || blocked()) return;
+  await syncAll();
+  if (!on) V.toast(st.keysTrash ? "Keys and settings stay on each device. The settings file goes to your Drive's bin as soon as VizLab can reach Google Drive." : "Keys and settings are no longer brought to your other devices: VizLab settings (private).json is in your Drive's bin.", false, 8000, { key: "drivekeys" });
+}
+
 // ---------- one sync round ----------
 async function syncOne(r) {
   const m = metas.get(r.pid);
@@ -18699,6 +19027,11 @@ async function syncOne(r) {
   // here and on Drive but never synced on this device (e.g. restored from a backup): the newer one wins, an older one is kept
   return String(row.updated_at || "") <= String(r.at || "") ? pull(r) : conflict(row, { pid: r.pid, blobs: {} }, r);
 }
+// a part that fails for its own reason (not the sign-in or the connection) says so and lets the projects carry on
+async function part(what, fn, words) {
+  try { await fn(); V.closeToastKey && V.closeToastKey("drivefail-" + what); }
+  catch (e) { if (e.kind) throw e; console.warn("drive " + what, e); V.toast(`Couldn't copy ${words} to Google Drive: ${e.message}. It is kept on this device; VizLab tries again by itself.`, true, 0, { key: "drivefail-" + what }); }
+}
 async function syncAll() {
   if (!st.on || blocked()) return;
   if (syncing) { again = true; return syncing; }
@@ -18708,6 +19041,9 @@ async function syncAll() {
       await ensureRoot();
       const dels = (await L.get("kv", "drive:deletes").catch(() => null)) || { id: "drive:deletes", list: [] };
       for (const id of dels.list.slice()) { try { await patch(id, { trashed: true }); } catch (e) { if (e.kind) throw e; } dels.list.splice(dels.list.indexOf(id), 1); await L.put("kv", dels); }
+      // v3.72: keys and settings first (a new device can render straight away), then the office catalogue, then projects
+      await part("settings", setSync, "your keys and settings");
+      await part("catalogue", catSync, "the office catalogue");
       await refreshRemote();
       for (const r of remote.values()) await syncOne(r);
       for (const m of [...metas.values()]) if (m.fileId && !remote.has(m.pid) && !m.detached) await goneRemote(m);
@@ -18739,9 +19075,12 @@ async function connect() {
   else { await loadGIS(); keepTok(await gisAsk(st.email ? "" : "select_account")); st.route = "gis"; }
   const ab = await g("GET", "/drive/v3/about", { query: { fields: "user(displayName,emailAddress)" } });
   const email = (ab.user && ab.user.emailAddress) || "";
-  if (st.email && email !== st.email) { for (const pid of [...metas.keys()]) await dropMeta(pid); covers.clear(); } // another Google account: start afresh
-  Object.assign(st, { on: true, email, name: (ab.user && ab.user.displayName) || "" }); rootId = null; saveSt();
-  V.toast(`Google Drive connected${email ? " (" + email + ")" : ""}: your projects are now saved to the VizLab folder in your Drive too`, false, 6000);
+  if (st.email && email !== st.email) { // another Google account: start afresh
+    for (const pid of [...metas.keys()]) await dropMeta(pid); covers.clear();
+    for (const rid of [...cm.keys()]) await dropCM(rid); catInfo = { id: "drivecatinfo" }; st.keysAt = 0; st.setMax = 0;
+  }
+  Object.assign(st, { on: true, email, name: (ab.user && ab.user.displayName) || "" }); rootId = null; libOk = false; saveSt();
+  V.toast(`Google Drive connected${email ? " (" + email + ")" : ""}: your projects${st.keys !== false ? ", office catalogue, keys and settings" : " and office catalogue"} are now kept in the VizLab folder in your Drive too`, false, 6000);
   await syncAll();
 }
 async function reconnect() {
@@ -18753,7 +19092,7 @@ async function reconnect() {
 }
 async function disconnect() {
   try { if (st.route === "desk") await V.deskCall("/drive/logout", {}); else if (tok && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.token, () => {}); } catch (e) { console.warn(e); }
-  tok = null; dtok = null; V.store.set("driveTok", null); rootId = null;
+  tok = null; dtok = null; V.store.set("driveTok", null); rootId = null; libOk = false;
   Object.assign(st, { on: false, route: "" }); saveSt(); remote = new Map(); keepRemote();
   setState("off", "");
   V.toast("Google Drive disconnected. Your projects stay on this device, and the copies in your Drive stay there.", false, 6000);
@@ -18776,6 +19115,7 @@ V.localApi = async (action, b = {}) => {
     }
   }
   const out = await base(action, b);
+  if ((action === "preset_save" || action === "preset_delete") && st.on) soon(2500); // (saved presets travel with the office catalogue)
   if (action === "project_save" && !applying) {
     const m = metas.get(out.id) || { pid: out.id, blobs: {}, baseRev: 0, seq: 0 };
     m.dirty = true; m.seq = (m.seq || 0) + 1; await putMeta(m);
@@ -18810,8 +19150,10 @@ V.drive = {
     return "Saving to Drive · " + (st.last ? "last synced " + hhmm(st.last) : "not synced yet") + w;
   },
   connect, disconnect, reconnect, sync: () => syncAll(), device: deviceName, preload: () => { if (!blocked() && !deskRoute()) loadGIS().catch(() => {}); },
-  _test: { metas, remote: () => remote, state: () => state }, // (for the tests)
+  keys: () => st.keys !== false, setKeys, // v3.72: bring keys and settings to the other devices
+  _test: { metas, remote: () => remote, state: () => state, cm, cat: () => catInfo }, // (for the tests)
 };
+V.onCatalogueChange = () => { if (st.on) soon(2500); };
 
 function paintSettings() {
   const row = $("#driveRow"); if (!row) return;
@@ -18824,6 +19166,10 @@ function paintSettings() {
   $("#driveSync").textContent = state === "needsauth" ? "Reconnect" : "Sync now"; $("#driveSync").disabled = state === "syncing";
   const c = $("#setDriveClient"); if (c && document.activeElement !== c) c.value = V.store.get("driveClient", "") || "";
   const pd = $("#projDrive"); if (pd) { pd.hidden = !on; pd.textContent = on ? V.drive.line() : ""; }
+  const k = $("#setDriveKeys"), ks = $("#driveKeysStatus"), kr = $("#driveKeysRow");
+  if (kr) kr.hidden = V.cfg.mode === "cloud";
+  if (k) k.checked = st.keys !== false;
+  if (ks) ks.textContent = st.keys === false ? "Off: each device keeps its own keys and settings." : !on ? "On: they come over as soon as Google Drive is connected." : st.setLast ? "On · last brought up to date " + hhmm(st.setLast) : "On";
 }
 const bind = () => {
   if (!$("#driveRow")) return;
@@ -18837,6 +19183,13 @@ const bind = () => {
   const c = $("#setDriveClient");
   if (c) c.onchange = () => { V.store.set("driveClient", c.value.trim()); paintSettings(); };
   const pd = $("#projDrive"); if (pd) pd.onclick = () => (state === "needsauth" ? reconnect() : syncAll());
+  const k = $("#setDriveKeys");
+  if (k) k.onchange = async () => {
+    if (k.checked) return setKeys(true);
+    const ok = await V.confirm("Stop bringing keys and settings?", "The file \"VizLab settings (private).json\" goes to your Google Drive's bin and your other devices stop getting changes from it. The keys already on each device stay there.", "Switch off", { danger: false });
+    if (!ok) { k.checked = true; return; }
+    setKeys(false);
+  };
 };
 
 // ---------- when it syncs ----------
@@ -19287,6 +19640,7 @@ function paintGlance() {
     line(su.length ? "ok" : "off", "SketchUp", su.length ? (su.length === 1 && su[0].id === "sketchup" ? "" : su.map((x) => x.name).join(" and ") + " ") + "connected" : V.SU && !V.desk ? "inside SketchUp" : "not connected", "#sHosts"), // (lfA, P1: VizLab.exe with SketchUp closed is not connected)
     V.SU ? line(V.cfg.autosave && V.cfg.folder ? "ok" : "off", "Save folder", V.cfg.autosave ? V.cfg.folder || "not set" : "off", "#setAutosave") : null,
     V.drive && V.cfg.mode !== "cloud" ? line(V.drive.on() ? (/sign-in ran out|failed/.test(V.drive.line()) ? "bad" : "ok") : "off", "Google Drive", V.drive.on() ? (V.drive.info().last ? "synced " + new Date(V.drive.info().last).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "on") : "off", "#sDrive") : null,
+    V.desk && V.cfg.mode !== "cloud" ? (() => { const cx = linkState && linkState.codex; return !cx ? line("", "ChatGPT", "checking…", "#cxBtn") : !cx.installed ? line("off", "ChatGPT", "Codex not installed", "#cxBtn") : cx.signedIn ? line("ok", "ChatGPT", "signed in", "#cxBtn") : line("off", "ChatGPT", cx.busy ? "finish in the browser…" : "Sign in to ChatGPT", () => V.codexSignIn()); })() : null, // v3.72: one click signs in (per PC)
     line(o.on ? "ok" : "off", "Clarman logo", o.on ? "on, " + corner : "off", "#setLogo"),
     line("", "This month", "~" + V.money(monthCost), () => setView("account")),
     line("", "Version", D.VERSION, "#sAbout")].filter(Boolean)); // (the save-folder line only in SketchUp or the desktop app)
@@ -19345,7 +19699,7 @@ $("#setCosts").onchange = () => { V.store.set("showCosts", $("#setCosts").checke
 // "oauth" only once the sign-in has worked, and "Use the key instead" signs out and goes back to the key. Until IT has filled
 // in the setup under Advanced, the row says so and nothing can be switched on.
 const linkBtns = ["#gSignIn", "#gUseSign", "#gSignOut", "#cxBtn", "#gcBtn", "#setTextAI"];
-let linkState = null;
+var linkState = null; // (var: At a glance, above, reads it too)
 function paintGAuth() {
   const g = linkState && linkState.google, ready = !!(V.cfg.gClient && V.cfg.gProject), on = V.cfg.gauth === "oauth";
   $("#gSignIn").hidden = !ready || !!(g && g.signedIn); $("#gUseSign").hidden = !(g && g.signedIn && !on); $("#gSignOut").hidden = !(g && g.signedIn);
@@ -19366,7 +19720,41 @@ async function fillLinks() {
   $("#gcBtn").disabled = !gc.installed;
   if (cx.signedIn && !V.cfg.useCodex) { V.cfg.useCodex = true; V.store.set("useCodex", true); }
   $("#mdBtn").disabled = !linkState.modly?.installed;
+  paintGlance(); if (V.paintWelcomeCodex) V.paintWelcomeCodex();
 }
+// v3.72 (Stephen: ChatGPT on a new PC): the ChatGPT sign-in belongs to each PC (the official Codex sign-in, desktop/ai.go
+// "codex login"; VizLab never reads its saved login). The welcome card and At a glance offer it in one click.
+V.codexState = async () => {
+  if (!V.desk) return null;
+  try { linkState = await V.deskCall("/ai/status", null, 60000); } catch (e) { return linkState && linkState.codex; }
+  paintGlance(); return linkState.codex;
+};
+V.codexSignIn = async () => {
+  if (!V.desk) return;
+  try {
+    await V.deskCall("/ai/codex/login", {});
+    if (linkState && linkState.codex) linkState.codex.busy = true;
+    paintGlance(); if (V.paintWelcomeCodex) V.paintWelcomeCodex();
+    if (!$("#ovSettings").hidden && $("#cxStatus")) $("#cxStatus").textContent = "Finish signing in in the browser…";
+    V.toast("Sign in to ChatGPT in the browser window that opened. VizLab carries on when it's done.", false, 8000, { key: "cxlogin" });
+    for (let i = 0; i < 100; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const cx = await V.codexState();
+      if (cx && cx.signedIn) { if (!V.cfg.useCodex) { V.cfg.useCodex = true; V.store.set("useCodex", true); } V.engRedraw && V.engRedraw(); if (V.paintWelcomeCodex) V.paintWelcomeCodex(); if (!$("#ovSettings").hidden) fillLinks(); V.closeToastKey && V.closeToastKey("cxlogin"); return V.toast("Signed in to ChatGPT on this PC: ChatGPT Images is in the AI model menu now", false, 5000); }
+      if (cx && !cx.busy && i > 3) break; // (the sign-in window was closed)
+    }
+    if (V.paintWelcomeCodex) V.paintWelcomeCodex();
+  } catch (e) { V.toast(e.message, true, 0); }
+};
+// v3.72: keys and settings brought from Google Drive (drive.js): Settings shows them, and a first run carries on without
+// asking for a key
+document.addEventListener("vl-settings", (e) => {
+  const keys = (e.detail && e.detail.keys) || [];
+  if (!$("#ovSettings").hidden) { fillSettings(); if (keys.includes("gkey") && V.cfg.gkey && $("#setStatus")) { $("#setStatus").textContent = "✓ Your Google key came from your Google Drive. You're ready to render."; $("#setGoRender").hidden = false; } }
+  else { paintKeys(); if (V.paintNext) V.paintNext(); }
+  if (keys.includes("showCosts")) paintCosts();
+  if (!booted && V.aiReady()) boot(false);
+});
 // Modly is checked from the page itself (its API allows it), so this also works in a browser
 async function fillModly() {
   const m = await V.modlyStatus();

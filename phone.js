@@ -425,7 +425,24 @@ $("#shDone").onclick = closeSheet; $("#shade").onclick = closeSheet;
 })();
 
 // ---------- welcome ----------
-function paintWelcome() { $("#wKey").value = ""; $("#wStatus").textContent = ""; $("#wStatus").className = "status"; }
+function paintWelcome() {
+  $("#wKey").value = ""; $("#wStatus").textContent = ""; $("#wStatus").className = "status";
+  // v3.72: the key (and settings, catalogue, projects) from Google Drive, when VizLab is already used on a PC
+  const di = V.drive ? V.drive.info() : null, can = !!(di && !di.why && !di.on);
+  $("#wDrive").hidden = !can; $("#wDriveStatus").textContent = ""; $("#wDriveStatus").className = "status";
+  if (can) V.drive.preload();
+}
+const welcomeDone = () => { stack.length = 0; paintHome(); show("home", 1); a2hsHint(); };
+$("#wDriveBtn").onclick = async () => {
+  const b = $("#wDriveBtn"), s = $("#wDriveStatus"); b.disabled = true; s.className = "status"; s.textContent = "Connecting to Google Drive…";
+  try { await V.drive.connect(); } catch (e) { s.className = "status bad"; s.textContent = e.message; b.disabled = false; return; }
+  b.disabled = false;
+  if (cfg.key) { s.className = "status ok"; s.textContent = "Your key came from your Google Drive."; setTimeout(welcomeDone, 600); }
+  else { s.className = "status"; s.textContent = V.drive.keys() ? "Connected. No key was in your Drive yet: paste it above once." : "Connected. Bringing keys to other devices is switched off on the PC, so paste the key above."; $("#wDrive").hidden = true; }
+};
+// keys from Google Drive (drive.js): the welcome screen goes, and an open Settings or Library page shows what came
+document.addEventListener("vl-settings", () => { if (cur === "welcome" && cfg.key) welcomeDone(); else if (cur === "settings") paintSettings(); else if (cur === "home") paintHome(); });
+document.addEventListener("vl-catalogue", () => { if (cur === "library") paintLibrary(); });
 async function keySave(input, status, after) {
   const key = input.value.trim().replace(/\s+/g, "");
   status.className = "status"; if (!key) { status.textContent = "Paste the key first."; status.className = "status bad"; return; }
@@ -877,8 +894,13 @@ async function paintSettings() {
     const ob = h("button", { class: "btn sec" }, "Disconnect"); ob.onclick = async () => { if (await confirmBox("Disconnect Google Drive?", "VizLab stops copying projects to your Drive. Everything stays on this phone, and the copies already in your Drive stay there.", "Disconnect")) { await V.drive.disconnect(); paintSettings(); } };
     B.append(h("div", { class: "set", id: "phDrive" }, h("h3", {}, "Google Drive"),
       on ? h("div", { class: "keyrow" }, h("span", { class: "okdot" }), h("span", {}, "Connected · " + (di.email || "Google Drive"))) : null,
-      h("p", {}, on ? V.drive.line() : di.why || "Save your projects to your own Google Drive, so they are on the PC and this phone. Google's own window does the sign-in."),
-      on ? h("div", { class: "row" }, sb, ob) : di.why ? null : cb));
+      h("p", {}, on ? V.drive.line() : di.why || "Save your projects and the office catalogue to your own Google Drive, so they are on the PC and this phone. Google's own window does the sign-in."),
+      on ? h("div", { class: "row" }, sb, ob) : di.why ? null : cb,
+      // v3.72: keys and settings come over too (the same switch as the PC's Settings › Google Drive)
+      di.why ? null : h("div", { class: "sw", id: "phDriveKeys", style: "background:none;border:0;padding:0;margin:14px 0 0", role: "switch", "aria-checked": V.drive.keys(), onclick: async () => {
+        if (V.drive.keys() && !(await confirmBox("Stop bringing keys and settings?", "The file \"VizLab settings (private).json\" goes to your Google Drive's bin, and your other devices stop getting changes from it. The keys already on each device stay there.", "Switch off"))) return;
+        await V.drive.setKeys(!V.drive.keys()); paintSettings();
+      } }, h("div", { class: "ot" }, h("b", {}, "Bring my keys and settings to my other devices"), h("small", {}, "Your Google and fal.ai keys and preferences are kept in a file in your own Drive, so this phone and your PCs share them. The keys are readable text in that file: only VizLab and you can open it, but anyone who gets into your Google account could see them.")), h("span", { class: "tog" + (V.drive.keys() ? " on" : "") }))));
   }
   const e = engOf(cfg.model);
   B.append(h("div", { class: "set" }, h("h3", {}, "Renders"), h("p", {}, `${e.name} · ${cfg.res} · ${cfg.shape === "auto" ? "same shape as the picture" : cfg.shape}`),
@@ -905,7 +927,7 @@ async function paintSettings() {
     drow("sliders", "Usage", "Pictures made and estimated running costs, by month", () => deskPage("account", "Usage")),
     drow("info", "Help and tutorial", "Quick start and every how-to topic", () => deskPage("help", "Help")))));
   B.append(h("div", { class: "set" }, h("h3", {}, "On the Home Screen"), h("p", { style: "margin:0" }, standalone() ? "VizLab is running from your Home Screen." : "In Safari, tap Share, then Add to Home Screen. VizLab then opens like an app, full screen, even without a connection.")));
-  B.append(h("p", { class: "ver" }, `Clarman VizLab Mobile · version ${VERSION}`), h("p", { class: "ver", style: "margin-top:0" }, "Your key and pictures stay on this phone. Pictures go only to Google, when you press Render, Edit or Upscale."));
+  B.append(h("p", { class: "ver" }, `Clarman VizLab Mobile · version ${VERSION}`), h("p", { class: "ver", style: "margin-top:0" }, V.drive && V.drive.on() ? (V.drive.keys() ? "Your key, settings and projects are also kept in your own Google Drive." : "Your projects are also kept in your own Google Drive; your key stays on this phone.") + " Pictures go to Google's AI only when you press Render, Edit or Upscale." : "Your key and pictures stay on this phone. Pictures go only to Google, when you press Render, Edit or Upscale."));
 }
 async function backup() {
   await saved();
