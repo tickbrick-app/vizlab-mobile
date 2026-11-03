@@ -439,3 +439,8 @@ body.tabson #a2hs{bottom:calc(var(--sab) + var(--tabh) + 12px)}
 .mini3 .ti svg.i{width:26px;height:26px}
 .mini3 b{font:600 15.5px/1.15 var(--head)}
 .mini3 small{color:var(--mute);font-size:12.5px;line-height:1.2}
+/* Google Drive badge on a project card (drive.js) */
+.pcard .drv{position:absolute;right:10px;top:10px;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#0a0a0ad0;border:1px solid var(--acc);color:#fff;font:600 13px var(--head)}
+.pcard .drv::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--acc)}
+.pcard .drv.remote{background:var(--acc);color:#0a0a0a}
+.pcard .drv.remote::before{background:#0a0a0a}

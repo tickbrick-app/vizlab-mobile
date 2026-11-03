@@ -764,6 +764,8 @@ async function newProject() {
   await saved(); V.newProject(); V.project.name = name.slice(0, 80); V.updateTitle(); tab("home");
   say(`Project "${V.project.name}": add a photo to start`);
 }
+// (Google Drive: the list follows a sync; projects from the PC appear "On Drive")
+document.addEventListener("vl-drive", () => { const pj = $("#jList"); if (pj && pj.offsetParent) paintProjects(); });
 async function paintProjects() {
   const L = $("#jList"); L.innerHTML = "";
   let list = [];
@@ -776,7 +778,8 @@ async function paintProjects() {
     const c = h("button", { class: "pcard" + (on ? " cur" : ""), style: `animation-delay:${Math.min(i, 8) * 30}ms`, onclick: (e) => { if (e.target.closest(".more3")) return; if (p.id) openProject(p.id); else tab("home"); } },
       p.thumb ? h("img", { class: "th", src: p.thumb, alt: "", loading: "lazy" }) : h("span", { class: "noth", html: icon("folder") }),
       on ? h("span", { class: "now" }, "Open now") : null,
-      h("span", { class: "cap" }, h("b", {}, p.name), h("small", {}, [n, p.updated_at ? when(Date.parse(p.updated_at)) : "not saved yet"].filter(Boolean).join(" · "))));
+      p.drive === "on" || p.drive === "remote" ? h("span", { class: "drv" + (p.drive === "remote" ? " remote" : "") }, "On Drive") : null,
+      h("span", { class: "cap" }, h("b", {}, p.name), h("small", {}, [p.drive === "remote" ? "not on this phone yet" : "", n, p.updated_at ? when(Date.parse(p.updated_at)) : "not saved yet"].filter(Boolean).join(" · "))));
     if (p.id) c.append(h("span", { class: "more3", role: "button", "aria-label": "More for " + p.name, html: icon("more"), onclick: (e) => { e.stopPropagation(); projectSheet(p); } }));
     L.append(c);
   });
@@ -864,6 +867,19 @@ async function paintSettings() {
     k ? h("div", { class: "keyrow" }, h("span", { class: "okdot" }), h("span", {}, "Saved on this phone · ", h("span", { class: "k" }, "…" + k.slice(-4))), h("span", { style: "flex:1" })) : h("p", {}, "No key yet: renders need the office Google key."),
     k ? h("div", { class: "row" }, h("button", { class: "btn sec", onclick: () => { keyBox.hidden = false; inp.focus(); } }, "Change key"), h("button", { class: "btn sec", onclick: async () => { if (await confirmBox("Remove the key?", "VizLab can't render until a key is added again. Your pictures stay.", "Remove", true)) { cfg.key = ""; paintSettings(); } } }, "Remove")) : null,
     keyBox));
+  // Google Drive (the desktop's drive.js): the same projects on the PC and this phone
+  if (V.drive) {
+    const di = V.drive.info(), on = V.drive.on();
+    if (!on) V.drive.preload(); // (Google's sign-in script ready before the tap, so its window opens from the tap)
+    const dbusy = (b, fn) => async () => { b.disabled = true; try { await fn(); } catch (er) { alertBox("Google Drive", er.message); } paintSettings(); };
+    const cb = h("button", { class: "btn pri" }, "Connect Google Drive"); cb.onclick = dbusy(cb, () => V.drive.connect());
+    const sb = h("button", { class: "btn sec" }, di.state === "needsauth" ? "Reconnect" : "Sync now"); sb.onclick = dbusy(sb, () => (di.state === "needsauth" ? V.drive.reconnect() : V.drive.sync()));
+    const ob = h("button", { class: "btn sec" }, "Disconnect"); ob.onclick = async () => { if (await confirmBox("Disconnect Google Drive?", "VizLab stops copying projects to your Drive. Everything stays on this phone, and the copies already in your Drive stay there.", "Disconnect")) { await V.drive.disconnect(); paintSettings(); } };
+    B.append(h("div", { class: "set", id: "phDrive" }, h("h3", {}, "Google Drive"),
+      on ? h("div", { class: "keyrow" }, h("span", { class: "okdot" }), h("span", {}, "Connected · " + (di.email || "Google Drive"))) : null,
+      h("p", {}, on ? V.drive.line() : di.why || "Save your projects to your own Google Drive, so they are on the PC and this phone. Google's own window does the sign-in."),
+      on ? h("div", { class: "row" }, sb, ob) : di.why ? null : cb));
+  }
   const e = engOf(cfg.model);
   B.append(h("div", { class: "set" }, h("h3", {}, "Renders"), h("p", {}, `${e.name} · ${cfg.res} · ${cfg.shape === "auto" ? "same shape as the picture" : cfg.shape}`),
     h("button", { class: "btn sec", onclick: () => optionsSheet(paintSettings) }, "AI model, size and shape")));

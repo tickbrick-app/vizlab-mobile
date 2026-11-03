@@ -1,4 +1,4 @@
-/* VizLab 3.70.0: web/style.css scoped under .dk for VizLab Mobile by build_mobile.py (scopecss.py) */
+/* VizLab 3.71.0: web/style.css scoped under .dk for VizLab Mobile by build_mobile.py (scopecss.py) */
 .dk{
   --bg:#0a0a0a; --canvas:#111112; --panel:#161617; --panel2:#1f1f21; --card:#18181a; --line:#262628; --line2:#363739;
   --text:#fefefe; --mute:#8f9093; --dim:#808185;
@@ -2423,3 +2423,13 @@ body.enlarged.cmpview:not(.modalup) .dk .toasts{bottom:calc(var(--pbarH,80px) + 
 .dk .rdkeep.off{opacity:.6}
 .dk .rdkeep.off .switch span{cursor:not-allowed}
 @media (max-width:900px){.dk .rdcols{grid-template-columns:1fr}}
+.dk .pcard .pthumb{position:relative}
+.dk .pdrive{position:absolute;right:8px;top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(10,10,10,.82);color:var(--text);border:1px solid var(--acc);font-size:var(--fs2);font-weight:600;padding:2px 9px;border-radius:var(--r1)}
+.dk .pdrive::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--acc)}
+.dk .pdrive.remote{background:var(--acc);color:#0a0a0a}
+.dk .pdrive.remote::before{background:#0a0a0a}
+.dk .pdrive.wait{border-color:var(--line);color:var(--mute)}
+.dk .pdrive.wait::before{background:var(--mute)}
+.dk .pdriveline{display:block;margin:0 20px 6px;background:none;border:0;padding:0;color:var(--mute);font:inherit;font-size:var(--fs3);cursor:pointer;text-align:left}
+.dk .pdriveline:hover{color:var(--acc)}
+.dk #driveStatus.warn{color:var(--acc)}

@@ -1,4 +1,4 @@
-/* VizLab 3.70.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
+/* VizLab 3.71.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
 
 /* ===== web/data.js ===== */
 // VizLab static data
@@ -136,10 +136,11 @@ const I = {
 };
 
 window.VLD = {
-  VERSION: "3.70.0",
+  VERSION: "3.71.0",
   // v3.69 (FR20): what changed, in plain words, 2-5 lines per version. The first open after an update shows "VizLab updated:
   // see what's new" (shell.js), and the Tutorial starts with a What's new chapter. Add the new version's lines at every release.
   NEWS: {
+    "3.71.0": ["Save to Google Drive: connect your Drive in Settings and your projects and pictures follow you to every device, iPhone included (a copy stays on each device for offline work)"],
     "3.70.0": [
       "Update the design: when the client changes an approved render's design, right-click the render → Update the design…, give it the new SketchUp view (or drawing), and the render is redrawn on the new design with the same materials, light, sky and camera. Only the parts that changed are new; the rest stays exactly as approved.",
     ],
@@ -157,6 +158,9 @@ window.VLD = {
     ],
   },
   API_URL: "https://ypdtizzmoujafeyrjxzo.supabase.co/functions/v1/api",
+  // Save to Google Drive (drive.js, code/DRIVE-SETUP.md): the practice's OAuth client ID of type "Web application". Not a
+  // secret (Google shows it to every browser that signs in). Empty until IT makes it; Settings › Advanced can hold one too.
+  driveClientId: "",
   ANON: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwZHRpenptb3VqYWZleXJqeHpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1ODQ2NzAsImV4cCI6MjEwODE2MDY3MH0.J5IRBRtcCUfDfBGZ83qo06f_aTtryuUcUKCIVrmaBRo",
   icons: I,
 
@@ -1437,7 +1441,7 @@ const paintSave = (st, tip = "", text) => {
   clearTimeout(fadeT); el.className = "savestate" + (st ? " " + st : ""); el.textContent = text || SAVE_TEXT[st] || ""; el.title = tip; el.disabled = st !== "bad" && st !== "part";
   if (st === "saved") fadeT = setTimeout(() => el.classList.add("old"), 3000);
 };
-const where = () => (V.cfg.mode === "cloud" ? "on the VizLab server" : V.desk ? "on this PC" : "in this browser on this PC");
+const where = () => (V.cfg.mode === "cloud" ? "on the VizLab server" : (V.desk ? "on this PC" : "in this browser on this PC") + (V.drive && V.drive.on() ? ", and copied to your Google Drive" : ""));
 const hhmm = () => new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 V.changed = (immediate = false) => {
   if (!V.G.nodes.length && !V.project.id) return; // nothing to keep yet (a blank canvas)
@@ -1943,6 +1947,7 @@ const get = (store, id) => tx(store, "readonly", (s) => s.get(id));
 const del = (store, id) => tx(store, "readwrite", (s) => s.delete(id));
 const all = (store) => tx(store, "readonly", (s) => s.getAll());
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : V.uid() + V.uid());
+V.localDB = { get, put, del, all, uuid }; // (v3.71 drive.js: the Google Drive copy reads and writes the same stores)
 
 // ---------- engine builders (same as the server version) ----------
 const G_MODELS = { "nano-banana-2.1": "gemini-nano-banana-2.1", "nano-banana-pro": "gemini-3-pro-image", "nano-banana-2": "gemini-3.1-flash-image" };
@@ -18333,6 +18338,524 @@ V.canRedesign = (n) => !!(n && (V.redesignSource(n) || V.redesignMatch(n)));
 
 ;
 
+/* ===== web/drive.js ===== */
+/* VizLab: Save to Google Drive (v3.71, code/DRIVE-SETUP.md). With Drive connected, every project kept on this device is also
+   copied into a "VizLab" folder in the user's own Google Drive: one folder per project holding "<name>.vizlab.json" (the canvas
+   with every large picture replaced by a reference) and each picture as its own full-quality file (renders at the top, previews,
+   layers and masks in "Working files"). The IndexedDB copy stays the working copy, so VizLab works offline and catches up later.
+   Other devices signed in to the same Google account list those projects ("On Drive") and download one when it is opened.
+   Scope drive.file only: VizLab sees only the files it made itself.
+   Sign-in: VizLab.exe with the practice's Desktop OAuth client (Settings › Advanced › Google sign-in setup) uses the exe's own
+   loopback sign-in (desktop/drive.go: refresh token kept encrypted for this Windows user, so it never asks again); everywhere
+   else (VizLab Mobile, the exe without that client) Google Identity Services in the page, with the Web client ID
+   (D.driveClientId or Settings › Advanced): its tokens last an hour, then "Reconnect" asks Google again (one tap, no password
+   when still signed in to Google). VizLab.html opened as a file can't sign in (Google needs a web address).
+   Sync: each project has a revision on Drive (appProperties rev). A device that saved revision N and finds N on Drive uploads
+   N+1. If Drive has moved on and this device has changes of its own, both are kept: this device's copy becomes
+   "<name> (from <device>, 3 Nov 14:05)" and the other device's version comes in under the original name; a message says so.
+   Nothing on Drive is ever deleted outright: removed projects and pictures go to the Drive bin. */
+(() => {
+const V = window.V, D = V.D, { $, h } = V;
+const L = V.localDB;
+const SCOPE = "https://www.googleapis.com/auth/drive.file";
+const FOLDER = "application/vnd.google-apps.folder";
+const BIG = 4096; // data URLs longer than this become their own file on Drive
+// tests only: a pretend Google (scratchpad mockdrive.py) is put in window.__vlDriveTest before the app loads
+const T = () => window.__vlDriveTest || null;
+const API = () => (T() && T().api) || "https://www.googleapis.com";
+const GIS = () => (T() && T().gis) || "https://accounts.google.com/gsi/client";
+
+// ---------- state ----------
+const st = Object.assign({ on: false, email: "", name: "", route: "", last: null }, V.store.get("drive", {}) || {});
+const saveSt = () => V.store.set("drive", st);
+let tok = V.store.get("driveTok", null); // GIS access token {token, exp} (one hour)
+let dtok = null; // the exe's access token {token, expires}
+let state = st.on ? "idle" : "off", lastErr = "";
+const metas = new Map(); // pid -> {pid, fileId, folderId, dataId, baseRev, sig, name, blobs {hash: fileId}, dirty, seq, email, detached}
+let remote = new Map(); // pid -> {pid, fileId, folderId, rev, name, at, dev, pics, sheets, cover}
+const covers = new Map(); // pid -> {id, url}
+let applying = 0, syncing = null, again = false, timer = null, reauthTold = false, ready = null;
+const clientId = () => (V.store.get("driveClient", "") || D.driveClientId || "").trim();
+const deskRoute = () => !!(V.desk && V.cfg.gClient && V.cfg.gSecret);
+const ping = () => { try { document.dispatchEvent(new CustomEvent("vl-drive")); } catch (e) {} paintSettings(); };
+const setState = (s, err) => { state = s; if (err !== undefined) lastErr = err; ping(); };
+const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const dayTime = (t) => { const d = new Date(t); return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " " + hhmm(d); };
+const plural = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+function deviceName() {
+  const u = navigator.userAgent || "";
+  if (/iPhone/.test(u)) return "iPhone";
+  if (/iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1)) return "iPad";
+  if (/Android/.test(u)) return /Mobile/.test(u) ? "Android phone" : "Android tablet";
+  if (/Mac OS X/.test(u)) return "Mac";
+  return "PC";
+}
+
+// why Drive can't be used here (null = it can)
+function blocked() {
+  if (V.cfg.mode === "cloud") return "Google Drive saving is for projects kept on this device. With the VizLab cloud server switched on (Advanced), projects are already kept on the server.";
+  if (location.protocol === "file:") return "Google Drive can't be used in VizLab.html opened from a file: Google only allows the sign-in from VizLab.exe or VizLab Mobile, not from a file on this PC. Open VizLab.exe (or VizLab Mobile on your phone) to save to Drive.";
+  if (!window.crypto || !crypto.subtle) return "This window can't use Google Drive (it isn't a secure page). Use VizLab.exe or VizLab Mobile.";
+  if (!deskRoute() && !clientId()) return "Not set up yet: IT pastes the practice's Google Drive client ID once, under Advanced › Google Drive setup.";
+  return null;
+}
+
+// ---------- errors ----------
+const authErr = () => { const e = new Error("Google Drive needs you to sign in again"); e.kind = "auth"; return e; };
+const offErr = () => { const e = new Error("No internet connection"); e.kind = "offline"; return e; };
+
+// ---------- sign-in ----------
+let gisP = null;
+const loadGIS = () => gisP || (gisP = new Promise((res, rej) => {
+  if (window.google && google.accounts && google.accounts.oauth2) return res();
+  const s = document.createElement("script"); s.src = GIS(); s.async = true;
+  s.onload = () => (window.google && google.accounts && google.accounts.oauth2 ? res() : rej(new Error("Google's sign-in didn't load")));
+  s.onerror = () => { gisP = null; rej(new Error("Couldn't reach Google's sign-in (are you online?)")); };
+  document.head.append(s);
+}));
+function gisAsk(prompt) {
+  return new Promise((res, rej) => {
+    let c;
+    try {
+      c = google.accounts.oauth2.initTokenClient({ client_id: clientId(), scope: SCOPE, prompt, login_hint: st.email || undefined,
+        callback: (r) => {
+          if (!r || r.error || !r.access_token) return rej(new Error((r && (r.error_description || r.error)) || "Google sign-in didn't finish"));
+          if (google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(r, SCOPE)) return rej(new Error("Google Drive access wasn't allowed: press Connect again and leave the Google Drive box ticked"));
+          res(r);
+        },
+        error_callback: (e) => rej(new Error(e && e.type === "popup_closed" ? "The Google window was closed before signing in finished" : e && e.type === "popup_failed_to_open" ? "The Google window was blocked: allow pop-ups for VizLab, then press Connect again" : "Google sign-in didn't finish")) });
+    } catch (e) { return rej(e); }
+    c.requestAccessToken({ prompt });
+  });
+}
+const keepTok = (r) => { tok = { token: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3600) * 1000 }; V.store.set("driveTok", tok); };
+async function token() {
+  if (st.route === "desk") {
+    if (!dtok || Date.now() / 1000 > dtok.expires - 30) { try { dtok = await V.deskCall("/drive/token", null, 30000); } catch (e) { dtok = null; const x = authErr(); x.message = e.message; throw x; } }
+    return dtok.token;
+  }
+  if (tok && Date.now() < tok.exp - 60000) return tok.token;
+  throw authErr();
+}
+
+// ---------- Drive calls ----------
+async function g(method, path, o = {}, retried = false) {
+  if (!navigator.onLine) throw offErr();
+  const t = await token();
+  const url = (o.abs ? path : API() + path) + (o.query ? (path.includes("?") ? "&" : "?") + new URLSearchParams(o.query) : "");
+  const headers = Object.assign({ Authorization: "Bearer " + t }, o.json !== undefined ? { "Content-Type": "application/json; charset=UTF-8" } : {}, o.headers || {});
+  let r;
+  try { r = await fetch(url, { method, headers, body: o.json !== undefined ? JSON.stringify(o.json) : o.body }); }
+  catch (e) { const x = navigator.onLine ? new Error("Couldn't reach Google Drive (" + e.message + ")") : offErr(); if (navigator.onLine) x.kind = "net"; throw x; }
+  if (r.status === 401) {
+    if (st.route === "desk" && !retried) { dtok = null; return g(method, path, o, true); }
+    tok = null; V.store.set("driveTok", null); throw authErr();
+  }
+  if (!r.ok) { let m = ""; try { m = (await r.json()).error.message; } catch (e) {} const x = new Error("Google Drive: " + (m || "error " + r.status)); x.status = r.status; throw x; }
+  if (o.raw) return r;
+  return r.status === 204 ? null : r.json();
+}
+const qs = (s) => String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function list(q, fields) {
+  const out = []; let pageToken = "";
+  do {
+    const r = await g("GET", "/drive/v3/files", { query: Object.assign({ q, fields: "nextPageToken,files(" + fields + ")", pageSize: "1000", spaces: "drive" }, pageToken ? { pageToken } : {}) });
+    out.push(...(r.files || [])); pageToken = r.nextPageToken || "";
+  } while (pageToken);
+  return out;
+}
+const mkFolder = (name, parent, ap) => g("POST", "/drive/v3/files", { query: { fields: "id" }, json: { name, mimeType: FOLDER, parents: parent ? [parent] : undefined, appProperties: ap } });
+const fileMeta = (id, fields) => g("GET", "/drive/v3/files/" + encodeURIComponent(id), { query: { fields } });
+const patch = (id, json) => g("PATCH", "/drive/v3/files/" + encodeURIComponent(id), { query: { fields: "id" }, json });
+const download = async (id) => (await g("GET", "/drive/v3/files/" + encodeURIComponent(id), { query: { alt: "media" }, raw: true })).blob();
+// create (no id) or replace a file's content and metadata; over 4 MB as a resumable upload
+async function upload(meta, blob, id) {
+  const path = "/upload/drive/v3/files" + (id ? "/" + encodeURIComponent(id) : ""), type = blob.type || "application/octet-stream";
+  if (blob.size <= 4 * 1048576) {
+    const bd = "vlb" + V.uid() + V.uid();
+    const body = new Blob([`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: ${type}\r\n\r\n`, blob, `\r\n--${bd}--`]);
+    return g(id ? "PATCH" : "POST", path, { query: { uploadType: "multipart", fields: "id" }, body, headers: { "Content-Type": "multipart/related; boundary=" + bd } });
+  }
+  const r = await g(id ? "PATCH" : "POST", path, { query: { uploadType: "resumable", fields: "id" }, json: meta, headers: { "X-Upload-Content-Type": type, "X-Upload-Content-Length": String(blob.size) }, raw: true });
+  const loc = r.headers.get("Location"); if (!loc) throw new Error("Google Drive didn't start the upload");
+  return g("PUT", loc, { abs: true, body: blob, headers: { "Content-Type": type } });
+}
+
+// ---------- pictures <-> files ----------
+function toBlob(u) {
+  const i = u.indexOf(","), head = u.slice(5, i), mime = head.split(";")[0] || "application/octet-stream";
+  if (/;base64/i.test(head)) { const b = atob(u.slice(i + 1)), a = new Uint8Array(b.length); for (let k = 0; k < b.length; k++) a[k] = b.charCodeAt(k); return new Blob([a], { type: mime }); }
+  return new Blob([decodeURIComponent(u.slice(i + 1))], { type: mime });
+}
+const toDataUrl = (b) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(b); });
+const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg", "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "model/gltf-binary": "glb", "application/pdf": "pdf" };
+const mimeOf = (u) => u.slice(5, u.indexOf(",")).split(";")[0] || "application/octet-stream";
+const hcache = new Map();
+async function hashOf(s) {
+  let v = hcache.get(s); if (v) return v;
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+  v = Array.prototype.map.call(d, (x) => (x < 16 ? "0" : "") + x.toString(16)).join("").slice(0, 40);
+  if (hcache.size > 400) hcache.delete(hcache.keys().next().value);
+  hcache.set(s, v); return v;
+}
+// file and folder names: as typed, without slashes or control characters (Drive itself allows the rest)
+const clean = (s) => String(s || "").replace(/[\\/\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) || "Picture";
+// an appProperties value must fit in 124 bytes with its key (UTF-8)
+const fitAp = (k, v) => { let s = String(v || ""); while (new TextEncoder().encode(k + s).length > 124) s = s.slice(0, -1); return s; };
+// the pictures' names, as the canvas shows them (V.nodeTitle reads V.G, so it is pointed at this project's graph for a moment)
+function titles(graph) {
+  const out = new Map(), was = V.G;
+  try { V.G = { nodes: graph.nodes || [], edges: graph.edges || [], groups: graph.groups || [] }; (graph.nodes || []).forEach((n) => { let t = ""; try { t = V.nodeTitle ? V.nodeTitle(n) : ""; } catch (e) {} out.set(n.id, clean(t || n.label || n.kind || "Picture")); }); }
+  finally { V.G = was; }
+  return out;
+}
+// the project with every large data URL replaced by "vlblob:<hash>"; found = hash -> {url, label, top}
+async function strip(row) {
+  const graph = row.graph || {}, found = new Map(), names = titles(graph);
+  const walk = async (v, label, top) => {
+    if (typeof v === "string") {
+      if (v.length <= BIG || !v.startsWith("data:")) return v;
+      const k = await hashOf(v), f = found.get(k);
+      if (!f) found.set(k, { url: v, label, top }); else if (top && !f.top) Object.assign(f, { label, top });
+      return "vlblob:" + k;
+    }
+    if (Array.isArray(v)) { const o = []; for (const x of v) o.push(await walk(x, label, false)); return o; }
+    if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = await walk(v[k], label, false); return o; }
+    return v;
+  };
+  const g2 = {};
+  for (const key of Object.keys(graph)) {
+    if (key !== "nodes" || !Array.isArray(graph.nodes)) { g2[key] = await walk(graph[key], key === "sheets" ? "Sheets picture" : key === "library" ? "Library picture" : "Project picture", false); continue; }
+    g2.nodes = [];
+    for (const n of graph.nodes) {
+      const t = names.get(n.id) || "Picture", o = {};
+      for (const k of Object.keys(n)) o[k] = await walk(n[k], k === "url" ? t : k === "thumb" ? t + " (preview)" : k === "poster" ? t + " (still)" : t + " (" + k + ")", k === "url");
+      g2.nodes.push(o);
+    }
+  }
+  const thumb = await walk(row.thumb || null, "Project card", false);
+  return { graph: g2, thumb, found };
+}
+function restore(v, urls, miss) {
+  if (typeof v === "string") { if (!v.startsWith("vlblob:")) return v; const u = urls[v.slice(7)]; if (u == null) miss.n++; return u || ""; }
+  if (Array.isArray(v)) return v.map((x) => restore(x, urls, miss));
+  if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = restore(v[k], urls, miss); return o; }
+  return v;
+}
+const sigOf = (name, graph) => hashOf(JSON.stringify([name, graph]));
+
+// ---------- per-project records (IndexedDB kv "drive:<id>") ----------
+const putMeta = (m) => { metas.set(m.pid, m); return L.put("kv", Object.assign({ id: "drive:" + m.pid }, m)).catch(() => {}); };
+const dropMeta = (pid) => { metas.delete(pid); return L.del("kv", "drive:" + pid).catch(() => {}); };
+async function init() {
+  try {
+    const rows = await L.all("kv");
+    rows.forEach((r) => {
+      if (/^drive:/.test(r.id) && r.pid) metas.set(r.pid, r);
+      if (r.id === "driveinfo:remote" && st.on) remote = new Map((r.list || []).map((x) => [x.pid, x]));
+      if (/^drivecover:/.test(r.id)) covers.set(r.id.slice(11), { id: r.cid, url: r.url });
+    });
+  } catch (e) { console.warn("drive init", e); }
+}
+const keepRemote = () => L.put("kv", { id: "driveinfo:remote", list: [...remote.values()] }).catch(() => {});
+
+// ---------- root folder ----------
+let rootId = null;
+async function ensureRoot() {
+  if (rootId) return rootId;
+  const f = await list("appProperties has { key='vizlab' and value='root' } and trashed=false", "id");
+  rootId = f.length ? f[0].id : (await mkFolder("VizLab", null, { vizlab: "root" })).id;
+  return rootId;
+}
+
+// ---------- the list of projects on Drive ----------
+const fromFile = (f) => { const a = f.appProperties || {}; return { pid: a.pid, fileId: f.id, folderId: (f.parents || [])[0], rev: Number(a.rev) || 0, name: a.nm || String(f.name || "").replace(/\.vizlab\.json$/, ""), at: a.at || f.modifiedTime, dev: a.dev || "another device", pics: Number(a.pics) || 0, sheets: Number(a.sheets) || 0, cover: a.cover || "" }; };
+async function refreshRemote() {
+  const files = await list("appProperties has { key='vizlab' and value='graph' } and trashed=false", "id,name,parents,appProperties,modifiedTime");
+  remote = new Map(files.map(fromFile).filter((r) => r.pid).map((r) => [r.pid, r]));
+  keepRemote();
+}
+async function fetchCovers() {
+  for (const r of remote.values()) {
+    if (!r.cover || (covers.get(r.pid) || {}).id === r.cover || metas.has(r.pid)) continue;
+    try { const url = await toDataUrl(await download(r.cover)); covers.set(r.pid, { id: r.cover, url }); L.put("kv", { id: "drivecover:" + r.pid, cid: r.cover, url }).catch(() => {}); ping(); } catch (e) { if (e.kind) return; }
+  }
+}
+
+// ---------- upload one project ----------
+async function push(pid) {
+  const row = await L.get("projects", pid); if (!row) return;
+  let m = metas.get(pid) || { pid, blobs: {}, baseRev: 0, seq: 0, dirty: true };
+  if (m.detached && !m.dirty) return;
+  const seq0 = m.seq || 0;
+  const s = await strip(row), sig = await sigOf(row.name, s.graph);
+  if (m.fileId && sig === m.sig) { m.dirty = (m.seq || 0) !== seq0; return putMeta(m); }
+  if (m.fileId) {
+    let f = null; try { f = await fileMeta(m.fileId, "id,trashed,appProperties,parents,name,modifiedTime"); } catch (e) { if (e.status !== 404) throw e; }
+    if (!f || f.trashed) m = Object.assign(m, { fileId: null, folderId: null, dataId: null, blobs: {}, baseRev: 0 }); // gone from Drive: put it back as it is here
+    else if ((Number((f.appProperties || {}).rev) || 0) !== (m.baseRev || 0)) return conflict(row, m, fromFile(f));
+  }
+  const root = await ensureRoot();
+  if (!m.folderId) { m.folderId = (await mkFolder(clean(row.name), root, { vizlab: "project", pid })).id; m.dataId = null; m.blobs = {}; await putMeta(m); }
+  else if (m.name && m.name !== row.name) await patch(m.folderId, { name: clean(row.name) });
+  if (!m.dataId) { m.dataId = (await mkFolder("Working files", m.folderId, { vizlab: "data", pid })).id; await putMeta(m); }
+  m.nm = m.nm || {}; const used = new Set(Object.keys(m.nm).map((k) => m.nm[k]));
+  for (const [k, b] of s.found) {
+    if (m.blobs[k]) continue;
+    const ext = EXT[mimeOf(b.url)] || "bin", where = b.top ? "" : "w/"; let nm = b.label, i = 2; while (used.has(where + nm + "." + ext)) nm = `${b.label} (${i++})`;
+    used.add(where + nm + "." + ext); m.nm[k] = where + nm + "." + ext;
+    m.blobs[k] = (await upload({ name: nm + "." + ext, parents: [b.top ? m.folderId : m.dataId], mimeType: mimeOf(b.url), appProperties: { vizlab: "pic", pid } }, toBlob(b.url))).id;
+    await putMeta(m); // (kept as it goes, so a broken connection carries on from the next picture)
+  }
+  const blobs = {}; for (const k of s.found.keys()) blobs[k] = { id: m.blobs[k], mime: mimeOf(s.found.get(k).url) };
+  const rev = (m.baseRev || 0) + 1, dev = deviceName();
+  const json = { vizlab: "project", v: 1, id: pid, name: row.name, created_at: row.created_at, updated_at: row.updated_at, stats: row.stats || null, device: dev, rev, thumb: s.thumb, graph: s.graph, blobs };
+  const coverId = typeof s.thumb === "string" && s.thumb.startsWith("vlblob:") ? m.blobs[s.thumb.slice(7)] : "";
+  const ap = { vizlab: "graph", nm: fitAp("nm", row.name), pid, rev: String(rev), dev, at: row.updated_at || new Date().toISOString(), pics: String((row.stats && row.stats.pictures) || 0), sheets: String((row.stats && row.stats.sheets) || 0), cover: coverId || "" };
+  const fm = { name: clean(row.name) + ".vizlab.json", mimeType: "application/json", appProperties: ap }, body = new Blob([JSON.stringify(json)], { type: "application/json" });
+  if (m.fileId) await upload(fm, body, m.fileId); else m.fileId = (await upload(Object.assign({ parents: [m.folderId] }, fm), body)).id;
+  // pictures no longer in the project go to the Drive bin (never deleted outright)
+  for (const k of Object.keys(m.blobs)) if (!s.found.has(k)) { try { await patch(m.blobs[k], { trashed: true }); } catch (e) { if (e.kind) throw e; } delete m.blobs[k]; delete m.nm[k]; }
+  Object.assign(m, { baseRev: rev, sig, name: row.name, email: st.email, detached: false, dirty: (m.seq || 0) !== seq0 });
+  await putMeta(m);
+  remote.set(pid, { pid, fileId: m.fileId, folderId: m.folderId, rev, name: row.name, at: ap.at, dev, pics: Number(ap.pics), sheets: Number(ap.sheets), cover: coverId }); keepRemote();
+}
+
+// ---------- download one project ----------
+async function pull(r, o = {}) {
+  if (!o.noReload && openBusy(r.pid)) { again = true; return; }
+  const json = JSON.parse(await (await download(r.fileId)).text());
+  const row = await L.get("projects", r.pid), have = {};
+  if (row) { const s = await strip(row); s.found.forEach((b, k) => (have[k] = b.url)); }
+  const urls = {}, blobs = json.blobs || {}, keys = Object.keys(blobs), need = keys.filter((k) => !have[k]);
+  let done = 0;
+  for (const k of keys) {
+    if (have[k]) { urls[k] = have[k]; continue; }
+    try { const b = await download(blobs[k].id); urls[k] = await toDataUrl(b.type ? b : new Blob([b], { type: blobs[k].mime })); } catch (e) { if (e.kind) throw e; }
+    done++; if (o.progress) o.progress(done, need.length);
+  }
+  const miss = { n: 0 }, graph = restore(json.graph || {}, urls, miss), thumb = restore(json.thumb || null, urls, { n: 0 });
+  if (miss.n) graph.missing = (Number(graph.missing) || 0) + miss.n; // ("Saved · N pictures missing" by the name)
+  applying++;
+  try { await L.put("projects", { id: r.pid, name: json.name || r.name, graph, thumb, stats: json.stats || null, created_at: json.created_at || new Date().toISOString(), updated_at: json.updated_at || r.at }); }
+  finally { applying--; }
+  const ids = {}; keys.forEach((k) => (ids[k] = blobs[k].id));
+  const old = metas.get(r.pid) || {};
+  await putMeta({ pid: r.pid, fileId: r.fileId, folderId: r.folderId, dataId: old.folderId === r.folderId ? old.dataId : null, baseRev: Number(json.rev) || r.rev, sig: await sigOf(json.name || r.name, json.graph || {}), name: json.name || r.name, blobs: ids, dirty: false, seq: old.seq || 0, email: st.email });
+  if (!old.dataId || old.folderId !== r.folderId) { // the Working files folder of a project made on another device
+    try { const d = await list(`'${qs(r.folderId)}' in parents and appProperties has { key='vizlab' and value='data' } and trashed=false`, "id"); if (d.length) { const m = metas.get(r.pid); m.dataId = d[0].id; await putMeta(m); } } catch (e) { if (e.kind) throw e; }
+  }
+  if (V.project.id === r.pid && !o.noReload) await reloadOpen(r);
+}
+let reloadWanted = null;
+async function reloadOpen(r) {
+  const s = V.saveState(), busy = s.pending || s.saving || document.querySelector(".modal:not([hidden])") || (V.viewerMode && V.viewerMode !== "preview");
+  if (busy) { reloadWanted = r; return; }
+  reloadWanted = null;
+  await V.loadProject(r.pid);
+  V.toast(`"${V.project.name}" brought up to date from Google Drive (changed on ${r.dev}, ${dayTime(r.at)})`, false, 6000, { key: "drivepull" });
+}
+
+// ---------- changed on two devices: keep both ----------
+// (the open project is never switched while a save of it is waiting or under way: that save would land on the old id)
+const openBusy = (pid) => { if (V.project.id !== pid) return false; const s = V.saveState(); return s.pending || s.saving; };
+async function conflict(row, m, r) {
+  if (openBusy(row.id)) { again = true; return; }
+  if (reloadWanted && reloadWanted.pid === row.id) reloadWanted = null;
+  const dev = deviceName(), newName = `${row.name} (from ${dev}, ${dayTime(row.updated_at || Date.now())})`.slice(0, 120), newId = L.uuid(), open = V.project.id === row.id;
+  if (open) { V.project.id = newId; V.project.name = newName; V.cfg.lastProject = newId; V.store.set("lastProject", newId); V.updateTitle(); }
+  applying++;
+  try { await L.put("projects", Object.assign({}, row, { id: newId, name: newName })); } finally { applying--; }
+  await putMeta({ pid: newId, blobs: {}, baseRev: 0, seq: 1, dirty: true });
+  await dropMeta(row.id);
+  await pull(r, { noReload: true }); // the other device's version under the original name
+  await push(newId);
+  const other = r.dev === dev ? "another " + dev : "the " + r.dev;
+  V.toast(`"${row.name}" was also changed on ${other} before this ${dev} had copied its own changes to Google Drive. Both are kept: ${open ? "the one open here" : "this " + dev + "'s version"} is now "${newName}", and "${row.name}" has the changes made on ${other}.`, false, 0,
+    { key: "driveconflict" + row.id, action: { label: open ? "Open the other one" : "See projects", run: () => (open ? V.openProject(row.id) : V.setView("projects")) } });
+}
+
+// ---------- deleted from Drive on another device: the copy here is kept ----------
+async function goneRemote(m) {
+  let f = null; try { f = await fileMeta(m.fileId, "id,trashed"); } catch (e) { if (e.status !== 404) throw e; }
+  if (f && !f.trashed) return; // (still there: the list just didn't include it)
+  const row = await L.get("projects", m.pid);
+  await putMeta({ pid: m.pid, blobs: {}, baseRev: 0, seq: m.seq || 0, dirty: false, detached: true });
+  if (row) V.toast(`"${row.name}" was deleted from Google Drive on another device. The copy on this ${deviceName()} is kept; it goes back to Drive if you change it.`, false, 0, { key: "drivegone" + m.pid });
+}
+
+// ---------- one sync round ----------
+async function syncOne(r) {
+  const m = metas.get(r.pid);
+  if (m && m.fileId === r.fileId && (m.baseRev || 0) === r.rev) return;
+  const row = await L.get("projects", r.pid);
+  if (!row) { if (m) await dropMeta(r.pid); return; } // only on Drive: listed, and downloaded when opened
+  if (openBusy(r.pid)) { again = true; return; }
+  if (m && m.fileId) {
+    const mine = m.dirty && (await sigOf(row.name, (await strip(row)).graph)) !== m.sig;
+    return mine ? conflict(row, m, r) : pull(r);
+  }
+  // here and on Drive but never synced on this device (e.g. restored from a backup): the newer one wins, an older one is kept
+  return String(row.updated_at || "") <= String(r.at || "") ? pull(r) : conflict(row, { pid: r.pid, blobs: {} }, r);
+}
+async function syncAll() {
+  if (!st.on || blocked()) return;
+  if (syncing) { again = true; return syncing; }
+  syncing = (async () => {
+    setState("syncing");
+    try {
+      await ensureRoot();
+      const dels = (await L.get("kv", "drive:deletes").catch(() => null)) || { id: "drive:deletes", list: [] };
+      for (const id of dels.list.slice()) { try { await patch(id, { trashed: true }); } catch (e) { if (e.kind) throw e; } dels.list.splice(dels.list.indexOf(id), 1); await L.put("kv", dels); }
+      await refreshRemote();
+      for (const r of remote.values()) await syncOne(r);
+      for (const m of [...metas.values()]) if (m.fileId && !remote.has(m.pid) && !m.detached) await goneRemote(m);
+      const rows = (await V.localApi0("project_list")).projects || [];
+      for (const p of rows) { const m = metas.get(p.id); if (!m || m.dirty || !m.fileId) await push(p.id); }
+      if (reloadWanted && V.project.id === reloadWanted.pid) await reloadOpen(reloadWanted);
+      st.last = new Date().toISOString(); saveSt(); reauthTold = false;
+      setState("idle", "");
+      fetchCovers();
+    } catch (e) {
+      console.warn("drive sync", e);
+      if (e.kind === "auth") { setState("needsauth", e.message); tellReauth(); }
+      else if (e.kind === "offline" || e.kind === "net") setState("offline", e.message);
+      else { setState("error", e.message); V.toast("Couldn't copy to Google Drive: " + e.message + ". Your work is kept on this device; VizLab tries again by itself.", true, 0, { key: "drivefail" }); }
+    }
+  })();
+  try { await syncing; } finally { syncing = null; if (again) { again = false; soon(1500); } }
+}
+function tellReauth() {
+  if (reauthTold || st.route === "desk") return; reauthTold = true;
+  V.toast("Google Drive: your sign-in has run out (Google asks again every hour in a browser). Your work is kept on this device until you reconnect.", false, 12000, { key: "drivereauth", action: { label: "Reconnect", run: () => reconnect() } });
+}
+const soon = (ms) => { clearTimeout(timer); timer = setTimeout(() => syncAll(), ms); };
+
+// ---------- connect / disconnect ----------
+async function connect() {
+  const why = blocked(); if (why) throw new Error(why);
+  if (deskRoute()) { setState("syncing"); await V.deskCall("/drive/login", { ClientID: V.cfg.gClient, ClientSecret: V.cfg.gSecret }, 330000); st.route = "desk"; dtok = null; }
+  else { await loadGIS(); keepTok(await gisAsk(st.email ? "" : "select_account")); st.route = "gis"; }
+  const ab = await g("GET", "/drive/v3/about", { query: { fields: "user(displayName,emailAddress)" } });
+  const email = (ab.user && ab.user.emailAddress) || "";
+  if (st.email && email !== st.email) { for (const pid of [...metas.keys()]) await dropMeta(pid); covers.clear(); } // another Google account: start afresh
+  Object.assign(st, { on: true, email, name: (ab.user && ab.user.displayName) || "" }); rootId = null; saveSt();
+  V.toast(`Google Drive connected${email ? " (" + email + ")" : ""}: your projects are now saved to the VizLab folder in your Drive too`, false, 6000);
+  await syncAll();
+}
+async function reconnect() {
+  try {
+    if (st.route === "desk") { dtok = null; await token(); }
+    else { await loadGIS(); keepTok(await gisAsk("")); }
+    V.closeToastKey("drivereauth"); reauthTold = false; await syncAll();
+  } catch (e) { V.toast(e.message, true, 0); }
+}
+async function disconnect() {
+  try { if (st.route === "desk") await V.deskCall("/drive/logout", {}); else if (tok && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.token, () => {}); } catch (e) { console.warn(e); }
+  tok = null; dtok = null; V.store.set("driveTok", null); rootId = null;
+  Object.assign(st, { on: false, route: "" }); saveSt(); remote = new Map(); keepRemote();
+  setState("off", "");
+  V.toast("Google Drive disconnected. Your projects stay on this device, and the copies in your Drive stay there.", false, 6000);
+}
+
+// ---------- the local "API", with Drive behind it ----------
+V.localApi0 = V.localApi;
+V.localApi = async (action, b = {}) => {
+  const base = V.localApi0;
+  if (action === "project_get") {
+    try { return await base(action, b); }
+    catch (e) {
+      const r = st.on && remote.get(b.id); if (!r) throw e;
+      if (!navigator.onLine) throw new Error(`"${r.name}" is on Google Drive and isn't on this device yet: connect to the internet to open it.`);
+      V.toast(`Getting "${r.name}" from Google Drive…`, false, 60000, { key: "driveget" });
+      try { await pull(r, { noReload: true, progress: (k, n) => V.toast(`Getting "${r.name}" from Google Drive: picture ${k} of ${n}…`, false, 60000, { key: "driveget" }) }); }
+      catch (x) { if (x.kind === "auth") { tellReauth(); throw new Error(`"${r.name}" is on Google Drive: reconnect Google Drive to open it (Settings › Google Drive).`); } throw x; }
+      finally { V.closeToastKey("driveget"); }
+      return base(action, b);
+    }
+  }
+  const out = await base(action, b);
+  if (action === "project_save" && !applying) {
+    const m = metas.get(out.id) || { pid: out.id, blobs: {}, baseRev: 0, seq: 0 };
+    m.dirty = true; m.seq = (m.seq || 0) + 1; await putMeta(m);
+    if (st.on) soon(2500);
+  }
+  if (action === "project_delete") {
+    const m = metas.get(b.id), r = remote.get(b.id), folder = (m && m.folderId) || (r && r.folderId);
+    await dropMeta(b.id); remote.delete(b.id); keepRemote();
+    if (st.on && folder) { try { await patch(folder, { trashed: true }); } catch (e) { const d = (await L.get("kv", "drive:deletes").catch(() => null)) || { id: "drive:deletes", list: [] }; d.list.push(folder); await L.put("kv", d); } }
+  }
+  if (action === "project_list" && st.on) {
+    const here = new Set();
+    (out.projects || []).forEach((p) => { here.add(p.id); const m = metas.get(p.id); p.drive = m && m.fileId && !m.detached ? (m.dirty ? "waiting" : "on") : m && m.detached ? "" : "waiting"; });
+    for (const r of remote.values()) if (!here.has(r.pid)) out.projects.push({ id: r.pid, name: r.name, updated_at: r.at, thumb: (covers.get(r.pid) || {}).url || null, stats: { pictures: r.pics, sheets: r.sheets }, drive: "remote", device: r.dev });
+    out.projects.sort((x, y) => (x.updated_at < y.updated_at ? 1 : -1));
+  }
+  return out;
+};
+
+// ---------- what the pages show ----------
+V.drive = {
+  on: () => !!st.on && !blocked(),
+  info: () => ({ on: !!st.on, why: blocked(), email: st.email, name: st.name, route: st.route, state: state === "idle" && !navigator.onLine ? "offline" : state, err: lastErr, last: st.last, waiting: [...metas.values()].filter((m) => m.dirty && !m.detached).length }),
+  line() {
+    if (!st.on) return "";
+    const i = V.drive.info(), w = i.waiting ? ` · ${plural(i.waiting, "project")} waiting to copy` : "";
+    const state = i.state;
+    if (state === "syncing") return "Saving to Drive · copying now…";
+    if (state === "needsauth") return "Saving to Drive · sign-in ran out: reconnect to carry on" + w;
+    if (state === "offline") return "Saving to Drive · offline: changes copy when you're back online" + w;
+    if (state === "error") return "Saving to Drive · last try failed: " + lastErr;
+    return "Saving to Drive · " + (st.last ? "last synced " + hhmm(st.last) : "not synced yet") + w;
+  },
+  connect, disconnect, reconnect, sync: () => syncAll(), device: deviceName, preload: () => { if (!blocked() && !deskRoute()) loadGIS().catch(() => {}); },
+  _test: { metas, remote: () => remote, state: () => state }, // (for the tests)
+};
+
+function paintSettings() {
+  const row = $("#driveRow"); if (!row) return;
+  const why = blocked(), on = st.on && !why;
+  const s = $("#driveStatus"), who = st.email ? `${st.name ? V.esc(st.name) + " · " : ""}${V.esc(st.email)}` : "";
+  s.innerHTML = on ? `<b class="okdot">●</b> Connected to ${who || "Google Drive"}<br>${V.esc(V.drive.line())}` : why ? V.esc(why) : "Not connected. Projects are saved on this device only.";
+  s.classList.toggle("warn", !!why && V.cfg.mode !== "cloud");
+  $("#driveConnect").hidden = on; $("#driveConnect").disabled = !!why;
+  $("#driveSync").hidden = !on; $("#driveOff").hidden = !on;
+  $("#driveSync").textContent = state === "needsauth" ? "Reconnect" : "Sync now"; $("#driveSync").disabled = state === "syncing";
+  const c = $("#setDriveClient"); if (c && document.activeElement !== c) c.value = V.store.get("driveClient", "") || "";
+  const pd = $("#projDrive"); if (pd) { pd.hidden = !on; pd.textContent = on ? V.drive.line() : ""; }
+}
+const bind = () => {
+  if (!$("#driveRow")) return;
+  $("#driveConnect").onclick = async () => {
+    const b = $("#driveConnect"); b.disabled = true; b.textContent = st.route === "desk" || deskRoute() ? "Finish in the browser…" : "Connecting…";
+    try { await connect(); } catch (e) { setState(st.on ? state : "off"); V.toast(e.message, true, 0); }
+    b.disabled = false; b.textContent = "Connect Google Drive"; paintSettings();
+  };
+  $("#driveSync").onclick = () => (state === "needsauth" ? reconnect() : syncAll());
+  $("#driveOff").onclick = async () => { if (await V.confirm("Disconnect Google Drive?", "VizLab stops copying projects to your Drive. Everything stays on this device, and the copies already in your Drive stay there.", "Disconnect", { danger: false })) disconnect(); };
+  const c = $("#setDriveClient");
+  if (c) c.onchange = () => { V.store.set("driveClient", c.value.trim()); paintSettings(); };
+  const pd = $("#projDrive"); if (pd) pd.onclick = () => (state === "needsauth" ? reconnect() : syncAll());
+};
+
+// ---------- when it syncs ----------
+ready = init().then(() => {
+  bind(); paintSettings();
+  if (st.on && !blocked()) { if (st.route !== "desk" && !(tok && Date.now() < tok.exp - 60000)) setState("needsauth"); soon(2000); }
+});
+new MutationObserver(() => {
+  const v = document.body.dataset.view;
+  if (v === "settings") { paintSettings(); if (!blocked() && !deskRoute()) loadGIS().catch(() => {}); } // (loaded early, so Connect opens Google's window straight from the click)
+  if (v === "projects" && st.on) soon(100);
+}).observe(document.body, { attributes: true, attributeFilter: ["data-view"] });
+window.addEventListener("online", () => st.on && soon(500));
+window.addEventListener("offline", () => st.on && setState("offline"));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && st.on) soon(800); });
+setInterval(() => { if (st.on && !document.hidden && state !== "needsauth") syncAll(); }, 60000);
+})();
+
+;
+
 /* ===== web/shell.js ===== */
 /* VizLab shell: pages, settings, SketchUp bridge, boot */
 (() => {
@@ -18394,7 +18917,7 @@ const fetchProjects = async () => { projList = ((await V.api("project_list")) ||
 V.projectList = () => projList;
 const plural = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
 const dayMonth = (t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-const projSub = (p) => ["Edited " + ago(p.updated_at), p.stats && p.stats.pictures != null ? plural(p.stats.pictures, "picture") : "", p.stats && p.stats.sheets ? plural(p.stats.sheets, "sheet") : ""].filter(Boolean).join(" · ");
+const projSub = (p) => [p.drive === "remote" ? "Not on this device yet (opening it downloads it)" : "", "Edited " + ago(p.updated_at) + (p.drive === "remote" && p.device ? " on " + p.device : ""), p.stats && p.stats.pictures != null ? plural(p.stats.pictures, "picture") : "", p.stats && p.stats.sheets ? plural(p.stats.sheets, "sheet") : ""].filter(Boolean).join(" · ");
 // leaving this project: save it first; if that fails, say so before its unsaved changes are dropped
 async function leaveOk() {
   if (!V.project.id && !V.G.nodes.length) return true;
@@ -18426,7 +18949,7 @@ async function duplicateProject(p) {
   V.toast(`Made "${name}", a copy of "${p.name}" (for an option A / B)`, false, 5000);
 }
 async function deleteProject(p) {
-  if (!(await V.confirm("Delete project", `Delete "${p.name}"? Its canvas and sheets are deleted. Its renders stay in History.`))) return;
+  if (!(await V.confirm("Delete project", `Delete "${p.name}"? Its canvas and sheets are deleted. Its renders stay in History.${V.drive && V.drive.on() ? " Its folder in Google Drive goes to the Drive bin." : ""}`))) return;
   await V.api("project_delete", { id: p.id }); if (p.id === V.project.id) V.newProject();
 }
 async function loadProjects() {
@@ -18444,12 +18967,15 @@ function paintProjects() {
     const open = p.id === V.project.id;
     const act = (label, title, fn) => h("button", { class: "mini", title, onclick: async (e) => { e.stopPropagation(); try { await fn(); } catch (er) { V.toast(er.message, true, 0); } loadProjects(); } }, label);
     g.append(h("div", { class: "pcard" + (open ? " open" : ""), tabindex: 0, role: "button", "aria-label": "Open " + p.name, onclick: () => V.openProject(p.id), onkeydown: (e) => { if (e.key === "Enter" && e.target === e.currentTarget) V.openProject(p.id); } },
-      h("div", { class: "pthumb" }, p.thumb ? h("img", { src: p.thumb, alt: "" }) : "Empty", open ? h("span", { class: "popen" }, "Open now") : null),
+      h("div", { class: "pthumb" }, p.thumb ? h("img", { src: p.thumb, alt: "" }) : p.drive === "remote" ? "On Google Drive" : "Empty", open ? h("span", { class: "popen" }, "Open now") : null,
+        p.drive === "on" || p.drive === "remote" ? h("span", { class: "pdrive" + (p.drive === "remote" ? " remote" : ""), title: p.drive === "remote" ? "This project is in your Google Drive; opening it downloads it to this device" : "Saved on this device and in your Google Drive" }, "On Drive") : p.drive === "waiting" ? h("span", { class: "pdrive wait", title: "Saved on this device; it is copied to Google Drive at the next sync" }, "Copying to Drive") : null),
       h("div", { class: "pinfo" }, h("div", {}, h("b", { title: p.name }, p.name), h("span", {}, projSub(p)))),
       h("div", { class: "pacts" }, act("Rename", "Rename this project", () => renameAny(p)), act("Duplicate", "Make a copy of this project, for an option A / B", () => duplicateProject(p)), act("Delete", "Delete this project (its renders stay in History)", () => deleteProject(p)))));
   });
 }
 $("#projSearch").oninput = paintProjects;
+// (v3.71) Google Drive (drive.js): the list follows a sync (projects from other devices, covers, badges)
+document.addEventListener("vl-drive", () => { if (document.body.dataset.view === "projects") fetchProjects().then(paintProjects).catch(() => {}); if (!$("#ovSettings").hidden) paintGlance(); });
 $("#projSearch").onkeydown = (e) => { if (e.key === "Escape" && e.target.value) { e.stopPropagation(); e.target.value = ""; paintProjects(); } };
 $("#projSort").value = V.store.get("projSort", "edited") === "name" ? "name" : "edited";
 $("#projSort").onchange = () => { V.store.set("projSort", $("#projSort").value); paintProjects(); };
@@ -18759,6 +19285,7 @@ function paintGlance() {
     line(key[0], V.cfg.mode === "cloud" ? "Cloud server" : "Google key", key[1], V.cfg.mode === "cloud" ? "#setPass" : "#setGkey"),
     line(su.length ? "ok" : "off", "SketchUp", su.length ? (su.length === 1 && su[0].id === "sketchup" ? "" : su.map((x) => x.name).join(" and ") + " ") + "connected" : V.SU && !V.desk ? "inside SketchUp" : "not connected", "#sHosts"), // (lfA, P1: VizLab.exe with SketchUp closed is not connected)
     V.SU ? line(V.cfg.autosave && V.cfg.folder ? "ok" : "off", "Save folder", V.cfg.autosave ? V.cfg.folder || "not set" : "off", "#setAutosave") : null,
+    V.drive && V.cfg.mode !== "cloud" ? line(V.drive.on() ? (/sign-in ran out|failed/.test(V.drive.line()) ? "bad" : "ok") : "off", "Google Drive", V.drive.on() ? (V.drive.info().last ? "synced " + new Date(V.drive.info().last).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "on") : "off", "#sDrive") : null,
     line(o.on ? "ok" : "off", "Clarman logo", o.on ? "on, " + corner : "off", "#setLogo"),
     line("", "This month", "~" + V.money(monthCost), () => setView("account")),
     line("", "Version", D.VERSION, "#sAbout")].filter(Boolean)); // (the save-folder line only in SketchUp or the desktop app)
