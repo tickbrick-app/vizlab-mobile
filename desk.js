@@ -1,4 +1,4 @@
-/* VizLab 3.71.1: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
+/* VizLab 3.71.2: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
 
 /* ===== web/data.js ===== */
 // VizLab static data
@@ -136,7 +136,7 @@ const I = {
 };
 
 window.VLD = {
-  VERSION: "3.71.1",
+  VERSION: "3.71.2",
   // v3.69 (FR20): what changed, in plain words, 2-5 lines per version. The first open after an update shows "VizLab updated:
   // see what's new" (shell.js), and the Tutorial starts with a What's new chapter. Add the new version's lines at every release.
   NEWS: {
@@ -18375,8 +18375,9 @@ const metas = new Map(); // pid -> {pid, fileId, folderId, dataId, baseRev, sig,
 let remote = new Map(); // pid -> {pid, fileId, folderId, rev, name, at, dev, pics, sheets, cover}
 const covers = new Map(); // pid -> {id, url}
 let applying = 0, syncing = null, again = false, timer = null, reauthTold = false, ready = null;
+if (V.desk && V.deskCall) V.deskCall("/drive/info", null, 10000).then((r) => { V.deskDrive = !!(r && r.builtin); }, () => {}); // the exe's own Desktop client (stays signed in)
 const clientId = () => (V.store.get("driveClient", "") || D.driveClientId || "").trim();
-const deskRoute = () => !!(V.desk && V.cfg.gClient && V.cfg.gSecret);
+const deskRoute = () => !!(V.desk && ((V.cfg.gClient && V.cfg.gSecret) || V.deskDrive)); // V.deskDrive: the exe has its own client built in
 const ping = () => { try { document.dispatchEvent(new CustomEvent("vl-drive")); } catch (e) {} paintSettings(); };
 const setState = (s, err) => { state = s; if (err !== undefined) lastErr = err; ping(); };
 const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -18734,7 +18735,7 @@ const soon = (ms) => { clearTimeout(timer); timer = setTimeout(() => syncAll(), 
 // ---------- connect / disconnect ----------
 async function connect() {
   const why = blocked(); if (why) throw new Error(why);
-  if (deskRoute()) { setState("syncing"); await V.deskCall("/drive/login", { ClientID: V.cfg.gClient, ClientSecret: V.cfg.gSecret }, 330000); st.route = "desk"; dtok = null; }
+  if (deskRoute()) { setState("syncing"); await V.deskCall("/drive/login", { ClientID: V.cfg.gClient && V.cfg.gSecret ? V.cfg.gClient : "", ClientSecret: V.cfg.gClient && V.cfg.gSecret ? V.cfg.gSecret : "" }, 330000); st.route = "desk"; dtok = null; }
   else { await loadGIS(); keepTok(await gisAsk(st.email ? "" : "select_account")); st.route = "gis"; }
   const ab = await g("GET", "/drive/v3/about", { query: { fields: "user(displayName,emailAddress)" } });
   const email = (ab.user && ab.user.emailAddress) || "";
