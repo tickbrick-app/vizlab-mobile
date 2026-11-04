@@ -1,8 +1,8 @@
 // VizLab Mobile service worker: keeps the app itself on the phone so it opens without a connection.
 // Only this build's own files and the Google Fonts files are kept. The AI calls (generativelanguage.googleapis.com,
 // fal.ai) and anything else are never cached: they always go to the network.
-const CACHE = "vizlab-mobile-3.72.0-d0d917df4a";
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./desk.js?v=d0d917df4a", "./phone.js?v=d0d917df4a", "./phone.css?v=d0d917df4a", "./desk.css?v=d0d917df4a", "./icons/apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png"]; // this build's files, with their version stamp (build_mobile.py)
+const CACHE = "vizlab-mobile-3.73.0-c72901bec1";
+const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./desk.js?v=c72901bec1", "./phone.js?v=c72901bec1", "./phone.css?v=c72901bec1", "./desk.css?v=c72901bec1", "./icons/apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png"]; // this build's files, with their version stamp (build_mobile.py)
 
 self.addEventListener("install", (e) => {
   // straight from the server (not the browser's own cache), so a new build never mixes with an older file

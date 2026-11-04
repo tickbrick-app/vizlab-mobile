@@ -444,3 +444,5 @@ body.tabson #a2hs{bottom:calc(var(--sab) + var(--tabh) + 12px)}
 .pcard .drv::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--acc)}
 .pcard .drv.remote{background:var(--acc);color:#0a0a0a}
 .pcard .drv.remote::before{background:#0a0a0a}
+.pcard .drv.wait{border-color:#c0392b;color:#fff}
+.pcard .drv.wait::before{background:#e8743b}

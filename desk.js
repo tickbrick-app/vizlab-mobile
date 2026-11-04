@@ -1,4 +1,4 @@
-/* VizLab 3.72.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
+/* VizLab 3.73.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
 
 /* ===== web/data.js ===== */
 // VizLab static data
@@ -136,10 +136,11 @@ const I = {
 };
 
 window.VLD = {
-  VERSION: "3.72.0",
+  VERSION: "3.73.0",
   // v3.69 (FR20): what changed, in plain words, 2-5 lines per version. The first open after an update shows "VizLab updated:
   // see what's new" (shell.js), and the Tutorial starts with a What's new chapter. Add the new version's lines at every release.
   NEWS: {
+    "3.73.0": ["With Google Drive connected, your projects, renders, Library and History pictures are kept only in your Drive: this device keeps just the list of projects and small previews, and opening a project fetches its pictures (Settings › Google Drive to keep full copies here too)", "The title bar says Saved to Drive once Drive has your change; offline, it says Not saved to Drive yet, keeps your work in the window and sends it as soon as it can"],
     "3.72.0": ["With Google Drive connected, the office catalogue (furniture, materials, collections, saved scenes and presets, with their pictures) and your keys and settings come to every PC and phone you connect: no key to paste on a new device (Settings › Google Drive can switch the keys off)", "VizLab.exe on a new PC: Sign in to ChatGPT in one click from the welcome card or Settings › At a glance"],
     "3.71.0": ["Save to Google Drive: connect your Drive in Settings and your projects and pictures follow you to every device, iPhone included (a copy stays on each device for offline work)"],
     "3.70.0": [
@@ -1532,6 +1533,7 @@ V.$("#saveState") && V.$("#saveState").addEventListener("click", () => {
   else if (V.project.missing) { const k = V.project.missing; V.toast(`${k} picture${k > 1 ? "s" : ""} in this project ${k > 1 ? "were" : "was"} not uploaded before it was closed, so ${k > 1 ? "they are" : "it is"} missing. Bring ${k > 1 ? "them" : "it"} in again if you still have ${k > 1 ? "them" : "it"} (a download, or SketchUp).`, false, 12000, { key: "missingpics", action: { label: "Got it, hide this", run: () => { V.project.missing = 0; V.changed(true); } } }); }
 });
 V.saveState = () => ({ pending, saving, bad: !!saveBad, left: V.project.left || 0 });
+V.paintSave = paintSave; // (v3.73 drive.js: "Saved to Drive" / "Not saved to Drive yet · Retry" when projects live only in Google Drive)
 // the project name in the title bar: "New project" before the first save; an automatic name shows grey with "Name it"
 V.updateTitle = () => {
   const el = V.$("#projName"); if (!el) return;
@@ -1948,7 +1950,8 @@ const get = (store, id) => tx(store, "readonly", (s) => s.get(id));
 const del = (store, id) => tx(store, "readwrite", (s) => s.delete(id));
 const all = (store) => tx(store, "readonly", (s) => s.getAll());
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : V.uid() + V.uid());
-V.localDB = { get, put, del, all, uuid }; // (v3.71 drive.js: the Google Drive copy reads and writes the same stores)
+const keys = (store) => tx(store, "readonly", (s) => s.getAllKeys()); // (v3.73: drive.js goes through big stores one record at a time)
+V.localDB = { get, put, del, all, keys, uuid }; // (v3.71 drive.js: the Google Drive copy reads and writes the same stores)
 
 // ---------- engine builders (same as the server version) ----------
 const G_MODELS = { "nano-banana-2.1": "gemini-nano-banana-2.1", "nano-banana-pro": "gemini-3-pro-image", "nano-banana-2": "gemini-3.1-flash-image" };
@@ -2115,7 +2118,10 @@ function extractOutputs(d, kind) {
 
 // ---------- jobs ----------
 const live = new Map(); // jobs being worked on in this tab
-async function save(job) { live.set(job.id, job); await put("jobs", job); }
+// v3.73: with "only in Google Drive" on (drive.js V.jobRec), the record kept on this device has its pictures replaced by
+// references to their copies in Drive (and a small preview); the whole job stays in memory (live) for this session
+async function save(job) { live.set(job.id, job); await put("jobs", V.jobRec ? await V.jobRec(job) : job); }
+const full = async (j) => (j && V.jobFull ? V.jobFull(j) : j); // a record from this device with its pictures back (from Drive)
 async function runGoogle(job, images) {
   try {
     const parts = await Promise.all(images.map(toInline));
@@ -2366,7 +2372,7 @@ V.localApi = async (action, b = {}) => {
     }
     case "status": {
       const out = [];
-      for (const id of b.ids || [b.id]) { const j = live.get(id) || (await get("jobs", id)); if (j) { try { out.push({ ...(await refresh(j)) }); } catch (e) { out.push({ ...j, poll_error: e.message }); } } }
+      for (const id of b.ids || [b.id]) { let j = live.get(id) || (await get("jobs", id)); if (j && !live.has(id)) { try { j = await full(j); } catch (e) { out.push({ ...j, poll_error: e.message }); continue; } } if (j) { try { out.push({ ...(await refresh(j)) }); } catch (e) { out.push({ ...j, poll_error: e.message }); } } }
       return { jobs: out };
     }
     case "list": {
@@ -2408,7 +2414,7 @@ V.localApi = async (action, b = {}) => {
       let count = {};
       // (v3.69 P3) one record per line (still one valid JSON file): restore reads it a line at a time, so a backup of any
       // size comes back (a browser can't read a file over ~512 MB as one piece of text)
-      for (const s of ["projects", "jobs", "presets"]) { const rows = await all(s); count[s] = rows.length; parts.push('\n,"' + s + '":['); rows.forEach((r, i) => parts.push("\n" + (i ? "," : "") + JSON.stringify(r))); parts.push("\n]"); }
+      for (const s of ["projects", "jobs", "presets"]) { const rows = await all(s); count[s] = rows.length; parts.push('\n,"' + s + '":['); for (let i = 0; i < rows.length; i++) { const r = V.backupRow ? await V.backupRow(s, rows[i]) : rows[i]; if (r) parts.push("\n" + (i ? "," : "") + JSON.stringify(r)); } parts.push("\n]"); } // (v3.73 V.backupRow: a project or History record kept only in Google Drive is put in whole)
       parts.push("\n}");
       const blob = new Blob(parts, { type: "application/json" });
       return { blob, count, size: blob.size };
@@ -10335,11 +10341,15 @@ const store = async (name, mode, fn) => { const db = await CDB; return new Promi
 const CAT = { items: [], sets: [], loaded: null, done: false };
 const loadCat = () => CAT.loaded || (CAT.loaded = (async () => {
   CAT.items = (await store("items", "readonly", (s) => s.getAll())) || []; CAT.sets = (await store("sets", "readonly", (s) => s.getAll())) || []; CAT.done = true;
-  setTimeout(async () => { for (const it of CAT.items) if (/^data:image\/jpe?g/.test(it.img || "")) { it.img = await toPng(it.img); putCat(it); } }, 500); // older pictures saved as JPEG
+  setTimeout(async () => { for (const it of CAT.items) if (/^data:image\/jpe?g/.test(it.img || "") && !(V.catLite && V.catLite(it))) { it.img = await toPng(it.img); putCat(it); } }, 500); // older pictures saved as JPEG
 })().catch((e) => { console.warn("catalogue", e); }));
 // v3.72: every change is also copied to Google Drive (drive.js V.onCatalogueChange, VizLab/Library in the user's Drive)
 const catNote = () => { try { if (V.onCatalogueChange) V.onCatalogueChange(); } catch (e) { console.warn(e); } };
-const putRaw = (it) => store(it.kind === "set" ? "sets" : "items", "readwrite", (s) => s.put(it));
+// v3.73: with "only in Google Drive" on, drive.js V.catRecord gives the record to keep on this device: its pictures replaced by
+// references to their files in Drive (plus a small preview); the whole item stays in memory (CAT)
+const putRaw = async (it) => { const rec = V.catRecord ? await V.catRecord(it) : it; return store(it.kind === "set" ? "sets" : "items", "readwrite", (s) => s.put(rec)); };
+const putExact = (rec) => store(rec.kind === "set" ? "sets" : "items", "readwrite", (s) => s.put(rec)); // (as it is: drive.js)
+const allRaw = async () => ((await store("items", "readonly", (s) => s.getAll())) || []).concat((await store("sets", "readonly", (s) => s.getAll())) || []);
 const delRaw = (it) => store(it.kind === "set" ? "sets" : "items", "readwrite", (s) => s.delete(it.id));
 const putCat = (it) => putRaw(it).then(catNote, (e) => V.toast("Couldn't save to the catalogue: " + e.message, true, 0));
 const delCat = (it) => delRaw(it).then(catNote);
@@ -10455,6 +10465,7 @@ const inScene = (c) => !!copyOf(c)?.use;
 function useInScene(c, on = !inScene(c), o = {}) {
   let p = copyOf(c);
   if (on && !p?.use && inUse().length >= MAX_USE) { if (!o.quiet) V.toast(`Up to ${MAX_USE} products and materials at once: switch one off first`, true, 4500); return false; }
+  if (!p && on && V.catLite && V.catLite(c)) { if (!o.quiet) V.toast(`"${c.name}" is still coming from Google Drive (only its preview is here): try again in a moment, or connect to the internet`, true, 6000); return false; } // (v3.73: never the preview into a project)
   if (!p) { if (!on) return true; p = { ...c, id: V.uid(), catId: c.id, use: false }; delete p.tile; lib().items.push(p); } // the SketchUp tile is read from the catalogue item (sumat.js)
   p.use = on; if (on) skipFor = null; V.changed(); paintChip(); paint(); paintPicker(); return true;
 }
@@ -10853,14 +10864,14 @@ V.libraryAdd = async (n) => {
 // Esc closes the Furniture & materials window (a pop-up on top of it closes first)
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picker && (!V.isTopPopup || V.isTopPopup(picker))) { e.preventDefault(); e.stopImmediatePropagation(); picker.remove(); picker = null; } }, true);
 // for starter.js: the catalogue, adding to it, PNG helpers
-V.catalogue = { loadCat, CAT, put: putCat, toPng, blankItem, refresh: () => { paint(); paintPicker(); paintChip(); }, raw: { put: putRaw, del: delRaw }, add: (it) => { CAT.items.push(it); return putCat(it); }, useSet: (st, o) => useSet(st, true, o), undoUse, sceneOff,
+V.catalogue = { loadCat, CAT, put: putCat, toPng, blankItem, refresh: () => { paint(); paintPicker(); paintChip(); }, raw: { put: putRaw, del: delRaw, store: putExact, all: allRaw }, add: (it) => { CAT.items.push(it); return putCat(it); }, useSet: (st, o) => useSet(st, true, o), undoUse, sceneOff,
   MAX_USE, inUseCount: () => inUse().length, ownProducts, ownItems, addable, setState: (st) => { const l = st.ids.map((id) => CAT.items.find((i) => i.id === id)).filter(Boolean); return { total: l.length, on: l.filter(inScene).length }; }, remove: async (it) => { CAT.items = CAT.items.filter((x) => x !== it); await delCat(it); for (const st of CAT.sets) if (st.ids.includes(it.id)) { st.ids = st.ids.filter((x) => x !== it.id); await putCat(st); } }, addSet: (st) => { CAT.sets.push(st); return putCat(st); } };
 // v3.68 for sumat.js (SketchUp materials) and the material bucket: Library materials, an item by id, a project copy's
 // catalogue twin, and a catalogue material adopted into this project (switched off for "every render", no tile copied)
 V.libraryMaterials = async () => { await loadCat(); return { project: lib().items.filter((i) => i.kind === "material" && i.img), office: CAT.items.filter((i) => i.kind === "material" && i.img) }; };
 V.libraryItem = (id) => lib().items.find((i) => i.id === id) || null;
 V.catalogueTwin = (it) => (it && it.catId ? CAT.items.find((c) => c.id === it.catId) || null : null);
-V.libraryAdopt = (c) => { let p = copyOf(c); if (!p) { p = { ...c, id: V.uid(), catId: c.id, use: false }; delete p.tile; lib().items.push(p); V.changed(); } return p; };
+V.libraryAdopt = (c) => { let p = copyOf(c); if (!p && V.catLite && V.catLite(c)) throw new Error(`"${c.name}" is still coming from Google Drive (only its preview is here): try again in a moment`); if (!p) { p = { ...c, id: V.uid(), catId: c.id, use: false }; delete p.tile; lib().items.push(p); V.changed(); } return p; };
 V.libraryTest = { lib, CAT, loadCat, addPictures, useInScene, useSet, saveToCatalogue, exportCat, importCat, get scope() { return scope; }, set scope(v) { scope = v; }, get view() { return view; }, set view(v) { view = v; }, ticked };
 })();
 
@@ -12554,7 +12565,7 @@ async function openChooser(o = {}) {
   const usedBy = (it) => l && l.zones.find((z) => z.mat && z.mat.src === "lib" && (z.mat.id === it.id || ((V.libraryItem && V.libraryItem(z.mat.id)) || {}).catId === it.id));
   const tile = (it, office) => {
     const u = usedBy(it), on = !!(u && z0 && u === z0);
-    return h("button", { class: "pktile" + (on ? " on" : ""), onclick: () => done(matFromItem(office ? V.libraryAdopt(it) : it, finish.value)) },
+    return h("button", { class: "pktile" + (on ? " on" : ""), onclick: () => { let x = it; if (office) { try { x = V.libraryAdopt(it); } catch (e) { return V.toast(e.message, true, 6000); } } done(matFromItem(x, finish.value)); } },
       h("img", { src: previewOf(it), alt: "" }), h("b", {}, it.name || "Material"), h("small", {}, u ? `used for ${letterOf(l, u)}` : it.where || it.product || ""), on ? h("span", { class: "pkon" }, "✓") : null);
   };
   const fileIn = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true, onchange: (e) => { const fs = [...e.target.files]; e.target.value = ""; addSamples(fs); } });
@@ -18391,7 +18402,16 @@ V.canRedesign = (n) => !!(n && (V.redesignSource(n) || V.redesignMatch(n)));
    Nothing on Drive is ever deleted outright: removed projects and pictures go to the Drive bin.
    v3.72: the office catalogue (VizLab/Library: one "VizLab catalogue.json" plus one PNG per picture, the same revisions and
    keep-both rule per record) and, unless switched off, the keys and settings ("VizLab settings (private).json", newest
-   wins key by key) come to every device that connects. A sync round: settings, catalogue, then projects. */
+   wins key by key) come to every device that connects. A sync round: settings, catalogue, then projects.
+   v3.73 "only in Google Drive" (Settings › Google Drive, on by default once Drive is connected; Stephen, 3 Nov 2026: "I don't
+   want the files to download to my device, I just want them saved in Google Drive"): this device keeps only a small index
+   (project rows with no canvas, a card preview of at most ~20 KB, the Drive revisions; catalogue and History records with
+   their pictures replaced by "vlblob:<hash>" and a ~20 KB preview). Opening a project downloads its pictures into memory
+   only; switching project frees them. Saves go to memory and straight up to Drive; until Drive has them the title bar says
+   "Not saved to Drive yet · Retry", VizLab retries, closing the window asks first, and after repeated failures it offers
+   "Keep a copy on this device for now". Switching it on moves what is here up, checks every picture on Drive (size and
+   SHA-256) and only then replaces the full copy here; switching it off brings full copies back. See "only in Google
+   Drive" below. */
 (() => {
 const V = window.V, D = V.D, { $, h } = V;
 const L = V.localDB;
@@ -18600,6 +18620,98 @@ async function init() {
 }
 const keepRemote = () => L.put("kv", { id: "driveinfo:remote", list: [...remote.values()] }).catch(() => {});
 
+// ---------- v3.73: only in Google Drive ----------
+// st.only: undefined or true = on (the default once Drive is connected), false = a full copy on this device as before.
+// A project row in IndexedDB is either a FULL copy (graph) or, with the mode on, an INDEX row { id, name, thumb (<= ~20 KB),
+// stats, dates, graph: null, only: true }. mem holds the whole project in memory: the open one, and any whose newest
+// version hasn't reached Drive yet (memOnly). st.keepCopy ("Keep a copy on this device for now"): full copies are written
+// here too until Drive has everything; the next check removes them again. st.move: something here still needs moving up
+// (and checking) before its full copy can go; st.back: index rows still need their full copy brought back (mode off).
+const only = () => !!st.on && st.only !== false && V.cfg.mode !== "cloud" && !blocked();
+const mem = new Map(), memOnly = new Set();
+let failN = 0, failSince = 0, moveTold = "", onlyBusy = "", storeMB = null, estT = null;
+const isIndex = (row) => !!row && (!row.graph || row.only === true);
+const rowOf = async (pid) => mem.get(pid) || (await L.get("projects", pid));
+// a small preview kept on this device (cards, History, catalogue): JPEG, at most about 20 KB
+const TINY = 20000, tinyC = new Map();
+async function tiny(u) {
+  if (!u || typeof u !== "string" || !u.startsWith("data:")) return null;
+  if (u.length <= TINY) return u;
+  const key = u.length + ":" + u.slice(-48), c0 = tinyC.get(key); if (c0 !== undefined) return c0;
+  let out = null;
+  try {
+    const im = await V.loadImg(u);
+    for (const side of [480, 380, 300, 220]) {
+      const k = Math.min(1, side / Math.max(im.naturalWidth || 1, im.naturalHeight || 1)), c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round((im.naturalWidth || 1) * k)); c.height = Math.max(1, Math.round((im.naturalHeight || 1) * k));
+      const x = c.getContext("2d"); x.fillStyle = "#111112"; x.fillRect(0, 0, c.width, c.height); x.imageSmoothingQuality = "high"; x.drawImage(im, 0, 0, c.width, c.height);
+      for (const q of [0.8, 0.68, 0.56, 0.45]) { const d = c.toDataURL("image/jpeg", q); if (d.length <= TINY) { out = d; break; } }
+      if (out) break;
+    }
+  } catch (e) {}
+  if (tinyC.size > 80) tinyC.delete(tinyC.keys().next().value);
+  tinyC.set(key, out); return out;
+}
+// the index row for a project (what this device keeps of it)
+async function putIndex(row) {
+  applying++;
+  try { await L.put("projects", { id: row.id, name: row.name, thumb: await tiny(row.thumb), stats: row.stats || null, created_at: row.created_at, updated_at: row.updated_at, graph: null, only: true }); }
+  finally { applying--; }
+}
+// keep a project row the way the mode says: a full copy, or memory + the index row
+async function keepRow(row, o = {}) {
+  if (!only() || o.full) { applying++; try { await L.put("projects", row); } finally { applying--; } return; }
+  mem.set(row.id, row);
+  const here = await L.get("projects", row.id);
+  if (st.keepCopy || (here && !isIndex(here))) { applying++; try { await L.put("projects", row); } finally { applying--; } st.move = true; saveSt(); } // (a full copy still here: kept up to date until it is moved)
+  else await putIndex(row);
+}
+// free the pictures of projects that aren't open and are safely on Drive
+function prune() {
+  for (const pid of [...mem.keys()]) if (pid !== V.project.id && !memOnly.has(pid)) mem.delete(pid);
+  hcache.clear(); // (its keys are whole pictures)
+}
+const hex = (d) => Array.prototype.map.call(new Uint8Array(d), (x) => (x < 16 ? "0" : "") + x.toString(16)).join("");
+const shaBlob = async (b) => hex(await crypto.subtle.digest("SHA-256", await b.arrayBuffer()));
+// is this picture on Drive, whole? (its size and SHA-256 match; with no checksum from Drive, the file is read back)
+async function onDriveOk(id, url) {
+  if (!id) return false;
+  let f = null; try { f = await fileMeta(id, "id,size,sha256Checksum,trashed"); } catch (e) { if (e.kind) throw e; return false; }
+  if (!f || f.trashed) return false;
+  const b = toBlob(url); if (Number(f.size) !== b.size) return false;
+  const mine = await shaBlob(b);
+  if (f.sha256Checksum) return String(f.sha256Checksum).toLowerCase() === mine;
+  try { return (await shaBlob(await download(id))) === mine; } catch (e) { if (e.kind) throw e; return false; }
+}
+// a project here is the same as its copy on Drive, every picture checked (null), or why not
+async function verifyProject(row) {
+  const m = metas.get(row.id);
+  if (!m || !m.fileId || m.dirty) return "not copied to Drive yet";
+  const s = await strip(row);
+  if ((await sigOf(row.name, s.graph)) !== m.sig) return "changed since it was copied";
+  let f = null; try { f = await fileMeta(m.fileId, "id,trashed,appProperties"); } catch (e) { if (e.kind) throw e; return "its file isn't on Drive"; }
+  if (!f || f.trashed || (Number((f.appProperties || {}).rev) || 0) !== (m.baseRev || 0)) return "Drive has another version";
+  const json = JSON.parse(await (await download(m.fileId)).text());
+  if ((await sigOf(json.name, json.graph || {})) !== m.sig) return "the copy on Drive is different";
+  for (const [k, b] of s.found) {
+    const bl = (json.blobs || {})[k];
+    if (!bl || !(await onDriveOk(bl.id, b.url))) { // (sent again at the next round, then checked again)
+      if (bl && bl.id) { try { await patch(bl.id, { trashed: true }); } catch (e) { if (e.kind) throw e; } } // (the broken copy to the bin; this device's copy stays whole)
+      if (m.blobs) delete m.blobs[k]; m.sig = ""; m.dirty = true; await putMeta(m);
+      return `"${b.label}" isn't whole on Drive (sending it again)`;
+    }
+  }
+  return null;
+}
+// several downloads at once (4), in order of the list
+async function pool(list, fn, n = 4) { let i = 0; const run = async () => { while (i < list.length) { const k = i++; await fn(list[k], k); } }; await Promise.all(Array.from({ length: Math.min(n, list.length) }, run)); }
+// one message that changes as it goes (no pile of messages)
+function progress(key, msg) {
+  const box = V.$("#toast"), el = box && [...box.children].find((x) => !x._gone && x._key === key);
+  if (el) { const t = el.querySelector(".tmsg"); if (t) t.textContent = msg; return; }
+  V.toast(msg, false, 120000, { key });
+}
+
 // ---------- root folder ----------
 let rootId = null, rootAp = {}; // rootAp: the VizLab folder's own notes (v3.72: keysync on/off, set on any device)
 async function ensureRoot() {
@@ -18618,19 +18730,21 @@ async function refreshRemote() {
 }
 async function fetchCovers() {
   for (const r of remote.values()) {
-    if (!r.cover || (covers.get(r.pid) || {}).id === r.cover || metas.has(r.pid)) continue;
-    try { const url = await toDataUrl(await download(r.cover)); covers.set(r.pid, { id: r.cover, url }); L.put("kv", { id: "drivecover:" + r.pid, cid: r.cover, url }).catch(() => {}); ping(); } catch (e) { if (e.kind) return; }
+    if (!r.cover || (covers.get(r.pid) || {}).id === r.cover || (metas.has(r.pid) && !only())) continue;
+    if (only() && mem.has(r.pid)) continue; // (its card comes from the project itself)
+    try { let url = await toDataUrl(await download(r.cover)); url = (await tiny(url)) || url; covers.set(r.pid, { id: r.cover, url }); L.put("kv", { id: "drivecover:" + r.pid, cid: r.cover, url }).catch(() => {}); ping(); } catch (e) { if (e.kind) return; }
   }
 }
 
 // ---------- upload one project ----------
 async function push(pid) {
-  const row = await L.get("projects", pid); if (!row) return;
+  const row = await rowOf(pid); if (!row) return;
   let m = metas.get(pid) || { pid, blobs: {}, baseRev: 0, seq: 0, dirty: true };
+  if (isIndex(row)) { if (m.dirty) { m.dirty = false; await putMeta(m); } return; } // (only the index here and nothing new in memory: Drive has it)
   if (m.detached && !m.dirty) return;
   const seq0 = m.seq || 0;
   const s = await strip(row), sig = await sigOf(row.name, s.graph);
-  if (m.fileId && sig === m.sig) { m.dirty = (m.seq || 0) !== seq0; return putMeta(m); }
+  if (m.fileId && sig === m.sig) { m.dirty = (m.seq || 0) !== seq0; if (!m.dirty) memOnly.delete(pid); return putMeta(m); }
   if (m.fileId) {
     let f = null; try { f = await fileMeta(m.fileId, "id,trashed,appProperties,parents,name,modifiedTime"); } catch (e) { if (e.status !== 404) throw e; }
     if (!f || f.trashed) m = Object.assign(m, { fileId: null, folderId: null, dataId: null, blobs: {}, baseRev: 0 }); // gone from Drive: put it back as it is here
@@ -18656,30 +18770,43 @@ async function push(pid) {
   const fm = { name: clean(row.name) + ".vizlab.json", mimeType: "application/json", appProperties: ap }, body = new Blob([JSON.stringify(json)], { type: "application/json" });
   if (m.fileId) await upload(fm, body, m.fileId); else m.fileId = (await upload(Object.assign({ parents: [m.folderId] }, fm), body)).id;
   // pictures no longer in the project go to the Drive bin (never deleted outright)
-  for (const k of Object.keys(m.blobs)) if (!s.found.has(k)) { try { await patch(m.blobs[k], { trashed: true }); } catch (e) { if (e.kind) throw e; } delete m.blobs[k]; delete m.nm[k]; }
+  // (v3.73: one that History still shows moves to VizLab/History instead, as it is the only copy)
+  for (const k of Object.keys(m.blobs)) if (!s.found.has(k)) {
+    try {
+      if (histUse.has(k) && !histIds[k]) { await g("PATCH", "/drive/v3/files/" + encodeURIComponent(m.blobs[k]), { query: { addParents: await ensureHist(), removeParents: m.dataId && /^w\//.test((m.nm || {})[k] || "") ? m.dataId : m.folderId, fields: "id" }, json: {} }); histIds[k] = m.blobs[k]; keepHist(); }
+      else if (!histIds[k] || histIds[k] !== m.blobs[k]) await patch(m.blobs[k], { trashed: true });
+    } catch (e) { if (e.kind) throw e; }
+    delete m.blobs[k]; delete m.nm[k];
+  }
   Object.assign(m, { baseRev: rev, sig, name: row.name, email: st.email, detached: false, dirty: (m.seq || 0) !== seq0 });
   await putMeta(m);
+  if (!m.dirty) memOnly.delete(pid); // (v3.73: Drive has this version: it is saved)
   remote.set(pid, { pid, fileId: m.fileId, folderId: m.folderId, rev, name: row.name, at: ap.at, dev, pics: Number(ap.pics), sheets: Number(ap.sheets), cover: coverId }); keepRemote();
+  if (only() && coverId && typeof row.thumb === "string") { const url = await tiny(row.thumb); if (url) { covers.set(pid, { id: coverId, url }); L.put("kv", { id: "drivecover:" + pid, cid: coverId, url }).catch(() => {}); } }
+  if (only()) paintSaveDrive();
 }
 
 // ---------- download one project ----------
 async function pull(r, o = {}) {
   if (!o.noReload && openBusy(r.pid)) { again = true; return; }
   const json = JSON.parse(await (await download(r.fileId)).text());
-  const row = await L.get("projects", r.pid), have = {};
-  if (row) { const s = await strip(row); s.found.forEach((b, k) => (have[k] = b.url)); }
+  const row = await rowOf(r.pid), have = {};
+  if (row && !isIndex(row)) { const s = await strip(row); s.found.forEach((b, k) => (have[k] = b.url)); }
   const urls = {}, blobs = json.blobs || {}, keys = Object.keys(blobs), need = keys.filter((k) => !have[k]);
+  // (v3.73) the small pictures first (previews, the card), four at a time
+  const small = new Set(); const look = (v, sm) => { if (typeof v === "string") { if (sm && v.startsWith("vlblob:")) small.add(v.slice(7)); } else if (Array.isArray(v)) v.forEach((x) => look(x, sm)); else if (v && typeof v === "object") Object.keys(v).forEach((k) => look(v[k], sm || k === "thumb" || k === "poster")); };
+  look(json.graph || {}, false); look(json.thumb, true);
+  need.sort((a, b) => (small.has(b) ? 1 : 0) - (small.has(a) ? 1 : 0));
+  keys.forEach((k) => { if (have[k]) urls[k] = have[k]; });
   let done = 0;
-  for (const k of keys) {
-    if (have[k]) { urls[k] = have[k]; continue; }
+  await pool(need, async (k) => {
     try { const b = await download(blobs[k].id); urls[k] = await toDataUrl(b.type ? b : new Blob([b], { type: blobs[k].mime })); } catch (e) { if (e.kind) throw e; }
     done++; if (o.progress) o.progress(done, need.length);
-  }
+  });
   const miss = { n: 0 }, graph = restore(json.graph || {}, urls, miss), thumb = restore(json.thumb || null, urls, { n: 0 });
   if (miss.n) graph.missing = (Number(graph.missing) || 0) + miss.n; // ("Saved · N pictures missing" by the name)
-  applying++;
-  try { await L.put("projects", { id: r.pid, name: json.name || r.name, graph, thumb, stats: json.stats || null, created_at: json.created_at || new Date().toISOString(), updated_at: json.updated_at || r.at }); }
-  finally { applying--; }
+  await keepRow({ id: r.pid, name: json.name || r.name, graph, thumb, stats: json.stats || null, created_at: json.created_at || new Date().toISOString(), updated_at: json.updated_at || r.at }, { full: !!o.full });
+  memOnly.delete(r.pid);
   const ids = {}; keys.forEach((k) => (ids[k] = blobs[k].id));
   const old = metas.get(r.pid) || {};
   await putMeta({ pid: r.pid, fileId: r.fileId, folderId: r.folderId, dataId: old.folderId === r.folderId ? old.dataId : null, baseRev: Number(json.rev) || r.rev, sig: await sigOf(json.name || r.name, json.graph || {}), name: json.name || r.name, blobs: ids, dirty: false, seq: old.seq || 0, email: st.email });
@@ -18705,8 +18832,8 @@ async function conflict(row, m, r) {
   if (reloadWanted && reloadWanted.pid === row.id) reloadWanted = null;
   const dev = deviceName(), newName = `${row.name} (from ${dev}, ${dayTime(row.updated_at || Date.now())})`.slice(0, 120), newId = L.uuid(), open = V.project.id === row.id;
   if (open) { V.project.id = newId; V.project.name = newName; V.cfg.lastProject = newId; V.store.set("lastProject", newId); V.updateTitle(); }
-  applying++;
-  try { await L.put("projects", Object.assign({}, row, { id: newId, name: newName })); } finally { applying--; }
+  await keepRow(Object.assign({}, row, { id: newId, name: newName }));
+  if (only()) { memOnly.add(newId); mem.delete(row.id); memOnly.delete(row.id); } // (v3.73: this device's version, until Drive has it)
   await putMeta({ pid: newId, blobs: {}, baseRev: 0, seq: 1, dirty: true });
   await dropMeta(row.id);
   await pull(r, { noReload: true }); // the other device's version under the original name
@@ -18720,7 +18847,18 @@ async function conflict(row, m, r) {
 async function goneRemote(m) {
   let f = null; try { f = await fileMeta(m.fileId, "id,trashed"); } catch (e) { if (e.status !== 404) throw e; }
   if (f && !f.trashed) return; // (still there: the list just didn't include it)
-  const row = await L.get("projects", m.pid);
+  let row = await rowOf(m.pid);
+  if (only() && isIndex(row) && !mem.has(m.pid)) { // (v3.73: nothing of it here but its name: it leaves this device's list too)
+    applying++; try { await L.del("projects", m.pid); } finally { applying--; }
+    await dropMeta(m.pid); covers.delete(m.pid);
+    if (row) V.toast(`"${row.name}" was deleted from Google Drive on another device, so it has gone from this ${deviceName()}'s list too. It is in your Drive's bin if you need it back.`, false, 0, { key: "drivegone" + m.pid });
+    return;
+  }
+  if (only() && row && mem.has(m.pid)) { // the one open here goes back to Drive as it is
+    await putMeta({ pid: m.pid, blobs: {}, baseRev: 0, seq: (m.seq || 0) + 1, dirty: true }); memOnly.add(m.pid); soon(1500);
+    V.toast(`"${row.name}" was deleted from Google Drive on another device. The copy open here is kept and saved to Drive again.`, false, 0, { key: "drivegone" + m.pid });
+    return;
+  }
   await putMeta({ pid: m.pid, blobs: {}, baseRev: 0, seq: m.seq || 0, dirty: false, detached: true });
   if (row) V.toast(`"${row.name}" was deleted from Google Drive on another device. The copy on this ${deviceName()} is kept; it goes back to Drive if you change it.`, false, 0, { key: "drivegone" + m.pid });
 }
@@ -18762,6 +18900,9 @@ async function stripRec(r, have) {
   const found = new Map();
   const walk = async (v, key) => {
     if (typeof v === "string") {
+      // (v3.73) a picture not on this device: its preview stands in for it here, or its "vlblob:" reference itself
+      const lr = liteRef.get(v) || (v.startsWith("vlblob:") ? { k: v.slice(7) } : null);
+      if (lr) { if (!found.has(lr.k)) found.set(lr.k, { url: null, mime: lr.mime, label: clean(r.name) + (key in PICN ? PICN[key] : " (" + key + ")") }); return "vlblob:" + lr.k; }
       if (v.length <= 200 || !v.startsWith("data:")) return v;
       const k = await picHash(v); if (have) have.set(k, v);
       if (!found.has(k)) found.set(k, { url: v, label: clean(r.name) + (key in PICN ? PICN[key] : " (" + key + ")") });
@@ -18771,7 +18912,7 @@ async function stripRec(r, have) {
     if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = await walk(v[k], k); return o; }
     return v;
   };
-  const top = {}; for (const k of Object.keys(r.obj || {})) if (!(r.type === "item" && k === "use")) top[k] = await walk(r.obj[k], k);
+  const top = {}; for (const k of Object.keys(r.obj || {})) if (!(r.type === "item" && k === "use") && k !== "_th") top[k] = await walk(r.obj[k], k); // (_th: this device's own small preview)
   return { data: top, found, sig: await hashOf(JSON.stringify([r.type, top])) };
 }
 const picIds = (R) => { const o = {}; for (const k of Object.keys(R.pics || {})) o[k] = R.pics[k].id; return o; };
@@ -18783,7 +18924,7 @@ async function applyRec(type, rid, obj) {
     obj.id = rid; if (type === "set") { obj.kind = "set"; obj.ids = Array.isArray(obj.ids) ? obj.ids : []; }
     const arr = type === "set" ? C.CAT.sets : C.CAT.items, i = arr.findIndex((x) => x.id === rid);
     if (i >= 0) arr[i] = obj; else arr.push(obj);
-    await C.raw.put(obj);
+    await C.raw.put(obj); liteIds.delete(rid); // (v3.73: whole now)
   } else if (type === "scene") {
     const all = (V.store.get("envs", []) || []).slice(), i = all.findIndex((x) => x && "scene:" + x.name === rid);
     if (i >= 0) all[i] = obj; else all.unshift(obj);
@@ -18879,13 +19020,14 @@ async function catRound() {
   for (const [l, s, rev] of push) {
     const m = Object.assign({ rid: l.rid, baseRev: 0, sig: "" }, cm.get(l.rid)); m.pics = Object.assign({}, m.pics);
     for (const [k, b] of s.found) {
-      if (m.pics[k]) continue;
-      if (onDrive.has(k)) { m.pics[k] = onDrive.get(k); continue; } // (the same picture is already there, e.g. a copied item)
+      if (m.pics[k]) { catPend.delete(k); continue; }
+      if (onDrive.has(k)) { m.pics[k] = onDrive.get(k); catPend.delete(k); continue; } // (the same picture is already there, e.g. a copied item)
+      if (!b.url) { const u = catMem.get(k); if (u) b.url = u; else continue; } // (v3.73: a picture only its preview is here of, and not on Drive: nothing to send)
       const mime = mimeOf(b.url);
       m.pics[k] = (await upload({ name: b.label + "." + (EXT[mime] || "png"), parents: [await libFolder(subOf(l))], mimeType: mime, appProperties: { vizlab: "libpic", rid: fitAp("rid", l.rid) } }, toBlob(b.url))).id;
-      onDrive.set(k, m.pics[k]); await putCM(m); // (kept as it goes: a broken connection carries on from the next picture)
+      onDrive.set(k, m.pics[k]); catPend.delete(k); catMem.delete(k); await putCM(m); // (kept as it goes: a broken connection carries on from the next picture)
     }
-    const pics = {}; for (const k of s.found.keys()) pics[k] = { id: m.pics[k], mime: mimeOf(s.found.get(k).url) };
+    const pics = {}; for (const k of s.found.keys()) { const b = s.found.get(k); pics[k] = { id: m.pics[k], mime: b.url ? mimeOf(b.url) : b.mime || picMime(k, doc) }; }
     doc.records[l.rid] = { id: l.rid, type: l.type, rev, at: iso, dev, name: l.name, sig: s.sig, data: s.data, pics };
     delete doc.gone[l.rid]; changed = true;
     after.push(() => putCM(Object.assign(m, { baseRev: rev, sig: s.sig })));
@@ -18920,11 +19062,257 @@ async function catRound() {
     const parts = [names.added ? names.added + " added" : "", names.changed ? names.changed + " changed" : "", names.removed ? names.removed + " deleted" : ""].filter(Boolean).join(", ");
     V.toast(!hadAny && !catTold++ ? `Your office catalogue came from Google Drive: ${what}` : `Office catalogue brought up to date from Google Drive (${parts}, on ${[...names.from].join(" and ") || "another device"})`, false, 6000, { key: "drivecat" });
   }
+  for (const k of [...catPend]) if (onDrive.has(k)) { catPend.delete(k); catMem.delete(k); } // (v3.73: Drive has these pictures now)
   for (const [nm, newName, other] of clashNames) {
     V.toast(`"${nm}" in the office catalogue was also changed on ${other === dev ? "another " + dev : "the " + (other || "other device")} before this ${dev} had copied its own change to Google Drive. Both are kept: this ${dev}'s version is now "${newName}", and "${nm}" has the other change.`, false, 0,
       { key: "drivecatconflict" + nm, action: { label: "Open the Library", run: () => (V.openLibraryAt ? V.openLibraryAt("office") : V.setView("library")) } });
   }
   return true;
+}
+
+// ---------- v3.73: the office catalogue only in Google Drive ----------
+// The record kept on this device (library.js putRaw asks V.catRecord) has each picture as "vlblob:<hash>" and _th, a small
+// preview of its main picture. In memory (CAT) the items are whole: hydrateCat() brings their pictures from Drive. Until
+// then (just opened, offline) an item shows its preview (liteIds; liteRef maps the preview back to its picture), and the
+// Library won't copy a preview into a project (V.catLite). A new picture waits in catMem until Drive has it (catPend).
+const catMem = new Map(), catPend = new Set(), liteRef = new Map(), liteIds = new Set();
+const picMime = (k, doc) => { for (const R of Object.values(((doc || catInfo.doc) || {}).records || {})) if (R.pics && R.pics[k]) return R.pics[k].mime || "image/png"; return "image/png"; };
+const catFiles = () => { const o = new Map(); const d = catInfo.doc; if (d) for (const R of Object.values(d.records || {})) for (const k of Object.keys(R.pics || {})) if (R.pics[k].id) o.set(k, R.pics[k].id); for (const m of cm.values()) for (const k of Object.keys(m.pics || {})) if (m.pics[k]) o.set(k, m.pics[k]); return o; };
+const hasData = (v, min) => typeof v === "string" ? v.length > min && v.startsWith("data:") : Array.isArray(v) ? v.some((x) => hasData(x, min)) : v && typeof v === "object" ? Object.keys(v).some((k) => k !== "_th" && hasData(v[k], min)) : false;
+const hasRef = (v) => typeof v === "string" ? v.startsWith("vlblob:") || liteRef.has(v) : Array.isArray(v) ? v.some(hasRef) : v && typeof v === "object" ? Object.keys(v).some((k) => k !== "_th" && hasRef(v[k])) : false;
+V.catLite = (it) => !!it && liteIds.has(it.id);
+V.catRecord = async (it) => {
+  const strip1 = only() && !st.keepCopy;
+  if (!strip1 && !hasRef(it)) return it;
+  const files = strip1 ? catFiles() : null;
+  const walk = async (v) => {
+    if (typeof v === "string") {
+      const lr = liteRef.get(v); if (lr) return "vlblob:" + lr.k;
+      if (!strip1 || v.length <= 200 || !v.startsWith("data:")) return v;
+      const k = await picHash(v); if (!files.has(k)) { catMem.set(k, v); catPend.add(k); }
+      return "vlblob:" + k;
+    }
+    if (Array.isArray(v)) { const o = []; for (const x of v) o.push(await walk(x)); return o; }
+    if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) if (k !== "_th") o[k] = await walk(v[k]); return o; }
+    return v;
+  };
+  const rec = await walk(it), main = it.img || (Array.isArray(it.imgs) ? it.imgs[0] : null);
+  if (it.kind !== "set" && typeof main === "string" && main.startsWith("data:")) rec._th = liteRef.has(main) ? main : await tiny(main);
+  if (catPend.size && st.on) soon(1500);
+  return rec;
+};
+// the catalogue's pictures into memory (from what waits here, else from Drive); previews meanwhile
+let hydrating = null;
+function hydrateCat() { return hydrating || (hydrating = hydrate1().finally(() => { hydrating = null; })); }
+async function hydrate1() {
+  const C = V.catalogue; if (!C || !C.CAT) return 0;
+  await C.loadCat();
+  const all = C.CAT.items.concat(C.CAT.sets).filter(hasRef);
+  if (!all.length) return 0;
+  // previews first, so the Library shows something straight away
+  for (const it of all) {
+    if (typeof it.img === "string" && it.img.startsWith("vlblob:") && it._th) { liteRef.set(it._th, { k: it.img.slice(7), mime: "image/png" }); it.img = it._th; }
+    else if (Array.isArray(it.imgs) && typeof it.imgs[0] === "string" && it.imgs[0].startsWith("vlblob:") && it._th) { liteRef.set(it._th, { k: it.imgs[0].slice(7), mime: "image/png" }); it.imgs[0] = it._th; }
+    liteIds.add(it.id);
+  }
+  try { C.refresh(); } catch (e) {}
+  if (!st.on) return all.length;
+  const files = catFiles(), got = new Map(); let left = 0, n = 0;
+  const need = new Set(); const look = (v) => { if (typeof v === "string") { const lr = liteRef.get(v); const k = lr ? lr.k : v.startsWith("vlblob:") ? v.slice(7) : null; if (k) need.add(k); } else if (Array.isArray(v)) v.forEach(look); else if (v && typeof v === "object") Object.keys(v).forEach((k) => k !== "_th" && look(v[k])); };
+  all.forEach(look);
+  const list = [...need];
+  if (list.length > 6) progress("drivecatget", `Getting the office catalogue's pictures from Google Drive: 0 of ${list.length}…`);
+  try {
+    await pool(list, async (k) => {
+      const u = catMem.get(k); if (u) { got.set(k, u); return; }
+      const id = files.get(k); if (!id) return;
+      try { const b = await download(id); got.set(k, await toDataUrl(b.type ? b : new Blob([b], { type: picMime(k) }))); } catch (e) { if (e.kind) throw e; }
+      n++; if (list.length > 6 && n % 4 === 0) progress("drivecatget", `Getting the office catalogue's pictures from Google Drive: ${n} of ${list.length}…`);
+    });
+  } finally { V.closeToastKey("drivecatget"); }
+  const put = (v) => { if (typeof v === "string") { const lr = liteRef.get(v), k = lr ? lr.k : v.startsWith("vlblob:") ? v.slice(7) : null; return k && got.has(k) ? got.get(k) : v; } if (Array.isArray(v)) return v.map(put); if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = put(v[k]); return o; } return v; };
+  for (const it of all) {
+    for (const k of Object.keys(it)) if (k !== "_th" && k !== "id") it[k] = put(it[k]);
+    if (hasRef(it)) { left++; continue; }
+    delete it._th; liteIds.delete(it.id);
+  }
+  try { C.refresh(); if (V.envRepaint) V.envRepaint(); } catch (e) {}
+  return left;
+}
+// catalogue records still kept whole here: moved to Drive (each picture checked there), then kept small
+async function moveCat() {
+  const C = V.catalogue; if (!C || !C.raw || !C.raw.all) return { moved: 0, left: 0 };
+  await C.loadCat();
+  let moved = 0, left = 0;
+  for (const rec of await C.raw.all()) {
+    if (!hasData(rec, 200)) continue;
+    const it = (rec.kind === "set" ? C.CAT.sets : C.CAT.items).find((x) => x.id === rec.id), m = cm.get(rec.id);
+    if (!it || !m || liteIds.has(rec.id)) { left++; continue; }
+    const s = await stripRec({ rid: it.id, type: it.kind === "set" ? "set" : "item", name: it.name, obj: it }, null);
+    if (s.sig !== m.sig) { left++; continue; } // (Drive has another version: the next round copies it first)
+    let ok = true; for (const [k, b] of s.found) if (!b.url || !(await onDriveOk((m.pics || {})[k], b.url))) { ok = false; break; }
+    if (!ok) { left++; continue; }
+    await C.raw.store(await V.catRecord(it)); moved++;
+  }
+  return { moved, left };
+}
+// mode off: the catalogue's full pictures back on this device
+async function backCat() {
+  const C = V.catalogue; if (!C || !C.raw || !C.raw.all) return 0;
+  const left = await hydrateCat();
+  let n = 0;
+  for (const rec of await C.raw.all()) {
+    if (!hasRef(rec)) continue;
+    const it = (rec.kind === "set" ? C.CAT.sets : C.CAT.items).find((x) => x.id === rec.id);
+    if (it && !hasRef(it)) { await C.raw.store(it); n++; }
+  }
+  return left;
+}
+
+// ---------- v3.73: History (jobs) only in Google Drive ----------
+// local.js keeps each job through V.jobRec: with the mode on, its result pictures become "vlblob:<hash>" with a ~20 KB preview
+// (o.th) and dpics {hash: Drive file id}. A picture that is also in a project uses that project's file on Drive; one that
+// isn't goes to VizLab/History. When a project drops a picture History still lists, the file moves to History instead of
+// the bin. History cards show the preview; full screen, Download and Add to canvas fetch the picture (V.drive.fullUrl).
+const jobPend = new Map(); // job id -> the whole job, until Drive has its pictures
+let histIds = {}, histUse = new Set(), histFolder = null;
+const keepHist = () => L.put("kv", { id: "drivehist", ids: histIds }).catch(() => {});
+const knownId = (k) => { if (histIds[k]) return histIds[k]; for (const m of metas.values()) if (m.blobs && m.blobs[k]) return m.blobs[k]; return null; };
+const bigOut = (o) => o && typeof o.url === "string" && o.url.startsWith("data:") && o.url.length > BIG;
+V.jobRec = async (job) => {
+  if (!job || !(job.outputs || []).some(bigOut) || !only() || st.keepCopy) return job;
+  const rec = Object.assign({}, job, { outputs: [] }), ids = Object.assign({}, job.dpics || {});
+  let pend = false;
+  for (const o of job.outputs) {
+    if (!bigOut(o)) { rec.outputs.push(o); continue; }
+    const k = await hashOf(o.url), id = ids[k] || knownId(k);
+    if (id) ids[k] = id; else pend = true;
+    histUse.add(k);
+    rec.outputs.push(Object.assign({}, o, { url: "vlblob:" + k, mime: mimeOf(o.url), th: o.type === "image" || o.type === "thumb" ? await tiny(o.url) : null }));
+  }
+  rec.dpics = ids;
+  if (pend) { jobPend.set(job.id, job); if (st.on) soon(4000); } else jobPend.delete(job.id);
+  return rec;
+};
+const fullC = new Map(); // the last few pictures fetched for History (memory only)
+async function picFromDrive(k, id, mime) {
+  if (fullC.has(k)) return fullC.get(k);
+  for (const j of jobPend.values()) for (const o of j.outputs || []) if (bigOut(o) && (await hashOf(o.url)) === k) return o.url;
+  if (!id) throw new Error("This picture isn't on Google Drive (it was never copied there)");
+  if (!st.on) throw new Error("This picture is kept in your Google Drive: connect Google Drive (Settings) to see it");
+  const b = await download(id), u = await toDataUrl(b.type ? b : new Blob([b], { type: mime || "image/png" }));
+  fullC.set(k, u); while (fullC.size > 6) fullC.delete(fullC.keys().next().value);
+  return u;
+}
+// a History record from this device with its pictures back
+V.jobFull = async (j) => {
+  if (!j || !(j.outputs || []).some((o) => typeof o.url === "string" && o.url.startsWith("vlblob:"))) return j;
+  const out = Object.assign({}, j, { outputs: [] });
+  for (const o of j.outputs) {
+    if (typeof o.url !== "string" || !o.url.startsWith("vlblob:")) { out.outputs.push(o); continue; }
+    const k = o.url.slice(7), x = Object.assign({}, o, { url: await picFromDrive(k, (j.dpics || {})[k] || knownId(k), o.mime) }); delete x.th; delete x.mime;
+    out.outputs.push(x);
+  }
+  delete out.dpics; return out;
+};
+async function ensureHist() {
+  if (histFolder) return histFolder;
+  const root = await ensureRoot();
+  const f = await list(`appProperties has { key='vizlab' and value='history' } and '${qs(root)}' in parents and trashed=false`, "id");
+  histFolder = f.length ? f[0].id : (await mkFolder("History", root, { vizlab: "history" })).id;
+  return histFolder;
+}
+// copy one job's pictures up (or point at the same picture in a project); true when Drive has them all
+async function jobUp(job) {
+  const rec = await L.get("jobs", job.id); if (!rec) return true;
+  const ids = Object.assign({}, rec.dpics || {});
+  let i = 0;
+  for (const o of job.outputs || []) {
+    i++; if (!bigOut(o)) continue;
+    const k = await hashOf(o.url); if (ids[k]) continue;
+    let id = knownId(k);
+    if (!id) {
+      const mime = mimeOf(o.url), d = new Date(job.created_at || Date.now());
+      const nm = `${(V.kindOf ? V.kindOf(job.kind, job.settings) : job.kind || "picture").replace(/^./, (c) => c.toUpperCase())} ${d.toISOString().slice(0, 10)} ${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}${job.outputs.length > 1 ? " (" + i + ")" : ""}.${EXT[mime] || "png"}`;
+      id = (await upload({ name: nm, parents: [await ensureHist()], mimeType: mime, appProperties: { vizlab: "hpic", job: fitAp("job", job.id) } }, toBlob(o.url))).id;
+      histIds[k] = id; keepHist();
+    }
+    ids[k] = id; histUse.add(k);
+  }
+  const now = (await L.get("jobs", job.id)) || rec; // (it may have been saved again meanwhile)
+  now.dpics = Object.assign({}, now.dpics || {}, ids); await L.put("jobs", now);
+  return true;
+}
+async function jobSync() {
+  for (const [id, job] of [...jobPend]) { await jobUp(job); jobPend.delete(id); }
+}
+// History records kept whole here: pictures copied up and checked, then kept small (one record at a time)
+async function moveJobs() {
+  let moved = 0, left = 0;
+  for (const id of await L.keys("jobs")) {
+    const j = await L.get("jobs", id); if (!j || !(j.outputs || []).some(bigOut)) continue;
+    try {
+      await jobUp(j);
+      const rec = await L.get("jobs", id), ids = rec.dpics || {};
+      let ok = true; for (const o of j.outputs) if (bigOut(o) && !(await onDriveOk(ids[await hashOf(o.url)], o.url))) { ok = false; break; }
+      if (!ok) { left++; continue; }
+      const small = await V.jobRec(Object.assign({}, rec, { outputs: j.outputs, dpics: ids }));
+      if ((small.outputs || []).some(bigOut)) { left++; continue; }
+      await L.put("jobs", small); moved++;
+    } catch (e) { if (e.kind) throw e; left++; console.warn("drive history", e); }
+    hcache.clear();
+  }
+  return { moved, left };
+}
+async function backJobs() {
+  let left = 0;
+  for (const id of await L.keys("jobs")) {
+    const j = await L.get("jobs", id); if (!j || !(j.outputs || []).some((o) => typeof o.url === "string" && o.url.startsWith("vlblob:"))) continue;
+    try { const f = await V.jobFull(j); await L.put("jobs", f); } catch (e) { if (e.kind) throw e; left++; }
+  }
+  fullC.clear();
+  return left;
+}
+
+// ---------- v3.73: moving what is on this device up (mode on), and back (mode off) ----------
+async function moveAll() {
+  if (!only() || st.keepCopy) return;
+  let moved = 0, left = 0; const why = [];
+  for (const id of await L.keys("projects")) {
+    const row = await L.get("projects", id); if (!row || isIndex(row)) continue;
+    const m = metas.get(id);
+    if (!m || m.dirty || !m.fileId) { try { await push(id); } catch (e) { if (e.kind) throw e; left++; why.push(`"${row.name}": ${e.message}`); continue; } }
+    const now = (await rowOf(id)) || row, w = await verifyProject(now);
+    if (w) { left++; why.push(`"${row.name}": ${w}`); continue; }
+    if (V.project.id === id) mem.set(id, now);
+    await putIndex(now); moved++;
+    hcache.clear();
+  }
+  const c = await moveCat(); moved += c.moved; left += c.left; if (c.left) why.push(plural(c.left, "Library item") + " not checked yet");
+  const j = await moveJobs(); moved += j.moved; left += j.left; if (j.left) why.push(plural(j.left, "History picture") + " not checked yet");
+  for (const r of await L.all("kv")) if (/^drivecover:/.test(r.id) && typeof r.url === "string" && r.url.length > TINY) { const url = await tiny(r.url); if (url) { r.url = url; await L.put("kv", r); covers.set(r.id.slice(11), { id: r.cid, url }); } }
+  st.move = left > 0; saveSt();
+  const said = moved + ":" + left;
+  if (moved && !left && moveTold !== said) V.toast(`Moved to Google Drive: everything was checked there, and the full copies on this ${deviceName()} were removed (only small previews and the list stay here).`, false, 8000, { key: "drivemove" });
+  else if (left && moveTold !== said) V.toast(`${moved ? "Most of it is now only in Google Drive. " : ""}Some things are still kept on this ${deviceName()}, because VizLab couldn't check them in Google Drive yet: ${why.slice(0, 3).join("; ")}. Nothing is removed from here until Drive has it; VizLab tries again by itself.`, false, 0, { key: "drivemove" });
+  moveTold = said;
+}
+async function backAll() {
+  let left = 0;
+  for (const [pid, row] of mem) if (memOnly.has(pid)) { applying++; try { await L.put("projects", row); } finally { applying--; } memOnly.delete(pid); } // (newest first: not yet on Drive)
+  for (const id of await L.keys("projects")) {
+    const row = await L.get("projects", id); if (!row || !isIndex(row)) continue;
+    const m = metas.get(id), r = remote.get(id) || (m && m.fileId ? { pid: id, fileId: m.fileId, folderId: m.folderId, rev: m.baseRev || 0, name: row.name, at: row.updated_at, dev: deviceName() } : null);
+    if (!r) { left++; continue; }
+    try { progress("driveback", `Bringing "${row.name}" back to this ${deviceName()} from Google Drive…`); await pull(r, { noReload: true, full: true }); } catch (e) { if (e.kind) throw e; left++; }
+    if (V.project.id !== id) mem.delete(id);
+  }
+  V.closeToastKey("driveback");
+  left += await backCat();
+  left += await backJobs();
+  st.back = left > 0; saveSt();
+  if (!left) V.toast(`Full copies of your projects, Library and History are on this ${deviceName()} again (and still in Google Drive).`, false, 7000, { key: "driveback2" });
+  return left;
 }
 
 // ---------- v3.72: keys and settings on Drive ----------
@@ -19017,9 +19405,16 @@ async function setKeys(on) {
 async function syncOne(r) {
   const m = metas.get(r.pid);
   if (m && m.fileId === r.fileId && (m.baseRev || 0) === r.rev) return;
-  const row = await L.get("projects", r.pid);
+  const row = await rowOf(r.pid);
   if (!row) { if (m) await dropMeta(r.pid); return; } // only on Drive: listed, and downloaded when opened
   if (openBusy(r.pid)) { again = true; return; }
+  // (v3.73) only its name is here and it isn't open: the list follows Drive, nothing is downloaded
+  if (isIndex(row) && !mem.has(r.pid)) {
+    if (m && m.dirty && m.fileId) return; // (pushed below; a clash is found there)
+    applying++; try { await L.put("projects", Object.assign({}, row, { name: r.name || row.name, updated_at: r.at || row.updated_at, stats: { pictures: r.pics, sheets: r.sheets } })); } finally { applying--; }
+    await putMeta(Object.assign({ pid: r.pid, blobs: {}, seq: 0 }, m, { fileId: r.fileId, folderId: r.folderId, baseRev: r.rev, name: r.name, dirty: false, email: st.email, sig: "" }));
+    return;
+  }
   if (m && m.fileId) {
     const mine = m.dirty && (await sigOf(row.name, (await strip(row)).graph)) !== m.sig;
     return mine ? conflict(row, m, r) : pull(r);
@@ -19030,7 +19425,7 @@ async function syncOne(r) {
 // a part that fails for its own reason (not the sign-in or the connection) says so and lets the projects carry on
 async function part(what, fn, words) {
   try { await fn(); V.closeToastKey && V.closeToastKey("drivefail-" + what); }
-  catch (e) { if (e.kind) throw e; console.warn("drive " + what, e); V.toast(`Couldn't copy ${words} to Google Drive: ${e.message}. It is kept on this device; VizLab tries again by itself.`, true, 0, { key: "drivefail-" + what }); }
+  catch (e) { if (e.kind) throw e; console.warn("drive " + what, e); V.toast(what === "back" ? `Couldn't bring everything back from Google Drive yet: ${e.message}. It is safe in your Drive; VizLab tries again by itself.` : `Couldn't copy ${words} to Google Drive: ${e.message}. ${only() ? "Nothing is removed from this device until Google Drive has it" : "It is kept on this device"}; VizLab tries again by itself.`, true, 0, { key: "drivefail-" + what }); }
 }
 async function syncAll() {
   if (!st.on || blocked()) return;
@@ -19047,20 +19442,67 @@ async function syncAll() {
       await refreshRemote();
       for (const r of remote.values()) await syncOne(r);
       for (const m of [...metas.values()]) if (m.fileId && !remote.has(m.pid) && !m.detached) await goneRemote(m);
-      const rows = (await V.localApi0("project_list")).projects || [];
-      for (const p of rows) { const m = metas.get(p.id); if (!m || m.dirty || !m.fileId) await push(p.id); }
+      const ids = new Set((await V.localApi0("project_list")).projects.map((p) => p.id)); for (const pid of mem.keys()) ids.add(pid);
+      for (const pid of ids) { const m = metas.get(pid); if (!m || m.dirty || !m.fileId) await push(pid); }
       if (reloadWanted && V.project.id === reloadWanted.pid) await reloadOpen(reloadWanted);
-      st.last = new Date().toISOString(); saveSt(); reauthTold = false;
+      // v3.73: History pictures up, then (switched on) the full copies here moved and checked, or (switched off) brought back
+      if (only()) {
+        await part("history", jobSync, "History's pictures");
+        if (st.keepCopy && !memOnly.size && !catPend.size && !jobPend.size && ![...metas.values()].some((m) => m.dirty && !m.detached)) { st.keepCopy = false; st.move = true; saveSt(); }
+        if (st.move) await part("move", moveAll, "what is on this device");
+        if (liteIds.size || (V.catalogue && V.catalogue.CAT && V.catalogue.CAT.items.some(hasRef))) await hydrateCat().catch((e) => { if (e.kind) throw e; });
+      } else if (st.back) await part("back", backAll, "your projects back to this device");
+      prune();
+      st.last = new Date().toISOString(); saveSt(); reauthTold = false; failN = 0; failSince = 0;
+      V.closeToastKey("drivefail"); V.closeToastKey("drivekeep");
       setState("idle", "");
       fetchCovers();
     } catch (e) {
       console.warn("drive sync", e);
+      failN++; failSince = failSince || Date.now();
       if (e.kind === "auth") { setState("needsauth", e.message); tellReauth(); }
       else if (e.kind === "offline" || e.kind === "net") setState("offline", e.message);
-      else { setState("error", e.message); V.toast("Couldn't copy to Google Drive: " + e.message + ". Your work is kept on this device; VizLab tries again by itself.", true, 0, { key: "drivefail" }); }
+      else { setState("error", e.message); V.toast(only() ? `Not saved to Google Drive yet: ${e.message}. Your work is kept in this window; VizLab tries again by itself.` : "Couldn't copy to Google Drive: " + e.message + ". Your work is kept on this device; VizLab tries again by itself.", true, 0, { key: "drivefail", action: { label: "Retry", run: () => syncAll() } }); }
+      offerKeep();
     }
   })();
-  try { await syncing; } finally { syncing = null; if (again) { again = false; soon(1500); } }
+  try { await syncing; } finally { syncing = null; paintSaveDrive(); if (again) { again = false; soon(1500); } else if (only() && state !== "idle" && atRisk()) soon(failN > 5 ? 60000 : 15000); }
+}
+// v3.73: what isn't in Google Drive yet and has no copy on this device either (closing the window would lose it)
+const atRisk = () => (st.keepCopy ? 0 : memOnly.size + catPend.size + jobPend.size);
+const unsaved = () => ({ projects: [...metas.values()].filter((m) => m.dirty && !m.detached).length, library: catPend.size, history: jobPend.size, atRisk: atRisk(), keepCopy: !!st.keepCopy });
+// it keeps failing: offer to keep a copy here for now (never lose work)
+function offerKeep() {
+  if (!only() || st.keepCopy || !atRisk() || !(failN >= 3 || Date.now() - failSince > 90000)) return;
+  const u = unsaved(), what = [u.projects ? plural(u.projects, "project") : "", u.library ? plural(u.library, "Library picture") : "", u.history ? plural(u.history, "History picture") : ""].filter(Boolean).join(", ") || "your latest changes";
+  V.toast(`Still not saved to Google Drive (${what}). They are only in this window for now. Keep a copy on this ${deviceName()} until Google Drive has them? VizLab removes it again by itself once Drive has everything.`, true, 0,
+    { key: "drivekeep", actions: [{ label: "Keep a copy on this device for now", run: () => keepCopyNow() }, { label: "Retry", run: () => syncAll() }] });
+}
+async function keepCopyNow() {
+  st.keepCopy = true; saveSt();
+  try {
+    for (const pid of [...memOnly]) { const row = mem.get(pid); if (row) { applying++; try { await L.put("projects", row); } finally { applying--; } } }
+    const C = V.catalogue;
+    if (C && C.CAT && catPend.size) for (const it of C.CAT.items) { let mine = false; const look = async (v) => { if (typeof v === "string") { if (v.length > 200 && v.startsWith("data:") && catPend.has(await picHash(v))) mine = true; } else if (Array.isArray(v)) { for (const x of v) await look(x); } else if (v && typeof v === "object") { for (const k of Object.keys(v)) await look(v[k]); } }; await look(it); if (mine) await C.raw.store(it); }
+    for (const [id, job] of jobPend) { const rec = await L.get("jobs", id); await L.put("jobs", Object.assign({}, rec || job, { outputs: job.outputs })); }
+    V.closeToastKey("drivekeep");
+    V.toast(`A copy is kept on this ${deviceName()} for now. As soon as Google Drive has everything, VizLab checks it there and removes the copy from here by itself.`, false, 9000, { key: "drivekept" });
+  } catch (e) { V.toast("Couldn't keep a copy on this device: " + e.message + ". Download the pictures you need now.", true, 0); }
+  paintSettings(); paintSaveDrive();
+}
+// the title bar for the open project: "Saved to Drive" only once Drive has it
+let lastPaint = "";
+function paintSaveDrive() {
+  if (!only() || !V.paintSave || !V.project || !V.project.id) { lastPaint = ""; return; }
+  const s = V.saveState(); if (s.pending || s.saving || s.bad) { lastPaint = ""; return; } // (the save itself is under way or failed: core.js says so)
+  const m = metas.get(V.project.id), waiting = !!(m && m.dirty) || memOnly.has(V.project.id);
+  const st2 = !waiting ? "saved" : state === "syncing" || (state === "idle" && navigator.onLine && !failN) ? "saving" : "bad";
+  const key = st2 + (st2 === "bad" ? state + lastErr + st.keepCopy : "");
+  if (key === lastPaint) return; lastPaint = key;
+  if (st2 === "saved") return V.paintSave("saved", `Saved to Google Drive at ${hhmm(Date.now())}. VizLab saves by itself after every change; this ${deviceName()} keeps only a small preview.`, "Saved to Drive");
+  if (st2 === "saving") return V.paintSave("saving", "Copying your changes to Google Drive", "Saving to Drive…");
+  const why = !navigator.onLine ? "You're offline." : state === "offline" ? "Google Drive can't be reached just now." : state === "needsauth" ? "The Google Drive sign-in ran out (click to reconnect)." : lastErr ? "Google Drive: " + lastErr + "." : "Google Drive hasn't got it yet.";
+  V.paintSave("bad", `${why} Your changes are kept in this window${st.keepCopy ? " and in a copy on this device" : ""} until Google Drive has them. VizLab tries again by itself; click to try now.`, "Not saved to Drive yet · Retry");
 }
 function tellReauth() {
   if (reauthTold || st.route === "desk") return; reauthTold = true;
@@ -19078,9 +19520,14 @@ async function connect() {
   if (st.email && email !== st.email) { // another Google account: start afresh
     for (const pid of [...metas.keys()]) await dropMeta(pid); covers.clear();
     for (const rid of [...cm.keys()]) await dropCM(rid); catInfo = { id: "drivecatinfo" }; st.keysAt = 0; st.setMax = 0;
+    histIds = {}; keepHist(); // (v3.73)
   }
-  Object.assign(st, { on: true, email, name: (ab.user && ab.user.displayName) || "" }); rootId = null; libOk = false; saveSt();
-  V.toast(`Google Drive connected${email ? " (" + email + ")" : ""}: your projects${st.keys !== false ? ", office catalogue, keys and settings" : " and office catalogue"} are now kept in the VizLab folder in your Drive too`, false, 6000);
+  Object.assign(st, { on: true, email, name: (ab.user && ab.user.displayName) || "" }); rootId = null; libOk = false; histFolder = null;
+  if (st.onlyAuto) { st.only = true; st.onlyAuto = false; }
+  if (st.only !== false) { st.move = true; st.back = false; } // v3.73: on by default: what is here moves up, checked, then the full copies go
+  saveSt();
+  V.toast(st.only !== false ? `Google Drive connected${email ? " (" + email + ")" : ""}: your projects, pictures${st.keys !== false ? ", office catalogue, keys and settings" : " and office catalogue"} are now kept in the VizLab folder in your Drive. Once each one is checked there, this ${deviceName()} keeps only the list and small previews (Settings › Google Drive to change that).`
+    : `Google Drive connected${email ? " (" + email + ")" : ""}: your projects${st.keys !== false ? ", office catalogue, keys and settings" : " and office catalogue"} are now kept in the VizLab folder in your Drive too`, false, 8000);
   await syncAll();
 }
 async function reconnect() {
@@ -19090,7 +19537,12 @@ async function reconnect() {
     V.closeToastKey("drivereauth"); reauthTold = false; await syncAll();
   } catch (e) { V.toast(e.message, true, 0); }
 }
-async function disconnect() {
+async function disconnect(o = {}) {
+  // (v3.73) only in Drive: full copies come back first, or this device couldn't open its projects any more
+  if (st.on && st.only !== false && !o.force && !blocked()) {
+    await setOnly(false); st.onlyAuto = true; saveSt(); // (connecting again switches it back on)
+    if (st.back) throw new Error("Some projects or pictures couldn't be brought back from Google Drive yet, so Google Drive stays connected (they are only there for now). Try again when you're online.");
+  }
   try { if (st.route === "desk") await V.deskCall("/drive/logout", {}); else if (tok && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(tok.token, () => {}); } catch (e) { console.warn(e); }
   tok = null; dtok = null; V.store.set("driveTok", null); rootId = null; libOk = false;
   Object.assign(st, { on: false, route: "" }); saveSt(); remote = new Map(); keepRemote();
@@ -19100,20 +19552,47 @@ async function disconnect() {
 
 // ---------- the local "API", with Drive behind it ----------
 V.localApi0 = V.localApi;
+// a project that isn't whole on this device, opened from Drive: into memory (only in Drive) or onto this device (mode off)
+async function openFromDrive(id, row) {
+  const m = metas.get(id), r = remote.get(id) || (m && m.fileId ? { pid: id, fileId: m.fileId, folderId: m.folderId, rev: m.baseRev || 0, name: (row && row.name) || m.name || "This project", at: (row && row.updated_at) || "", dev: deviceName() } : null);
+  if (!r) return null;
+  const nm = r.name || (row && row.name) || "This project";
+  if (!st.on) throw new Error(`"${nm}" is kept in your Google Drive: connect Google Drive (Settings › Google Drive) to open it.`);
+  if (!navigator.onLine) throw new Error(`"${nm}" is kept in your Google Drive${row ? " (only its name and a small preview are on this device)" : " and isn't on this device"}: connect to the internet to open it.`);
+  progress("driveget", `Opening "${nm}" from Google Drive…`);
+  try { await pull(r, { noReload: true, full: !only(), progress: (k, n) => progress("driveget", `Opening "${nm}" from Google Drive: ${k} of ${plural(n, "picture")}…`) }); }
+  catch (x) {
+    if (x.kind === "auth") { tellReauth(); V.toast(`"${nm}" is kept in your Google Drive: reconnect Google Drive to open it.`, true, 0, { key: "driveopenauth", action: { label: "Reconnect and open", run: async () => { await reconnect(); V.openProject(id); } } }); throw new Error(`"${nm}" is kept in your Google Drive: reconnect Google Drive to open it (Settings › Google Drive).`); }
+    throw x;
+  } finally { V.closeToastKey("driveget"); }
+  return only() ? mem.get(id) : V.localApi0("project_get", { id });
+}
+// (its own arrays, so the canvas never changes the copy waiting for Drive)
+const copyRow = (r) => { const g0 = r.graph || {}; return Object.assign({}, r, { graph: Object.assign({}, g0, { nodes: (g0.nodes || []).map((n) => Object.assign({}, n)), edges: (g0.edges || []).slice(), groups: (g0.groups || []).slice() }) }); };
 V.localApi = async (action, b = {}) => {
   const base = V.localApi0;
   if (action === "project_get") {
-    try { return await base(action, b); }
-    catch (e) {
-      const r = st.on && remote.get(b.id); if (!r) throw e;
-      if (!navigator.onLine) throw new Error(`"${r.name}" is on Google Drive and isn't on this device yet: connect to the internet to open it.`);
-      V.toast(`Getting "${r.name}" from Google Drive…`, false, 60000, { key: "driveget" });
-      try { await pull(r, { noReload: true, progress: (k, n) => V.toast(`Getting "${r.name}" from Google Drive: picture ${k} of ${n}…`, false, 60000, { key: "driveget" }) }); }
-      catch (x) { if (x.kind === "auth") { tellReauth(); throw new Error(`"${r.name}" is on Google Drive: reconnect Google Drive to open it (Settings › Google Drive).`); } throw x; }
-      finally { V.closeToastKey("driveget"); }
-      return base(action, b);
-    }
+    await ready;
+    if (mem.has(b.id) && (only() || memOnly.has(b.id))) return copyRow(mem.get(b.id));
+    let row = null, err = null;
+    try { row = await base(action, b); } catch (e) { err = e; }
+    if (row && !isIndex(row)) return row;
+    const got = st.on || row ? await openFromDrive(b.id, row) : null;
+    if (!got) throw err || new Error(row ? `"${row.name}" is kept in Google Drive, but VizLab can't find it there (was it deleted on another device?)` : "project not found");
+    return copyRow(got);
   }
+  if (action === "project_save" && !applying && only()) { // v3.73: into memory and up to Drive; this device keeps the index row
+    await ready;
+    const id = b.id || L.uuid(), prev = mem.get(id) || (await L.get("projects", id)), now = new Date().toISOString();
+    const row = { id, name: b.name || "Untitled", graph: b.graph || {}, thumb: b.thumb || null, stats: b.stats || (prev && prev.stats) || null, created_at: (prev && prev.created_at) || now, updated_at: now };
+    await keepRow(row);
+    const here = await L.get("projects", id); if (isIndex(here)) memOnly.add(id);
+    const m = metas.get(id) || { pid: id, blobs: {}, baseRev: 0, seq: 0 };
+    m.dirty = true; m.seq = (m.seq || 0) + 1; await putMeta(m);
+    lastPaint = ""; soon(1200);
+    return { id, updated_at: now };
+  }
+  if (action === "backup_export") await ready;
   const out = await base(action, b);
   if ((action === "preset_save" || action === "preset_delete") && st.on) soon(2500); // (saved presets travel with the office catalogue)
   if (action === "project_save" && !applying) {
@@ -19121,38 +19600,70 @@ V.localApi = async (action, b = {}) => {
     m.dirty = true; m.seq = (m.seq || 0) + 1; await putMeta(m);
     if (st.on) soon(2500);
   }
+  if (action === "backup_import" && only()) { st.move = true; saveSt(); soon(1500); } // (restored whole: moved to Drive and checked like the rest)
   if (action === "project_delete") {
     const m = metas.get(b.id), r = remote.get(b.id), folder = (m && m.folderId) || (r && r.folderId);
+    mem.delete(b.id); memOnly.delete(b.id); covers.delete(b.id);
+    // (v3.73) pictures History still shows move to VizLab/History first: its folder goes to the bin
+    if (st.on && m && m.blobs) for (const k of Object.keys(m.blobs)) if (histUse.has(k) && !histIds[k]) { try { await g("PATCH", "/drive/v3/files/" + encodeURIComponent(m.blobs[k]), { query: { addParents: await ensureHist(), removeParents: ((m.nm || {})[k] || "").startsWith("w/") && m.dataId ? m.dataId : m.folderId, fields: "id" }, json: {} }); histIds[k] = m.blobs[k]; keepHist(); } catch (e) { console.warn("drive history move", e); } }
     await dropMeta(b.id); remote.delete(b.id); keepRemote();
     if (st.on && folder) { try { await patch(folder, { trashed: true }); } catch (e) { const d = (await L.get("kv", "drive:deletes").catch(() => null)) || { id: "drive:deletes", list: [] }; d.list.push(folder); await L.put("kv", d); } }
   }
   if (action === "project_list" && st.on) {
-    const here = new Set();
-    (out.projects || []).forEach((p) => { here.add(p.id); const m = metas.get(p.id); p.drive = m && m.fileId && !m.detached ? (m.dirty ? "waiting" : "on") : m && m.detached ? "" : "waiting"; });
-    for (const r of remote.values()) if (!here.has(r.pid)) out.projects.push({ id: r.pid, name: r.name, updated_at: r.at, thumb: (covers.get(r.pid) || {}).url || null, stats: { pictures: r.pics, sheets: r.sheets }, drive: "remote", device: r.dev });
+    const here = new Set(), on1 = only();
+    (out.projects || []).forEach((p) => {
+      here.add(p.id); const m = metas.get(p.id), r = mem.get(p.id);
+      if (r) Object.assign(p, { name: r.name, updated_at: r.updated_at, stats: r.stats || p.stats });
+      if (p.only && covers.get(p.id) && !r) p.thumb = covers.get(p.id).url;
+      p.drive = memOnly.has(p.id) ? "waiting" : m && m.fileId && !m.detached ? (m.dirty ? "waiting" : "on") : m && m.detached ? "" : "waiting";
+      p.only = on1 || !!p.only;
+    });
+    for (const r of remote.values()) if (!here.has(r.pid)) out.projects.push({ id: r.pid, name: r.name, updated_at: r.at, thumb: (covers.get(r.pid) || {}).url || null, stats: { pictures: r.pics, sheets: r.sheets }, drive: "remote", device: r.dev, only: on1 });
     out.projects.sort((x, y) => (x.updated_at < y.updated_at ? 1 : -1));
   }
+  if (action === "list" && out && out.jobs) // (v3.73) History: a picture kept in Drive shows its preview; V.drive.fullUrl fetches it
+    out.jobs = out.jobs.map((j) => (j.outputs || []).some((o) => typeof o.url === "string" && o.url.startsWith("vlblob:")) ? Object.assign({}, j, { outputs: j.outputs.map((o) => typeof o.url === "string" && o.url.startsWith("vlblob:") ? Object.assign({}, o, { url: o.th || "", ref: o.url, fid: (j.dpics || {})[o.url.slice(7)] || "" }) : o) }) : j);
   return out;
+};
+// a whole record for a backup file (v3.73: projects and History pictures kept only in Drive are fetched for it)
+V.backupRow = async (s, r) => {
+  try {
+    if (s === "projects" && isIndex(r)) { if (mem.has(r.id)) return mem.get(r.id); const got = await openFromDrive(r.id, r); const out = got || r; if (V.project.id !== r.id && !memOnly.has(r.id)) mem.delete(r.id); return out; }
+    if (s === "jobs") return await V.jobFull(r);
+  } catch (e) { console.warn("backup", e); }
+  return r;
 };
 
 // ---------- what the pages show ----------
 V.drive = {
   on: () => !!st.on && !blocked(),
-  info: () => ({ on: !!st.on, why: blocked(), email: st.email, name: st.name, route: st.route, state: state === "idle" && !navigator.onLine ? "offline" : state, err: lastErr, last: st.last, waiting: [...metas.values()].filter((m) => m.dirty && !m.detached).length }),
+  info: () => ({ on: !!st.on, why: blocked(), email: st.email, name: st.name, route: st.route, state: state === "idle" && !navigator.onLine ? "offline" : state, err: lastErr, last: st.last, waiting: [...metas.values()].filter((m) => m.dirty && !m.detached).length + (only() ? catPend.size + jobPend.size : 0), only: only(), unsaved: unsaved(), moving: !!st.move, back: !!st.back }),
   line() {
     if (!st.on) return "";
-    const i = V.drive.info(), w = i.waiting ? ` · ${plural(i.waiting, "project")} waiting to copy` : "";
-    const state = i.state;
-    if (state === "syncing") return "Saving to Drive · copying now…";
-    if (state === "needsauth") return "Saving to Drive · sign-in ran out: reconnect to carry on" + w;
-    if (state === "offline") return "Saving to Drive · offline: changes copy when you're back online" + w;
-    if (state === "error") return "Saving to Drive · last try failed: " + lastErr;
-    return "Saving to Drive · " + (st.last ? "last synced " + hhmm(st.last) : "not synced yet") + w;
+    const i = V.drive.info(), u = i.unsaved, o1 = only();
+    const w = o1 ? (i.waiting ? ` · not saved to Drive yet: ${[u.projects ? plural(u.projects, "project") : "", u.library ? plural(u.library, "Library picture") : "", u.history ? plural(u.history, "History picture") : ""].filter(Boolean).join(", ")}${u.keepCopy ? " (a copy is on this device for now)" : ""}` : "") : i.waiting ? ` · ${plural(i.waiting, "project")} waiting to copy` : "";
+    const state = i.state, lead = o1 ? "Only in Google Drive" : "Saving to Drive";
+    if (state === "syncing") return `${lead} · ${o1 ? "saving" : "copying"} now…`;
+    if (state === "needsauth") return lead + " · sign-in ran out: reconnect to carry on" + w;
+    if (state === "offline") return lead + (o1 ? " · offline: your changes are kept in this window and go to Drive when you're back online" : " · offline: changes copy when you're back online") + w;
+    if (state === "error") return lead + " · last try failed: " + lastErr + w;
+    return lead + " · " + (st.last ? (o1 ? "last saved " : "last synced ") + hhmm(st.last) : "not synced yet") + w;
   },
   connect, disconnect, reconnect, sync: () => syncAll(), device: deviceName, preload: () => { if (!blocked() && !deskRoute()) loadGIS().catch(() => {}); },
   keys: () => st.keys !== false, setKeys, // v3.72: bring keys and settings to the other devices
-  _test: { metas, remote: () => remote, state: () => state, cm, cat: () => catInfo }, // (for the tests)
+  // v3.73: projects and pictures only in Google Drive
+  only: () => st.only !== false, onlyNow: only, setOnly, unsaved, keepCopy: keepCopyNow,
+  fullUrl: async (o) => (o && o.ref ? picFromDrive(o.ref.slice(7), o.fid || knownId(o.ref.slice(7)), o.mime) : o ? o.url : ""), // a History picture kept in Drive
+  _test: { metas, remote: () => remote, state: () => state, cm, cat: () => catInfo, mem, memOnly, catPend, jobPend, liteIds, hydrateCat, histIds: () => histIds }, // (for the tests)
 };
+// switched on: what is here moves up (checked); off: full copies come back
+async function setOnly(on) {
+  if (on) { Object.assign(st, { only: true, move: true, back: false }); saveSt(); paintSettings(); if (st.on && !blocked()) await syncAll(); return true; }
+  Object.assign(st, { only: false, back: true, move: false, keepCopy: false }); saveSt(); paintSettings();
+  if (st.on && !blocked()) await syncAll();
+  paintSettings();
+  return !st.back;
+}
 V.onCatalogueChange = () => { if (st.on) soon(2500); };
 
 function paintSettings() {
@@ -19170,6 +19681,17 @@ function paintSettings() {
   if (kr) kr.hidden = V.cfg.mode === "cloud";
   if (k) k.checked = st.keys !== false;
   if (ks) ks.textContent = st.keys === false ? "Off: each device keeps its own keys and settings." : !on ? "On: they come over as soon as Google Drive is connected." : st.setLast ? "On · last brought up to date " + hhmm(st.setLast) : "On";
+  // v3.73: only in Google Drive
+  const o = $("#setDriveOnly"), os = $("#driveOnlyStatus"), orow = $("#driveOnlyRow");
+  if (orow) orow.hidden = V.cfg.mode === "cloud";
+  if (o) { o.checked = st.only !== false; o.disabled = !!onlyBusy; }
+  if (os) {
+    const u = unsaved(), d = deviceName();
+    os.textContent = onlyBusy ? onlyBusy : st.only === false ? (st.back && st.on ? `Off · bringing full copies back to this ${d}…` : `Off: full copies of your projects and pictures are kept on this ${d} as well as in Google Drive.`)
+      : !on ? `On: once Google Drive is connected, this ${d} keeps only the project list and small previews.`
+      : st.keepCopy ? `On · a copy is kept on this ${d} for now, until Google Drive has everything` : st.move ? `On · moving what is on this ${d} to Google Drive and checking it there…` : u.atRisk ? `On · not saved to Drive yet: kept in this window` : `On: this ${d} keeps only the project list and small previews` + (storeMB != null ? ` (VizLab uses about ${storeMB < 1 ? "under 1" : Math.round(storeMB)} MB here)` : "");
+  }
+  if (os && navigator.storage && navigator.storage.estimate && !estT) estT = setTimeout(() => { navigator.storage.estimate().then((e) => { estT = null; const mb = (e.usage || 0) / 1048576; if (storeMB == null || Math.abs(mb - storeMB) > 0.5) { storeMB = mb; paintSettings(); } }, () => { estT = null; }); }, 400);
 }
 const bind = () => {
   if (!$("#driveRow")) return;
@@ -19179,7 +19701,25 @@ const bind = () => {
     b.disabled = false; b.textContent = "Connect Google Drive"; paintSettings();
   };
   $("#driveSync").onclick = () => (state === "needsauth" ? reconnect() : syncAll());
-  $("#driveOff").onclick = async () => { if (await V.confirm("Disconnect Google Drive?", "VizLab stops copying projects to your Drive. Everything stays on this device, and the copies already in your Drive stay there.", "Disconnect", { danger: false })) disconnect(); };
+  $("#driveOff").onclick = async () => {
+    const o1 = st.only !== false;
+    if (!(await V.confirm("Disconnect Google Drive?", o1 ? `Your projects and pictures are kept only in Google Drive at the moment. Before disconnecting, VizLab brings full copies back to this ${deviceName()}, so they still open here. The copies in your Drive stay there.` : "VizLab stops copying projects to your Drive. Everything stays on this device, and the copies already in your Drive stay there.", o1 ? "Bring them back and disconnect" : "Disconnect", { danger: false }))) return;
+    if (o1) { onlyBusy = `Bringing full copies back to this ${deviceName()}…`; paintSettings(); }
+    try { await disconnect(); } catch (e) { V.toast(e.message, true, 0); } finally { onlyBusy = ""; paintSettings(); }
+  };
+  const ow = $("#setDriveOnly");
+  if (ow) ow.onchange = async () => {
+    const d = deviceName();
+    if (ow.checked) {
+      if (!(await V.confirm("Keep projects and pictures only in Google Drive?", `Your projects, renders, Library pictures and History pictures are moved to Google Drive. Each picture is checked there first; only then is the full copy on this ${d} removed. This ${d} keeps the list of projects and small previews, and opening a project fetches its pictures from Drive (it needs the internet).`, "Keep them only in Drive", { danger: false }))) { ow.checked = false; return; }
+      onlyBusy = `Moving what is on this ${d} to Google Drive and checking it there…`; paintSettings();
+      try { await setOnly(true); } finally { onlyBusy = ""; paintSettings(); }
+      return;
+    }
+    if (!(await V.confirm("Keep full copies on this device too?", `VizLab downloads full copies of your projects, Library and History pictures from Google Drive to this ${d}, and keeps both from now on. This can take a while for big projects.`, "Download full copies", { danger: false }))) { ow.checked = true; return; }
+    onlyBusy = `Bringing full copies back to this ${d}…`; paintSettings();
+    try { const ok = await setOnly(false); if (!ok && st.on) V.toast(`Some of it couldn't be brought back yet (are you online?). It stays safe in Google Drive; VizLab carries on by itself.`, true, 0, { key: "driveback3" }); } finally { onlyBusy = ""; paintSettings(); }
+  };
   const c = $("#setDriveClient");
   if (c) c.onchange = () => { V.store.set("driveClient", c.value.trim()); paintSettings(); };
   const pd = $("#projDrive"); if (pd) pd.onclick = () => (state === "needsauth" ? reconnect() : syncAll());
@@ -19193,10 +19733,22 @@ const bind = () => {
 };
 
 // ---------- when it syncs ----------
-ready = init().then(() => {
+ready = init().then(async () => {
   bind(); paintSettings();
+  if (st.on && st.only !== false && st.move === undefined) { st.move = true; saveSt(); } // (connected before v3.73: on by default, moved and checked first)
+  try { const h = await L.get("kv", "drivehist"); if (h && h.ids) histIds = h.ids; } catch (e) {}
   if (st.on && !blocked()) { if (st.route !== "desk" && !(tok && Date.now() < tok.exp - 60000)) setState("needsauth"); soon(2000); }
+  // (v3.73) the catalogue's previews at once, its pictures from Drive; which History pictures are in use
+  if (V.catalogue) V.catalogue.loadCat().then(() => { if (V.catalogue.CAT.items.concat(V.catalogue.CAT.sets).some(hasRef)) hydrateCat().catch(() => {}); });
+  if (st.on && st.only !== false) setTimeout(async () => { try { for (const id of await L.keys("jobs")) { const j = await L.get("jobs", id); for (const o of (j && j.outputs) || []) if (typeof o.url === "string" && o.url.startsWith("vlblob:")) histUse.add(o.url.slice(7)); } } catch (e) {} }, 1500);
 });
+// v3.73: closing the window while something is only in this window asks first; the title bar follows Drive
+window.addEventListener("beforeunload", (e) => { if (only() && atRisk()) { e.preventDefault(); e.returnValue = ""; } });
+const save0 = V.save; V.save = async function () { const r = await save0.apply(this, arguments); try { lastPaint = ""; paintSaveDrive(); } catch (e) {} return r; };
+const load0 = V.loadProject; V.loadProject = async function () { const r = await load0.apply(this, arguments); try { prune(); lastPaint = ""; paintSaveDrive(); } catch (e) {} return r; };
+const new0 = V.newProject; V.newProject = function () { const r = new0.apply(this, arguments); try { prune(); } catch (e) {} return r; };
+document.addEventListener("vl-drive", () => paintSaveDrive());
+const ss = V.$ && V.$("#saveState"); if (ss) ss.addEventListener("click", () => { if (!only() || !V.project.id) return; const m = metas.get(V.project.id); if (!(m && m.dirty) && !memOnly.has(V.project.id)) return; if (state === "needsauth") reconnect(); else syncAll(); });
 new MutationObserver(() => {
   const v = document.body.dataset.view;
   if (v === "settings") { paintSettings(); if (!blocked() && !deskRoute()) loadGIS().catch(() => {}); } // (loaded early, so Connect opens Google's window straight from the click)
@@ -19271,7 +19823,7 @@ const fetchProjects = async () => { projList = ((await V.api("project_list")) ||
 V.projectList = () => projList;
 const plural = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
 const dayMonth = (t) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-const projSub = (p) => [p.drive === "remote" ? "Not on this device yet (opening it downloads it)" : "", "Edited " + ago(p.updated_at) + (p.drive === "remote" && p.device ? " on " + p.device : ""), p.stats && p.stats.pictures != null ? plural(p.stats.pictures, "picture") : "", p.stats && p.stats.sheets ? plural(p.stats.sheets, "sheet") : ""].filter(Boolean).join(" · ");
+const projSub = (p) => [p.drive === "remote" && !p.only ? "Not on this device yet (opening it downloads it)" : "", "Edited " + ago(p.updated_at) + (p.drive === "remote" && p.device ? " on " + p.device : ""), p.stats && p.stats.pictures != null ? plural(p.stats.pictures, "picture") : "", p.stats && p.stats.sheets ? plural(p.stats.sheets, "sheet") : ""].filter(Boolean).join(" · ");
 // leaving this project: save it first; if that fails, say so before its unsaved changes are dropped
 async function leaveOk() {
   if (!V.project.id && !V.G.nodes.length) return true;
@@ -19322,7 +19874,10 @@ function paintProjects() {
     const act = (label, title, fn) => h("button", { class: "mini", title, onclick: async (e) => { e.stopPropagation(); try { await fn(); } catch (er) { V.toast(er.message, true, 0); } loadProjects(); } }, label);
     g.append(h("div", { class: "pcard" + (open ? " open" : ""), tabindex: 0, role: "button", "aria-label": "Open " + p.name, onclick: () => V.openProject(p.id), onkeydown: (e) => { if (e.key === "Enter" && e.target === e.currentTarget) V.openProject(p.id); } },
       h("div", { class: "pthumb" }, p.thumb ? h("img", { src: p.thumb, alt: "" }) : p.drive === "remote" ? "On Google Drive" : "Empty", open ? h("span", { class: "popen" }, "Open now") : null,
-        p.drive === "on" || p.drive === "remote" ? h("span", { class: "pdrive" + (p.drive === "remote" ? " remote" : ""), title: p.drive === "remote" ? "This project is in your Google Drive; opening it downloads it to this device" : "Saved on this device and in your Google Drive" }, "On Drive") : p.drive === "waiting" ? h("span", { class: "pdrive wait", title: "Saved on this device; it is copied to Google Drive at the next sync" }, "Copying to Drive") : null),
+        // v3.73: kept only in Google Drive: "In Drive", or "Not saved to Drive yet" while Drive hasn't got the newest version
+        p.only && (p.drive === "on" || p.drive === "remote") ? h("span", { class: "pdrive" + (p.drive === "remote" ? " remote" : ""), title: "Kept in your Google Drive: this device has only its name and a small preview, and opening it fetches its pictures from Drive" }, "In Drive")
+        : p.only && p.drive === "waiting" ? h("span", { class: "pdrive wait", title: "Its newest changes are not in Google Drive yet: VizLab keeps them in this window and sends them as soon as it can" }, "Not saved to Drive yet")
+        : p.drive === "on" || p.drive === "remote" ? h("span", { class: "pdrive" + (p.drive === "remote" ? " remote" : ""), title: p.drive === "remote" ? "This project is in your Google Drive; opening it downloads it to this device" : "Saved on this device and in your Google Drive" }, "On Drive") : p.drive === "waiting" ? h("span", { class: "pdrive wait", title: "Saved on this device; it is copied to Google Drive at the next sync" }, "Copying to Drive") : null),
       h("div", { class: "pinfo" }, h("div", {}, h("b", { title: p.name }, p.name), h("span", {}, projSub(p)))),
       h("div", { class: "pacts" }, act("Rename", "Rename this project", () => renameAny(p)), act("Duplicate", "Make a copy of this project, for an option A / B", () => duplicateProject(p)), act("Delete", "Delete this project (its renders stay in History)", () => deleteProject(p)))));
   });
@@ -19507,7 +20062,10 @@ function histCard(it, k) {
         h("div", { class: "hbot" }, h("b", {}, V.engineName(j.engine) + (o.type === "model" ? " · 3D" : o.type === "video" ? " · Video" : "")), V.historyPrompt(j).slice(0, 90)))),
     h("div", { class: "hcap" }, h("b", {}, histTitle(it) + (sc ? " · " + sc : "")), h("span", {}, [pn, whenText(j.created_at)].filter(Boolean).join(" · "))));
 }
-const histDownload = (it) => (it.o.type === "image" ? V.downloadImage : V.download)(it.o.url, V.fileName(V.kindOf(it.j.kind, it.j.settings), it.o, it.i));
+// v3.73: a History picture kept only in Google Drive shows its small preview (o.url); the full picture is fetched for
+// full screen, Download and Add to canvas
+const histFull = async (o) => (o && o.ref && V.drive && V.drive.fullUrl ? V.drive.fullUrl(o) : o.url);
+const histDownload = async (it) => { let u; try { u = await histFull(it.o); } catch (e) { return V.toast(e.message, true, 6000); } return (it.o.type === "image" ? V.downloadImage : V.download)(u, V.fileName(V.kindOf(it.j.kind, it.j.settings), it.o, it.i)); };
 async function toggleFav(it, b) {
   const v = !it.j.favourite;
   try { await V.api("favourite", { id: it.j.id, value: v }); } catch (e) { return V.toast(e.message, true); }
@@ -19525,7 +20083,10 @@ function fullscreen(k) {
   if (o.type === "video") st.append(h("video", { src: o.url, controls: true, autoplay: true, loop: true }));
   else if (o.type === "model") { V.ensureModelViewer(); st.append(h("model-viewer", { src: o.url, poster: th?.url || "", "camera-controls": true, "auto-rotate": true })); }
   else if (o.type === "world") { st.style.position = "relative"; V.splatView(st, { url: o.url }); }
-  else st.append(h("img", { src: o.url, alt: "" }));
+  else {
+    const im = h("img", { src: o.url, alt: "" }); st.append(im);
+    if (o.ref) { st.classList.add("fsload"); histFull(o).then((u) => { if (fsAt === k && im.isConnected) im.src = u; }, (e) => V.toast(e.message, true, 6000)).finally(() => st.classList.remove("fsload")); } // (the preview first, then the picture from Drive)
+  }
   paintFsBar(); $("#fsModal").hidden = false;
 }
 function paintFsBar() {
@@ -19551,7 +20112,9 @@ document.addEventListener("keydown", (e) => {
 }, true);
 // Add to canvas: a picture already on this canvas is shown, not copied; a new one goes in a free place near the middle
 async function addFromHistory(it) {
-  const { j, o, i, th } = it, there = V.G.nodes.find((n) => n.jobId === j.id && (n.outIndex || 0) === i && n.url);
+  const { j, i, th } = it, there = V.G.nodes.find((n) => n.jobId === j.id && (n.outIndex || 0) === i && n.url);
+  let o = it.o;
+  if (!there && o.ref) { try { o = Object.assign({}, o, { url: await histFull(o) }); } catch (e) { return V.toast(e.message, true, 6000); } }
   setView("canvas");
   if (there) { V.sel = [there.id]; V.render(); V.selectionChanged(); V.centerOn && V.centerOn(there); return V.toast("It is already on this canvas: selected", false, 3000); }
   V.snapshot();
@@ -19639,7 +20202,7 @@ function paintGlance() {
     line(key[0], V.cfg.mode === "cloud" ? "Cloud server" : "Google key", key[1], V.cfg.mode === "cloud" ? "#setPass" : "#setGkey"),
     line(su.length ? "ok" : "off", "SketchUp", su.length ? (su.length === 1 && su[0].id === "sketchup" ? "" : su.map((x) => x.name).join(" and ") + " ") + "connected" : V.SU && !V.desk ? "inside SketchUp" : "not connected", "#sHosts"), // (lfA, P1: VizLab.exe with SketchUp closed is not connected)
     V.SU ? line(V.cfg.autosave && V.cfg.folder ? "ok" : "off", "Save folder", V.cfg.autosave ? V.cfg.folder || "not set" : "off", "#setAutosave") : null,
-    V.drive && V.cfg.mode !== "cloud" ? line(V.drive.on() ? (/sign-in ran out|failed/.test(V.drive.line()) ? "bad" : "ok") : "off", "Google Drive", V.drive.on() ? (V.drive.info().last ? "synced " + new Date(V.drive.info().last).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "on") : "off", "#sDrive") : null,
+    V.drive && V.cfg.mode !== "cloud" ? line(V.drive.on() ? (/sign-in ran out|failed/.test(V.drive.line()) ? "bad" : "ok") : "off", "Google Drive", V.drive.on() ? (V.drive.info().unsaved && V.drive.info().unsaved.atRisk ? "not saved yet" : V.drive.info().last ? (V.drive.info().only ? "only in Drive · " : "synced ") + new Date(V.drive.info().last).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "on") : "off", "#sDrive") : null,
     V.desk && V.cfg.mode !== "cloud" ? (() => { const cx = linkState && linkState.codex; return !cx ? line("", "ChatGPT", "checking…", "#cxBtn") : !cx.installed ? line("off", "ChatGPT", "Codex not installed", "#cxBtn") : cx.signedIn ? line("ok", "ChatGPT", "signed in", "#cxBtn") : line("off", "ChatGPT", cx.busy ? "finish in the browser…" : "Sign in to ChatGPT", () => V.codexSignIn()); })() : null, // v3.72: one click signs in (per PC)
     line(o.on ? "ok" : "off", "Clarman logo", o.on ? "on, " + corner : "off", "#setLogo"),
     line("", "This month", "~" + V.money(monthCost), () => setView("account")),

@@ -795,8 +795,8 @@ async function paintProjects() {
     const c = h("button", { class: "pcard" + (on ? " cur" : ""), style: `animation-delay:${Math.min(i, 8) * 30}ms`, onclick: (e) => { if (e.target.closest(".more3")) return; if (p.id) openProject(p.id); else tab("home"); } },
       p.thumb ? h("img", { class: "th", src: p.thumb, alt: "", loading: "lazy" }) : h("span", { class: "noth", html: icon("folder") }),
       on ? h("span", { class: "now" }, "Open now") : null,
-      p.drive === "on" || p.drive === "remote" ? h("span", { class: "drv" + (p.drive === "remote" ? " remote" : "") }, "On Drive") : null,
-      h("span", { class: "cap" }, h("b", {}, p.name), h("small", {}, [p.drive === "remote" ? "not on this phone yet" : "", n, p.updated_at ? when(Date.parse(p.updated_at)) : "not saved yet"].filter(Boolean).join(" · "))));
+      p.drive === "on" || p.drive === "remote" ? h("span", { class: "drv" + (p.drive === "remote" ? " remote" : "") }, p.only ? "In Drive" : "On Drive") : p.only && p.drive === "waiting" ? h("span", { class: "drv wait" }, "Not saved to Drive yet") : null,
+      h("span", { class: "cap" }, h("b", {}, p.name), h("small", {}, [p.drive === "remote" && !p.only ? "not on this phone yet" : "", n, p.updated_at ? when(Date.parse(p.updated_at)) : "not saved yet"].filter(Boolean).join(" · "))));
     if (p.id) c.append(h("span", { class: "more3", role: "button", "aria-label": "More for " + p.name, html: icon("more"), onclick: (e) => { e.stopPropagation(); projectSheet(p); } }));
     L.append(c);
   });
@@ -847,11 +847,13 @@ async function paintAll() {
 let vJob = null;
 $("#vClose").innerHTML = icon("x"); $("#vClose").onclick = () => { $("#pview").hidden = true; };
 $("#vSave").innerHTML = icon("save") + "<span>Save to Photos</span>";
-$("#vSave").onclick = async () => { const o = vJob.outputs.find((x) => x.type === "image"); const b = await blobOf(o.url); shareFile(b, `VizLab ${new Date(vJob.created_at).toISOString().slice(0, 10)}.${/png/.test(b.type) ? "png" : "jpg"}`); };
+const fullOf = async (o) => (o && o.ref && V.drive && V.drive.fullUrl ? V.drive.fullUrl(o) : o.url); // (v3.73: a picture kept only in Google Drive: its preview in the list, the picture fetched here)
+$("#vSave").onclick = async () => { const o = vJob.outputs.find((x) => x.type === "image"); let u; try { u = await fullOf(o); } catch (e) { return alertBox("Google Drive", e.message); } const b = await blobOf(u); shareFile(b, `VizLab ${new Date(vJob.created_at).toISOString().slice(0, 10)}.${/png/.test(b.type) ? "png" : "jpg"}`); };
 $("#vOpen").onclick = () => { const id = vJob.project_id; $("#pview").hidden = true; if (id) openProject(id); };
 async function openViewer(j) {
   vJob = j; const o = j.outputs.find((x) => x.type === "image");
-  $("#vImg").src = o.url; $("#vTitle").textContent = V.kindOf(j.kind, j.settings) === "upscale" ? "Upscaled ×2" : "Render";
+  $("#vImg").src = o.url;
+  if (o.ref) fullOf(o).then((u) => { if (vJob === j) $("#vImg").src = u; }, () => {}); $("#vTitle").textContent = V.kindOf(j.kind, j.settings) === "upscale" ? "Upscaled ×2" : "Render";
   $("#vMeta").textContent = [V.historyPrompt(j), V.engineName(j.engine), when(Date.parse(j.created_at))].filter(Boolean).join(" · ");
   let has = false; try { has = !!j.project_id && (((await V.api("project_list")).projects || []).some((p) => p.id === j.project_id)); } catch (e) {}
   $("#vOpen").hidden = !has; $("#vOpen").innerHTML = icon("folder") + `<span>Open its project${j.project ? ": " + esc(j.project) : ""}</span>`;
@@ -891,11 +893,22 @@ async function paintSettings() {
     const dbusy = (b, fn) => async () => { b.disabled = true; try { await fn(); } catch (er) { alertBox("Google Drive", er.message); } paintSettings(); };
     const cb = h("button", { class: "btn pri" }, "Connect Google Drive"); cb.onclick = dbusy(cb, () => V.drive.connect());
     const sb = h("button", { class: "btn sec" }, di.state === "needsauth" ? "Reconnect" : "Sync now"); sb.onclick = dbusy(sb, () => (di.state === "needsauth" ? V.drive.reconnect() : V.drive.sync()));
-    const ob = h("button", { class: "btn sec" }, "Disconnect"); ob.onclick = async () => { if (await confirmBox("Disconnect Google Drive?", "VizLab stops copying projects to your Drive. Everything stays on this phone, and the copies already in your Drive stay there.", "Disconnect")) { await V.drive.disconnect(); paintSettings(); } };
+    const o1 = !!(V.drive.only && V.drive.only());
+    const ob = h("button", { class: "btn sec" }, "Disconnect"); ob.onclick = async () => { if (await confirmBox("Disconnect Google Drive?", o1 ? "Your projects and pictures are kept only in Google Drive at the moment. Before disconnecting, VizLab brings full copies back to this phone, so they still open here. The copies in your Drive stay there." : "VizLab stops copying projects to your Drive. Everything stays on this phone, and the copies already in your Drive stay there.", o1 ? "Bring back and disconnect" : "Disconnect")) { try { await V.drive.disconnect(); } catch (er) { alertBox("Google Drive", er.message); } paintSettings(); } };
+    // v3.73: only in Google Drive (the same switch as the PC's Settings › Google Drive)
+    const ou = V.drive.unsaved ? V.drive.unsaved() : null;
+    const onlySw = V.drive.setOnly ? h("div", { class: "sw", id: "phDriveOnly", style: "background:none;border:0;padding:0;margin:14px 0 0", role: "switch", "aria-checked": o1, onclick: async () => {
+      if (o1 ? !(await confirmBox("Keep full copies on this phone too?", "VizLab downloads full copies of your projects, Library and History pictures from Google Drive to this phone, and keeps both from now on. Big projects take room on the phone.", "Download full copies"))
+        : !(await confirmBox("Keep projects and pictures only in Google Drive?", "Your projects, renders, Library and History pictures are moved to Google Drive. Each picture is checked there first; only then is the copy on this phone removed. Opening a project then fetches its pictures from Drive (it needs the internet).", "Only in Drive"))) return;
+      say(o1 ? "Bringing full copies back to this phone…" : "Moving your pictures to Google Drive…");
+      try { await V.drive.setOnly(!o1); } catch (er) { alertBox("Google Drive", er.message); }
+      paintSettings();
+    } }, h("div", { class: "ot" }, h("b", {}, "Keep my projects and pictures only in Google Drive (nothing saved on this phone)"), h("small", {}, o1 ? (ou && ou.atRisk ? "On · not saved to Drive yet: kept in VizLab until Drive has it" : "On: this phone keeps only the list of projects and small previews. Opening a project fetches its pictures from Drive.") : "Off: full copies are kept on this phone as well as in Google Drive.")), h("span", { class: "tog" + (o1 ? " on" : "") })) : null;
     B.append(h("div", { class: "set", id: "phDrive" }, h("h3", {}, "Google Drive"),
       on ? h("div", { class: "keyrow" }, h("span", { class: "okdot" }), h("span", {}, "Connected · " + (di.email || "Google Drive"))) : null,
       h("p", {}, on ? V.drive.line() : di.why || "Save your projects and the office catalogue to your own Google Drive, so they are on the PC and this phone. Google's own window does the sign-in."),
       on ? h("div", { class: "row" }, sb, ob) : di.why ? null : cb,
+      di.why ? null : onlySw,
       // v3.72: keys and settings come over too (the same switch as the PC's Settings › Google Drive)
       di.why ? null : h("div", { class: "sw", id: "phDriveKeys", style: "background:none;border:0;padding:0;margin:14px 0 0", role: "switch", "aria-checked": V.drive.keys(), onclick: async () => {
         if (V.drive.keys() && !(await confirmBox("Stop bringing keys and settings?", "The file \"VizLab settings (private).json\" goes to your Google Drive's bin, and your other devices stop getting changes from it. The keys already on each device stay there.", "Switch off"))) return;

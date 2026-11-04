@@ -25,8 +25,8 @@
   presets, scenes and projects therefore come from the desktop's own code (V.makeEditFor, V.localApi, IndexedDB
   "vizlab-local"). The office Google key and every picture stay on this phone.
 -->
-<link rel="stylesheet" href="desk.css?v=d0d917df4a">
-<link rel="stylesheet" href="phone.css?v=d0d917df4a">
+<link rel="stylesheet" href="desk.css?v=c72901bec1">
+<link rel="stylesheet" href="phone.css?v=c72901bec1">
 <body>
 
 <!-- ============ welcome ============ -->
@@ -816,7 +816,8 @@
       <div class="row" id="gAuthBox"><button class="mini primary" id="gSignIn">Sign in with Google</button><button class="mini" id="gUseSign" hidden>Use my Google sign-in</button><button class="mini" id="gSignOut" hidden>Use the key instead</button></div></div>
 
     <h3 id="sDrive">Google Drive</h3>
-    <div class="srow" id="driveRow"><div><b>Save projects to Google Drive</b><span class="hint">Every project, and the office catalogue in the Library (furniture, materials, collections, saved scenes and presets), is also kept in a <i>VizLab</i> folder in your own Google Drive, so it opens on your other PC and in VizLab Mobile. Each picture is its own full-quality file there. A copy stays on this device, so VizLab works without a connection and catches up later. Google's own window does the sign-in (VizLab never sees your password), and VizLab can only see the files it made itself.</span><span class="hint" id="driveStatus"></span></div><div class="row"><button class="mini primary" id="driveConnect" type="button">Connect Google Drive</button><button class="mini" id="driveSync" type="button" hidden>Sync now</button><button class="mini" id="driveOff" type="button" hidden>Disconnect</button></div></div>
+    <div class="srow" id="driveRow"><div><b>Save projects to Google Drive</b><span class="hint">Every project, and the office catalogue in the Library (furniture, materials, collections, saved scenes and presets), is also kept in a <i>VizLab</i> folder in your own Google Drive, so it opens on your other PC and in VizLab Mobile. Each picture is its own full-quality file there. Unless you keep them only in Drive (below), a copy stays on this device too, so VizLab works without a connection and catches up later. Google's own window does the sign-in (VizLab never sees your password), and VizLab can only see the files it made itself.</span><span class="hint" id="driveStatus"></span></div><div class="row"><button class="mini primary" id="driveConnect" type="button">Connect Google Drive</button><button class="mini" id="driveSync" type="button" hidden>Sync now</button><button class="mini" id="driveOff" type="button" hidden>Disconnect</button></div></div>
+    <div class="srow" id="driveOnlyRow"><div><b>Keep my projects and pictures only in Google Drive (nothing saved on this device)</b><span class="hint">Your projects, renders, Library pictures and History pictures are kept in your Google Drive only. This device keeps just the list of projects and small previews. Opening a project fetches its pictures from Drive, so it needs the internet; every change goes straight up to Drive, and the title bar says <i>Saved to Drive</i> once Drive has it. If you're offline, your changes wait in the window (closing it asks first) and go up when you're back. Switch off to keep full copies on this device as well.</span><span class="hint" id="driveOnlyStatus"></span></div><label class="switch"><input type="checkbox" id="setDriveOnly" checked><span></span></label></div>
     <div class="srow" id="driveKeysRow"><div><b>Bring my keys and settings to my other devices</b><span class="hint">Your Google, fal.ai and Tripo keys, the AI models you chose and your preferences (Clarman logo, toolbar labels, running costs, keep my camera, favourite presets…) are kept in a file called <i>VizLab settings (private).json</i> in the VizLab folder of your Drive, and come to every PC and phone you connect. Change a key here and your other devices get it. The keys in that file are readable text: only VizLab and you can open it, but anyone who gets into your Google account could see them. Sign-ins (Google Drive, ChatGPT, Google sign-in), the cloud passcode and this PC's save folder stay on each device.</span><span class="hint" id="driveKeysStatus"></span></div><label class="switch"><input type="checkbox" id="setDriveKeys" checked><span></span></label></div>
 
     <h3 id="sHosts">SketchUp &amp; Revit</h3>
@@ -958,7 +959,7 @@ window.VL_PHONE = true; document.documentElement.classList.add("phone");
   };
 })();
 </script>
-<script src="desk.js?v=d0d917df4a"></script>
-<script src="phone.js?v=d0d917df4a"></script>
+<script src="desk.js?v=c72901bec1"></script>
+<script src="phone.js?v=c72901bec1"></script>
 </body>
 </html>
