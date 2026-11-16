@@ -39,10 +39,15 @@ svg.i{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .btn small{display:block;font:500 13px var(--body);opacity:.75;letter-spacing:0;margin-top:2px}
 .btn .lbl{display:flex;flex-direction:column;align-items:center}
 .btn svg.i{width:26px;height:26px}
-/* Clarman construction lines: the main button's frame overshoots its corners */
-.btn.pri.cl::before,.btn.pri.cl::after{content:"";position:absolute;pointer-events:none;border-color:#faaf2966;border-style:solid}
-.btn.pri.cl::before{inset:-5px -12px;border-width:1px 0}
-.btn.pri.cl::after{inset:-12px -5px;border-width:0 1px}
+/* Clarman construction lines (v3.74 mobile:M9): four small L-shaped corner ticks inside the button's own box, so nothing
+   crosses the margin or the footer's edge; the overshooting frame stays only on the Welcome button */
+.btn.pri.cl::before,.btn.pri.cl::after{content:"";position:absolute;pointer-events:none;inset:6px;border-radius:calc(var(--r) - 6px);
+  background:linear-gradient(#14100559,#14100559) top left/10px 1.5px,linear-gradient(#14100559,#14100559) top left/1.5px 10px,
+  linear-gradient(#14100559,#14100559) top right/10px 1.5px,linear-gradient(#14100559,#14100559) top right/1.5px 10px;background-repeat:no-repeat}
+.btn.pri.cl::after{background:linear-gradient(#14100559,#14100559) bottom left/10px 1.5px,linear-gradient(#14100559,#14100559) bottom left/1.5px 10px,
+  linear-gradient(#14100559,#14100559) bottom right/10px 1.5px,linear-gradient(#14100559,#14100559) bottom right/1.5px 10px;background-repeat:no-repeat}
+#welcome #wSave.btn.pri.cl::before,#welcome #wDriveBtn.btn.pri.cl::before{inset:-5px -12px;border:solid #faaf2966;border-width:1px 0;background:none;border-radius:0}
+#welcome #wSave.btn.pri.cl::after,#welcome #wDriveBtn.btn.pri.cl::after{inset:-12px -5px;border:solid #faaf2966;border-width:0 1px;background:none;border-radius:0}
 .row{display:flex;gap:10px;align-items:center}
 .link{color:var(--acc);font-weight:600;min-height:44px;padding:0 6px;display:inline-flex;align-items:center}
 
@@ -137,9 +142,9 @@ textarea.inp{min-height:96px;resize:none;line-height:1.4}
 .sent pre{white-space:pre-wrap;font:13px/1.45 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--text2);margin:0 0 14px;max-height:40vh;overflow:auto}
 
 /* ---------- sheets ---------- */
-.shade{position:fixed;inset:0;background:#000000a6;z-index:40;opacity:0;transition:opacity .22s}
+.shade{position:fixed;inset:0;background:#000000a6;z-index:46;opacity:0;transition:opacity .22s}
 .shade.on{opacity:1}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--panel);border-radius:22px 22px 0 0;border-top:1px solid var(--line2);max-height:calc(100% - var(--sat) - 24px);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s var(--ease);box-shadow:0 -20px 50px #000a}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:47;background:var(--panel);border-radius:22px 22px 0 0;border-top:1px solid var(--line2);max-height:calc(100% - var(--sat) - 24px);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s var(--ease);box-shadow:0 -20px 50px #000a}
 .sheet.on{transform:none}
 .sheet.tall{height:calc(100% - var(--sat) - 24px)}
 @media (min-width:700px){.sheet{left:50%;width:640px;margin-left:-320px}}
@@ -198,21 +203,6 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
 .radio.on .dot{border-color:var(--acc)}.radio.on .dot::after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--acc)}
 .radio .ot{flex:1}.radio b{display:block;font-size:17px;font-weight:600}.radio small{display:block;color:var(--mute);font-size:14px}
 
-/* ---------- busy ---------- */
-#busy{position:fixed;inset:0;z-index:30;background:#060606;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(var(--sat) + 20px) 24px calc(var(--sab) + 24px);text-align:center;opacity:0;transition:opacity .25s}
-#busy.on{opacity:1}
-.bpic{position:relative;width:min(100%,520px);border-radius:var(--r);overflow:hidden;margin-bottom:26px;background:#111;box-shadow:0 20px 60px #000}
-.bpic img{display:block;width:100%;max-height:46vh;object-fit:cover;filter:saturate(.6) brightness(.55)}
-.bpic::after{content:"";position:absolute;left:0;right:0;height:38%;top:-40%;background:linear-gradient(#faaf2900,#faaf2933 70%,#faaf29aa 98%,#faaf2900);animation:scan 2.2s var(--ease) infinite}
-.bpic .frame{position:absolute;inset:10px;border:1px solid #faaf2955;border-radius:8px}
-@keyframes scan{to{top:102%}}
-#busy h2{font-size:24px;margin-bottom:6px}
-#busy p{color:var(--text2);margin:0 0 4px;font-size:16px}
-#busy .time{font:600 40px var(--head);color:var(--acc);margin:10px 0 2px;font-variant-numeric:tabular-nums}
-.bar{width:min(100%,320px);height:4px;background:#ffffff1a;border-radius:9px;overflow:hidden;margin:16px auto 22px}
-.bar i{display:block;height:100%;width:35%;background:var(--acc);border-radius:9px;animation:slide 1.4s ease-in-out infinite}
-@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
-#busy .btn{max-width:320px}
 
 /* ---------- result / compare ---------- */
 .cmp{position:relative;border-radius:var(--r);overflow:hidden;background:#141416;border:1px solid var(--line);touch-action:pan-y;user-select:none;-webkit-user-select:none;margin:0 auto 14px;max-height:58vh}
@@ -268,11 +258,11 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
 #dlg p{color:var(--text2);margin:0 0 18px;font-size:16px;white-space:pre-line}
 #dlg .btns{display:grid;gap:10px}
 #dlg .btn{min-height:52px;font-size:17px}
-#a2hs{position:fixed;left:12px;right:12px;bottom:calc(var(--sab) + 12px);z-index:20;background:#1e1e21;border:1px solid #faaf2966;border-radius:18px;padding:14px 8px 14px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 40px #000c;animation:pop .35s var(--ease)}
+/* (v3.74 M8: a card in Home's page, not over the screen) */
+#a2hs{margin:22px 0 4px;background:#1e1e21;border:1px solid #faaf2966;border-radius:18px;padding:14px 8px 14px 16px;display:flex;gap:12px;align-items:center;animation:pop .35s var(--ease)}
 #a2hs .t{flex:1;font-size:15px;line-height:1.4;color:var(--text2)}
 #a2hs b{color:var(--text);display:block;font-size:16px;margin-bottom:2px}
 #a2hs svg.share{width:20px;height:20px;vertical-align:-4px;color:var(--acc)}
-#a2hs::after{content:"";position:absolute;left:50%;bottom:-9px;margin-left:-8px;border:8px solid transparent;border-bottom:0;border-top-color:#faaf2966}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 /* ---------- bottom tab bar (Make · Projects · Sheets · Library) ---------- */
@@ -284,7 +274,6 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
 #tabs button:active{background:#ffffff0d}
 .scr.tabbed .body{padding-bottom:calc(var(--tabh) + var(--sab) + 24px)}
 body.tabson #mtoast{bottom:calc(var(--sab) + var(--tabh) + 16px)}
-body.tabson #a2hs{bottom:calc(var(--sab) + var(--tabh) + 12px)}
 
 /* ---------- home: the project you're in ---------- */
 .projline{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:8px 14px;border-radius:var(--r2);background:var(--card);border:1px solid var(--line);margin:0 0 22px;text-align:left;color:var(--text2);font-size:15px}
@@ -344,7 +333,8 @@ body.tabson #a2hs{bottom:calc(var(--sab) + var(--tabh) + 12px)}
 .dk .modal{padding:calc(var(--sat,0px) + 8px) 8px calc(var(--sab,0px) + 8px)}
 .dk .modal .mbox{max-width:calc(100vw - 16px)!important;width:calc(100vw - 16px)!important;max-height:calc(100dvh - var(--sat,0px) - var(--sab,0px) - 16px);overflow:auto;-webkit-overflow-scrolling:touch;border-radius:16px;padding:18px 14px 16px}
 .dk .modal .mbox h3{font-size:20px;padding-right:44px}
-.dk .mclose{width:48px!important;height:48px!important;font-size:28px!important;top:6px!important;right:6px!important}
+.dk .mclose{width:48px!important;height:48px!important;font-size:28px;top:6px!important;right:6px!important}
+.dk .mclose:before{width:22px!important;height:22px!important}
 .dk .mini,.dk .linkbtn{min-height:48px;padding:10px 16px;font-size:16px}
 .dk .mini.primary{min-height:52px}
 .dk input,.dk select,.dk textarea{font-size:16px;min-height:46px} /* (16px: iPhone doesn't zoom in on a box) */
@@ -446,3 +436,547 @@ body.tabson #a2hs{bottom:calc(var(--sab) + var(--tabh) + 12px)}
 .pcard .drv.remote::before{background:#0a0a0a}
 .pcard .drv.wait{border-color:#c0392b;color:#fff}
 .pcard .drv.wait::before{background:#e8743b}
+
+/* ===== v3.74 A3: iPhone polish (design/critique-3.73.json mobile:big:1-4, mobile:M1-M25) ===== */
+/* screens: the keyboard's room is taken off the bottom (M22); vertical scrolling stays the page's, sideways is ours (M5) */
+.scr{bottom:var(--kb,0px);box-shadow:-14px 0 34px #0008}
+.scr .body{touch-action:pan-y}
+body.kbon #tabs{display:none}
+.sheet{bottom:var(--kb,0px)}
+.sheet.on.half{transform:translateY(45%)}
+/* press-down feedback everywhere a finger lands (M10) */
+.rowbtn,.act,.card,.big,.pcard,.opt,.crcard,.lcard,.dt,.mini3,.tt,.pick,.sct,.pt,.radio{transition:transform .12s var(--ease),background .15s,border-color .15s}
+.rowbtn:active,.act:active,.card:active,.big:active,.pcard:active,.opt:active,.crcard:active,.lcard:active,.dt:active,.mini3:active,.pick:active{transform:scale(.97)}
+.card img,.crcard img,.pcard img,.lcard img,.pick img,.cmp img,#pview img,.pic img{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.grid>.card{content-visibility:auto;contain-intrinsic-size:auto 220px}
+
+/* tab bar (M12): a filled icon and an amber bar for the chosen tab, a dot on Make when something finished */
+#tabs button{position:relative}
+#tabs button svg.f,#tabs button.on svg.o{display:none}
+#tabs button.on svg.f{display:block}
+#tabs button.on::before{content:"";position:absolute;top:0;left:50%;width:24px;height:3px;margin-left:-12px;border-radius:0 0 3px 3px;background:var(--acc)}
+#tabs button.dot::after{content:"";position:absolute;top:12px;left:calc(50% + 10px);width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 2px #0d0d0e}
+
+/* welcome (M19) */
+.wdlead{margin-bottom:16px}
+.wor{text-align:center;color:var(--mute);margin:18px 0 6px;font-size:15px}
+.pastebox{position:relative;display:block}
+.pastebox .inp{padding-right:96px}
+.pastebtn{position:absolute;right:8px;top:50%;transform:translateY(-50%);min-height:42px;padding:0 16px;border-radius:10px;background:var(--card2);border:1px solid var(--line2);font-weight:600;font-size:15px;color:var(--acc)}
+
+/* home for a returning user (M11): Continue first, the starts as one row of three */
+#home:not(.returning) #bMore{display:none}
+#home.returning .hero,#home.returning .sub,#home.returning .minis{display:none}
+#home.returning .bigs{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:20px}
+#home.returning .big{flex-direction:column;justify-content:center;text-align:center;min-height:112px;padding:12px 6px;gap:8px;font-size:16px;border-radius:var(--r)}
+#home.returning .big small{display:none}
+#home.returning .big .bi{width:48px;height:48px;border-radius:14px}
+#home.returning .big .bi svg.i{width:28px;height:28px}
+.big.c{background:var(--card);border:1px solid var(--line2)}.big.c .bi{background:var(--accbg);color:var(--acc)}
+.crow{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 calc(-16px - var(--sar)) 22px calc(-16px - var(--sal));padding:2px calc(16px + var(--sar)) 4px calc(16px + var(--sal));scroll-padding:0 16px;scrollbar-width:none}
+.crow::-webkit-scrollbar{display:none}
+.crcard{flex:none;width:220px;scroll-snap-align:start;position:relative;border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--line);text-align:left;display:block;animation:pop .32s var(--ease) both}
+.crcard .th{display:block;width:100%;height:150px;object-fit:cover;background:#1c1c1f}
+.crcard .cap{display:block;padding:9px 11px 11px}
+.crcard b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crcard small{display:block;color:var(--mute);font-size:13px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* your picture (M24): the Keep switch on one line, scene and preset side by side */
+.sw.one{min-height:64px;padding:8px 10px 8px 16px}
+.sw .info{width:44px;height:44px;display:grid;place-items:center;color:var(--mute);border-radius:12px;flex:none}
+.sw .info svg.i{width:24px;height:24px}
+.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:4px}
+.duo .opt{flex-direction:column;align-items:stretch;min-height:156px;margin:0;gap:10px;padding:10px}
+.duo .opt .oi{width:100%;height:76px;border-radius:12px}
+.duo .opt .oi>svg{width:48px;height:48px}
+.duo .opt .ot b{font-size:16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.duo .opt .ot small{font-size:13px}
+.duo .opt .chev{display:none}
+.duo .opt .x{position:absolute;right:4px;top:4px;margin:0;width:44px;height:44px;background:#000000b3;border-radius:12px;color:#fff}
+.btn.one{white-space:nowrap;padding:0 10px;gap:8px}
+.btn.one svg.i{width:22px;height:22px}
+textarea.inp.grow{min-height:60px;overflow-y:auto}
+
+/* what do you want to do? (M13): the first tool as a hero across both columns; the rest line up from the top */
+.tt{justify-content:flex-start}
+.tt .ti{margin-bottom:4px}
+.tt small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tt.hero{grid-column:1/-1;display:grid;grid-template-columns:56px minmax(0,1fr);align-items:center;gap:6px 14px;border-color:#faaf2988;background:linear-gradient(160deg,#faaf2922,var(--card) 70%)}
+.tt.hero .ti{width:56px;height:56px;margin:0;border-radius:16px}
+.tt.hero .ti svg.i{width:32px;height:32px}
+.tt.hero .ht b{display:block;font:600 21px/1.15 var(--head)}
+.tt.hero .ht small{display:block;margin-top:2px}
+.tt.hero .btn{grid-column:1/-1;margin-top:8px}
+
+/* scenes sheet (M16) */
+.sct .cap{display:block;padding:12px 14px 14px}
+.sct b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sct small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sctools{margin-bottom:12px}
+.sctools .btn{flex:1 1 0;min-height:56px;font-size:15px;padding:0 8px}
+
+/* result (M20, big:3): versions, chips, Save + Share, the waiting picture */
+.cmp .cz{position:absolute;inset:0}
+.cmp.zoomed{touch-action:none}
+.cmp.wait .cz img{filter:saturate(.6) brightness(.6)}
+.cmp .shine{position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,transparent 30%,#faaf2930 44%,#ffffff3a 50%,#faaf2930 56%,transparent 70%);background-size:260% 100%;animation:shine 1.8s linear infinite}
+@keyframes shine{from{background-position:130% 0}to{background-position:-130% 0}}
+.tchip{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#000c;color:#fff;font:600 17px var(--head);padding:10px 18px;border-radius:99px;font-variant-numeric:tabular-nums;white-space:nowrap;border:1px solid #faaf2966}
+#rPend{text-align:center;color:var(--text2)}
+#rPend p{margin:0 0 14px;font-size:15px}
+.pager{display:flex;align-items:center;justify-content:center;gap:8px;margin:-4px 0 10px}
+.pdots{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:150px}
+.pdots .vtext{font-size:14px;color:var(--text2);font-weight:600}
+.pdots .dots{display:flex;gap:6px}
+.pdots i{width:7px;height:7px;border-radius:50%;background:#ffffff40}
+.pdots i.on{background:var(--acc)}
+.pager .ib[disabled]{opacity:.3;pointer-events:none}
+.meta .what{display:block;margin-bottom:10px;color:var(--text2)}
+.rchips{display:flex;flex-wrap:wrap;gap:8px}
+.rchip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:99px;background:var(--card);border:1px solid var(--line);color:var(--text2);font-size:14px}
+.rchip.ri{color:var(--acc)}
+.rchip svg.i{width:18px;height:18px}
+.savrow{display:flex;gap:10px;margin-bottom:14px}
+.btn.sq{width:56px;flex:none;padding:0}
+.dinfo .irow{display:flex;justify-content:space-between;gap:16px;padding:13px 2px;border-bottom:1px solid var(--line);font-size:15px;color:var(--mute)}
+.dinfo .irow b{color:var(--text);text-align:right;font-weight:600}
+
+/* change an area (M14): the picture in the free height, the size slider on the right edge */
+#paint .body.pbody{display:flex;flex-direction:column;padding-top:8px;padding-bottom:6px}
+#paint .pbody>.wrap{flex:1;display:flex;flex-direction:column;min-height:0;width:100%}
+/* (fix A3-2: the picture takes the whole width less 8 px gutters; the size slider goes on the right edge only when the
+   picture is tall enough to leave room there, otherwise it lies flat in the free space under the picture: sizePaint) */
+.pzone{flex:1;min-height:180px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;margin:0 -8px}
+.pzone.side{padding-right:56px}
+.pzone .pstage{margin:0;flex:none}
+.pz{position:absolute;inset:0}
+.vsz{position:absolute;right:0;top:50%;width:48px;height:min(80%,240px);transform:translateY(-50%);border-radius:24px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.vsz input{position:absolute;left:50%;top:50%;width:200px;height:40px;margin:0;accent-color:var(--acc);transform:translate(-50%,-50%) rotate(-90deg)}
+.pzone.under .vsz{position:relative;right:auto;top:auto;transform:none;flex:none;width:min(100% - 16px,340px);height:48px}
+.pzone.under .vsz input{width:calc(100% - 72px);transform:translate(-50%,-50%)}
+.vsz::before,.vsz::after{content:"";position:absolute;border-radius:50%;background:var(--text2);pointer-events:none}
+.vsz::before{width:8px;height:8px;left:50%;bottom:10px;margin-left:-4px}
+.vsz::after{width:16px;height:16px;left:50%;top:8px;margin-left:-8px}
+.pzone.under .vsz::before{left:16px;bottom:auto;top:50%;margin:-4px 0 0}
+.pzone.under .vsz::after{left:auto;right:12px;top:50%;margin:-8px 0 0}
+.ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #000a,inset 0 0 0 1px #000a;pointer-events:none;z-index:3}
+.pzone.side .phint.pill{left:calc(50% - 28px)}
+.phint.pill{position:absolute;left:50%;top:8px;transform:translateX(-50%);margin:0;background:#000b;color:#fff;padding:7px 14px;border-radius:16px;font-size:14px;width:max-content;max-width:80%;text-align:center;pointer-events:none;z-index:4;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.ptools{margin:10px 0 0}
+.seg.pmode{flex:1;padding:0;display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
+.seg.pmode button{min-height:52px;white-space:nowrap;padding:0 10px}
+.tb.wide{display:flex;align-items:center;gap:6px;padding:0 14px;font-size:14px}
+#paint .foot textarea{min-height:52px;margin-bottom:8px;resize:none}
+
+/* projects (M17) */
+.ib.lab2{width:auto;padding:0 14px 0 10px;gap:4px;display:flex;font:600 17px var(--head);color:var(--acc)}
+.pcard .mosaic{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;aspect-ratio:16/9;background:#1c1c1f}
+.pcard .mosaic img{width:100%;height:100%;object-fit:cover;display:block;min-height:0;min-width:0}
+.pcard .mosaic.m2{grid-template-rows:1fr}
+.pcard .mosaic.m3 img:first-child{grid-row:span 2}
+.pcard.slim{display:flex;align-items:center;min-height:96px}
+.pcard.slim .noth{width:72px;height:72px;aspect-ratio:auto;border-radius:14px;margin:12px 0 12px 12px;flex:none}
+.pcard.slim .noth svg.i{width:34px;height:34px}
+.pcard.slim .cap{flex:1;min-width:0}
+.savenow{display:inline-flex;margin-top:8px;min-height:40px;align-items:center;padding:0 14px;border-radius:10px;background:var(--accbg);color:var(--acc);font-weight:600;font-size:14px}
+
+/* background jobs (big:3, M4): the pill, its sheet, the "ready" message */
+#jpill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sab) + var(--tabh) + 12px);z-index:30;display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 18px 6px 6px;border-radius:99px;background:#1e1e21f2;border:1px solid #faaf2966;box-shadow:0 10px 30px #000a;color:var(--text);font:600 15px var(--body);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);animation:pop .3s var(--ease);white-space:nowrap}
+#jpill.up{bottom:var(--pillb,calc(var(--sab) + 16px))} /* (no tab bar: just above the screen's own foot, never over the picture: A3-13) */
+body.kbon #jpill{display:none}
+.jth{position:relative;width:40px;height:40px;border-radius:50%;overflow:hidden;flex:none;background:#111}
+.jth img{width:100%;height:100%;object-fit:cover;display:block}
+.jth::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,#faaf2999 50%,transparent 70%);background-size:260% 100%;animation:shine 1.6s linear infinite}
+.jt{font-variant-numeric:tabular-nums}
+.jrow{display:flex;align-items:center;gap:12px;padding:10px;border-radius:var(--r2);background:var(--card);border:1px solid var(--line)}
+.jrow img{width:56px;height:56px;border-radius:12px;object-fit:cover;flex:none}
+.jrow .jt{flex:1;min-width:0}.jrow b{display:block;font-size:16px}.jrow small{display:block;color:var(--mute);font-size:13px}
+.jrow .btn{width:auto;min-height:44px;font-size:15px;padding:0 14px}
+.hint2{color:var(--mute);font-size:14px;text-align:center;margin:14px 0 0}
+body.tabson #mtoast{bottom:calc(var(--sab) + var(--tabh) + 74px)}
+#mtoast .tact{display:flex;align-items:center;gap:12px;padding:8px;pointer-events:auto;min-width:min(100%,340px)}
+#mtoast .tact img{width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none}
+#mtoast .tact span{flex:1;font-weight:600}
+#mtoast .tact button{min-height:44px;padding:0 14px;border-radius:12px;background:none;color:var(--acc);font:600 17px var(--head);text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1.5px} /* (an amber link, not a second filled amber button: A3-7) */
+/* the loupe while painting (big:2) */
+#loupe{position:fixed;left:0;top:0;z-index:80;width:112px;height:112px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 8px 24px #000c;pointer-events:none}
+#loupe canvas{width:100%;height:100%;display:block}
+/* the full-screen picture (big:2): pinch, double tap, swipe */
+#pview .vimg{position:relative;overflow:hidden;touch-action:none;padding:0}
+#pview .vz{position:absolute;inset:0;display:grid;place-items:center;padding:8px}
+#pview .vz img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px}
+
+/* pickers in sheets: three across, smaller cards; an Add button that stays in view */
+.vgrid.g3{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vgrid .pick img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.vgrid .pick .cap{display:block;padding:6px 8px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.vgrid:not(.g3) .pick .cap{padding:8px 10px;font-size:14px}
+.stickgo{position:sticky;bottom:calc(-1 * var(--sab) - 20px);padding:12px 0 calc(var(--sab) + 20px);background:linear-gradient(#11111200,var(--panel) 30%)}
+
+/* labelled tiles (the editor dock, the Sheets bar) */
+.dt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:64px;min-height:64px;padding:6px 4px;border-radius:14px;color:var(--text2);font:600 12px/1.15 var(--body);text-align:center}
+.dt svg.i{width:28px;height:28px}
+.dt small{font:inherit}
+.dt.on{background:var(--accbg);color:var(--acc)}
+.dt.pri{background:var(--acc);color:#141005}
+.dt[disabled]{opacity:.35;pointer-events:none}
+
+/* Sheets, the phone's own screen (big:4, M3) */
+.psinfo{color:var(--text2);font-size:15px;margin:0 0 10px;text-align:center}
+.pscar{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 calc(-16px - var(--sar)) 0 calc(-16px - var(--sal));scrollbar-width:none}
+.pscar::-webkit-scrollbar{display:none}
+.pspg{flex:none;width:100%;scroll-snap-align:center;scroll-snap-stop:always;padding:0 16px}
+.psbox{position:relative;overflow:hidden;border-radius:6px;box-shadow:0 8px 30px #000a;background:#fff;touch-action:pan-x pan-y}
+.psbox.zoomed{touch-action:none}
+.psz svg{display:block;width:100%;height:auto}
+.psz rect.shedit{fill:#faaf29;fill-opacity:0;stroke:none}
+.psdots{display:flex;justify-content:center;gap:7px;margin:12px 0 4px}
+.psdots i{width:8px;height:8px;border-radius:50%;background:#ffffff40}
+.psdots i.on{background:var(--acc)}
+.pstip{color:var(--mute);font-size:14px;text-align:center;margin:6px 0 14px}
+.psbar{position:sticky;bottom:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:8px;border-radius:20px;background:#161618f2;border:1px solid var(--line2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);z-index:3}
+
+/* Library, the phone's own screen (big:4, M7) */
+#library .seg.even{margin-bottom:4px}
+.lgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (min-width:700px){.lgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.lcard{position:relative;border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--line);text-align:left;display:block;width:100%;animation:pop .32s var(--ease) both}
+.lcard .th{display:grid;place-items:center;width:100%;height:165px;object-fit:contain;background:repeating-conic-gradient(#222225 0 25%,#1a1a1d 0 50%) 0 0/20px 20px;color:var(--mute)}
+.lcard .th svg.i{width:44px;height:44px}
+.lcard .cap{display:block;padding:10px 12px 12px}
+.lcard b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lcard small{display:block;color:var(--mute);font-size:13px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:17px}
+.lcard .use{position:absolute;right:6px;top:6px;display:inline-flex;align-items:center;gap:4px;min-height:40px;padding:0 12px 0 8px;border-radius:99px;background:#000c;color:#fff;font:600 13px var(--body)}
+.lcard .use.on{background:#000c;color:#fff;box-shadow:inset 0 0 0 1.5px var(--acc)} /* (N1 amber budget, fix A3-7: an amber outline and tick, not a filled pill) */
+.lcard .use.on svg.i{color:var(--acc)}
+.lcard .use svg.i{width:18px;height:18px}
+.libed .pic img{max-height:30vh}
+
+/* the phone editor shell (big:1, M1, M18): Draw, Materials, Touch up */
+#deskhost.lift>.app{bottom:calc(var(--liftfoot,0px) + var(--liftdock,0px) + var(--liftlist,0px) + var(--kb,0px))}
+#liftfoot{bottom:var(--kb,0px)}
+#liftfoot .frow{display:flex;gap:10px;margin-top:8px}
+#liftfoot .frow .fdone{flex:0 0 34%;min-height:56px}
+#liftfoot .frow .btn{margin:0}
+#liftfoot .frow .go{flex:1;font-size:17px;padding:8px 14px}
+#liftfoot textarea{min-height:48px}
+#deskhost.lift #pvTabs,#deskhost.lift #btnEnlarge,#deskhost.lift #vinfo,#deskhost.lift #dstatus,
+#deskhost.lift #dSave,#deskhost.lift #dDone,#deskhost.lift #dHand,#deskhost.lift #dZoom,#deskhost.lift #dtools .dsep,#deskhost.lift #dtools .tspacer,#deskhost.lift #dtools .dend,
+#deskhost.lift #tDone,#deskhost.lift #tHand,#deskhost.lift #tZoom,#deskhost.lift #ttools .tgap,#deskhost.lift #ttools .dsep,#deskhost.lift #ttools label.dopt,
+#deskhost.lift[data-kind=mats] #dtools{display:none!important}
+#deskhost.lift #vstage,#deskhost.lift #vstage *{touch-action:none}
+/* the dock: the desktop's own tool buttons (Draw, Touch up) or the phone's tiles (Materials), one sideways row */
+#deskhost.lift #dtools:not([hidden]),#deskhost.lift #ttools:not([hidden]),#liftdock{position:fixed;left:0;right:0;bottom:calc(var(--liftfoot,0px) + var(--kb,0px));z-index:49;height:var(--liftdock,92px);display:flex!important;flex-wrap:nowrap!important;align-items:center;gap:4px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;padding:6px calc(var(--sar) + 10px) 6px calc(var(--sal) + 10px);margin:0;background:#0d0d0e;border:0;border-top:1px solid var(--line);border-radius:0;scrollbar-width:none;font:600 12px var(--body);color:var(--text2);-webkit-overflow-scrolling:touch}
+#deskhost.lift #dtools::-webkit-scrollbar,#deskhost.lift #ttools::-webkit-scrollbar,#liftdock::-webkit-scrollbar{display:none}
+#deskhost.lift #dtools .dgrp,#deskhost.lift #ttools .tseg{display:flex;flex:none;gap:4px;background:none;border:0;padding:0}
+#deskhost.lift #dtools button,#deskhost.lift #ttools button,#liftdock .dt{flex:none;scroll-snap-align:start;width:auto;min-width:64px!important;height:76px;min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:6px;border-radius:14px;border:0;background:none;color:var(--text2);font:600 12px/1.1 var(--body);box-shadow:none}
+#deskhost.lift #dtools button svg,#deskhost.lift #ttools button svg,#liftdock .dt svg{width:28px!important;height:28px!important;flex:none}
+#deskhost.lift #dtools button.on,#deskhost.lift #ttools button.on,#liftdock .dt.on{background:var(--accbg);color:var(--acc)}
+#deskhost.lift #dtools button[disabled],#deskhost.lift #ttools button[disabled]{opacity:.35}
+#deskhost.lift #dtools .clab,#deskhost.lift #ttools button span,#deskhost.lift #ttools .clab{display:block!important;font:600 12px/1.1 var(--body);white-space:nowrap;position:static;margin:0;opacity:1}
+/* (fix A3-4: the desktop's .tight rule held the tiles at 38 px; !important above keeps them 64 px. The two arrow tiles
+   beside Select and Notes say what they open) */
+#deskhost.lift #dtools .dcaret{padding:6px}
+#deskhost.lift #dtools .dcaret::after{content:"More";font:600 12px/1.1 var(--body);white-space:nowrap}
+#deskhost.lift #dtools #dSelMore::after{content:"Shapes"}
+#deskhost.lift #dtools #dNoteMore::after{content:"Note types"}
+/* the tool's options, opened from Settings in the dock: a panel over the picture */
+#deskhost.lift #dopts,#deskhost.lift #mopts,#deskhost.lift #topts{display:none!important}
+#deskhost.lift.optson #dopts:not([hidden]),#deskhost.lift.optson #mopts:not([hidden]),#deskhost.lift.optson #topts:not([hidden]){display:flex!important;flex-wrap:wrap!important;position:fixed;left:8px;right:8px;bottom:calc(var(--liftfoot,0px) + var(--liftdock,0px) + var(--kb,0px) + 8px);z-index:51;max-height:46vh;height:auto;overflow:auto;gap:12px 14px;padding:16px;border-radius:20px;background:#161618f5;border:1px solid var(--line2);box-shadow:0 -10px 40px #000a;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);align-items:center;font-size:15px;color:var(--text)}
+#deskhost.lift.optson .dopts .dopt,#deskhost.lift.optson #topts .dopt{flex:1 1 100%;display:flex;align-items:center;gap:12px;font-size:15px}
+#deskhost.lift.optson .dopts input[type=range],#deskhost.lift.optson #topts input[type=range]{flex:1;width:auto!important;min-height:40px}
+#deskhost.lift.optson .dopts .dog{display:flex;flex-wrap:wrap;gap:10px;flex:1 1 100%}
+#deskhost.lift.optson .dopts .tspacer{display:none}
+#deskhost.lift.optson #viewer .layers{display:none!important}
+/* Layers / the Materials list: a panel above the dock (the Materials list tile hides it) */
+#deskhost.lift #viewer .layers:not([hidden]){position:fixed!important;left:8px!important;right:8px!important;width:auto!important;max-width:none!important;top:auto!important;bottom:calc(var(--liftfoot,0px) + var(--liftdock,0px) + var(--kb,0px) + 8px)!important;max-height:34vh;z-index:50;border-radius:20px;border:1px solid var(--line2);background:#161618f5;box-shadow:0 -10px 40px #000a}
+#deskhost.lift.listoff #matPanel{display:none!important}
+/* the tool's help: a pill on the picture, in phone words */
+#lifthint{position:fixed;left:50%;top:calc(var(--sat) + 70px);transform:translateX(-50%);z-index:50;width:max-content;max-width:calc(100% - 24px);padding:8px 16px;border-radius:18px;background:#000c;color:#fff;font:500 14px/1.3 var(--body);text-align:center;pointer-events:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid #ffffff1f}
+#lifthead .ib svg.i{width:26px;height:26px}
+
+/* the desktop's windows as phone sheets (M21, M25, M6): from the bottom, a grab bar, rounded fields, scrolling tab rows */
+.dk .modal{place-items:end center!important;align-items:end!important;padding:calc(var(--sat,0px) + 24px) 0 0!important}
+.dk .modal .mbox{width:100vw!important;max-width:100vw!important;margin:0!important;border-radius:22px 22px 0 0!important;max-height:calc(100dvh - var(--sat,0px) - 24px)!important;padding:28px 16px calc(var(--sab,0px) + 18px)!important;position:relative;animation:dksheet .3s var(--ease)}
+.dk .modal .mbox::before{content:"";position:absolute;top:9px;left:50%;width:44px;height:5px;margin-left:-22px;border-radius:9px;background:#ffffff38}
+@keyframes dksheet{from{transform:translateY(30%);opacity:.5}}
+.dk input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),.dk select,.dk textarea{border-radius:12px!important;min-height:52px;font-size:17px!important}
+.dk .modal .mini,.dk .overlay.liftov .mini{border-radius:12px;min-height:48px}
+.dk .modal .shseg,.dk .modal .pktabs,.dk .overlay.liftov .shseg,.dk .overlay.liftov .libtabs{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;gap:6px}
+.dk .modal .shseg>*,.dk .modal .pktabs>*,.dk .overlay.liftov .shseg>*,.dk .overlay.liftov .libtabs>*{flex:none;min-height:44px;border-radius:99px;padding:0 16px}
+/* the full editors (Sheets and Library as on the PC, M3, M7): no second title, the tools one sideways row */
+#deskhost .overlay.liftov .shtop>h3,#deskhost .overlay.liftov .libtop>h2{display:none}
+#deskhost .overlay.liftov .shtop{display:flex;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;gap:8px;padding-bottom:6px}
+#deskhost .overlay.liftov .shtop>*{flex:none}
+#deskhost .overlay.liftov .shtop .mini{min-height:52px}
+#deskhost .overlay.liftov .shexp .mini.primary::before,#deskhost .overlay.liftov .shexp .mini.primary::after{display:none}
+#deskhost .overlay.liftov .shbox{display:block!important;height:auto!important;max-height:none!important}
+#deskhost .overlay.liftov .shmain{height:auto!important;max-height:none!important;overflow:visible!important}
+#deskhost .overlay.liftov .shpgbtns{position:static!important}
+#deskhost .overlay.liftov .shtray{display:block!important;height:auto!important;max-height:none!important;margin-top:14px}
+#deskhost .overlay.liftov .shtrayhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px;height:auto}
+#deskhost .overlay.liftov .shtrayrow{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:10px;height:auto}
+#deskhost .overlay.liftov .shtrayrow>*{flex:none}
+#deskhost .overlay.liftov .libtop{display:flex;flex-wrap:wrap;gap:8px}
+#deskhost .overlay.liftov .libsearch{flex:1 1 100%;width:100%;min-height:52px}
+#deskhost .overlay.liftov .libcards,#deskhost .overlay.liftov .libgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+@media (prefers-reduced-motion:reduce){.cmp .shine,.jth::after{animation:none;background:none}}
+.dk .modal .mbox>.row.end:last-child{position:sticky;bottom:calc(-18px - var(--sab,0px));z-index:3;margin:12px -16px calc(-18px - var(--sab,0px));padding:14px 16px calc(var(--sab,0px) + 18px);background:linear-gradient(#1a1a1d00,#1a1a1d 22%)}
+#pview .vmeta{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* (N1: segmented switches and filter chips are neutral; amber is kept for the one main button on a screen) */
+.seg button.on,.chips button.on{background:#f4f4f2;border-color:#f4f4f2;color:#141005}
+.dk .cmdfoot{display:none!important} /* (Find on the phone: no keyboard keys to explain) */
+/* (M25: one icon box everywhere, a press-down for the desktop's buttons on the phone too) */
+.rowbtn .ti{width:48px;height:48px;border-radius:14px}
+.opt .oi.ic{width:48px;height:48px;border-radius:14px;background:var(--accbg)}
+.dk .modal button,.dk .overlay.liftov button{transition:transform .12s var(--ease)}
+.dk .modal button:active,.dk .overlay.liftov button:active{transform:scale(.97)}
+/* ===== v3.74 A3 fixes (checker round: A3-3, A3-9, A3-10, A3-12) ===== */
+/* (A3-9) the material chooser: tab pills each whole, no box round the row; one sticky footer with [Cancel] and a
+   full-width "Paint now, choose later" (the empty note slot goes unless the Office catalogue tab shows it) */
+.dk .modal .shseg,.dk .modal .pktabs,.dk .overlay.liftov .shseg{border:0!important;border-radius:0!important;background:none!important;overflow-x:auto;overflow-y:hidden;padding:2px 0!important}
+.dk .modal .shseg>button,.dk .modal .pktabs>button,.dk .overlay.liftov .shseg>button{flex:none!important;border:1px solid var(--line)!important;background:var(--card)!important;color:var(--text2)!important;font:600 15px var(--body)!important;padding:0 16px!important;white-space:nowrap!important;box-shadow:none!important}
+.dk .modal .shseg>button.on,.dk .modal .pktabs>button.on,.dk .overlay.liftov .shseg>button.on{background:#f4f4f2!important;border-color:#f4f4f2!important;color:#141005!important}
+.dk .modal.mchoose .mbox>.row.end:last-child{display:flex;flex-wrap:wrap;gap:10px}
+.dk .modal.mchoose .row.end .pkoffice{flex:1 1 100%!important;margin:0}
+.dk .modal.mchoose .row.end .pkoffice[style*="hidden"]{display:none}
+.dk .modal.mchoose .row.end>.mini{flex:1 1 100%;min-height:52px;border-radius:12px;font-size:17px;margin:0;border-color:#ffffff40;color:var(--text)}
+.dk .modal.mchoose .row.end>.mini+.mini{display:none} /* (beside "Paint now, choose later", Cancel is the sheet's own × and the shade: M6) */
+#deskhost.lift[data-kind=mats] #dtools:not([hidden]),#deskhost.lift[data-kind=compare] #dtools:not([hidden]),#deskhost.lift[data-kind=preview] #dtools:not([hidden]),#deskhost.lift[data-kind=preview] #ttools:not([hidden]){display:none!important}
+#deskhost.lift #matPanel .lhead .mini{border-color:var(--line2);color:var(--text)}
+/* (A3-3) the Materials list on the phone: rounded 48 px controls, a drawn ••• icon, a larger sample; the picture is
+   fitted above it (--liftlist, liftSize) */
+#deskhost.lift #matPanel{padding:0 0 4px}
+#deskhost.lift #matPanel .lhead{padding:10px 8px 8px 16px;gap:10px;justify-content:flex-start}
+#deskhost.lift #matPanel .lhead>b{font:600 17px var(--head);margin-right:auto}
+#deskhost.lift #matPanel .mini{min-height:44px;border-radius:12px;padding:0 14px;font:600 15px var(--body);border:1px solid var(--line2);background:var(--card);color:var(--text)}
+#deskhost.lift #matPanel .lx,#deskhost.lift #matPanel .eye,#deskhost.lift #matPanel .lmenu{width:44px;height:44px;min-width:44px;display:grid;place-items:center;border-radius:12px;padding:0;opacity:1;flex:none}
+#deskhost.lift #matPanel .eye svg,#deskhost.lift #matPanel .lx svg{width:22px;height:22px}
+#deskhost.lift #matPanel .lmenu{font-size:0;color:var(--text2)}
+#deskhost.lift #matPanel .lmenu::before{content:"";width:24px;height:24px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Ccircle cx='19' cy='12' r='2'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Ccircle cx='19' cy='12' r='2'/%3E%3C/svg%3E") center/contain no-repeat}
+#deskhost.lift #matPanel .lrow.mrow{min-height:76px;gap:10px;padding:8px 6px;margin:2px 6px;border-radius:14px;font-size:15px}
+#deskhost.lift #matPanel .mrow .mthumb{width:56px!important;height:56px!important;border-radius:12px;overflow:hidden}
+#deskhost.lift #matPanel .mrow .mthumb .mkey{width:24px;height:24px;font-size:13px;line-height:22px;border-radius:7px}
+#deskhost.lift #matPanel .mrow .ln b{font-size:16px}
+#deskhost.lift #matPanel .mrow .ln small{font-size:14px}
+#deskhost.lift #matPanel .lrow.mrow .mswap{min-height:40px;padding:0 14px;margin-top:6px;border-radius:12px;font-size:15px}
+#deskhost.lift #matPanel .mfoot{padding:8px 12px 6px;gap:10px;align-items:center}
+#deskhost.lift #matPanel .mfoot .mcap{font-size:13px;flex:1}
+#deskhost.lift #matPanel .mchips{display:flex;flex-wrap:wrap;gap:8px;padding:8px 12px}
+#deskhost.lift #matPanel .mchips .mkey{width:44px;height:44px;border-radius:12px;font:700 16px/42px var(--head)}
+/* (A3-10) Compare: the desktop's compare bar is the dock, one sideways row of finger-sized pills (the switch as the
+   phone's own); the slider's handle a 48 px knob */
+#deskhost.lift[data-kind=compare] #cmpBar:not([hidden]){position:fixed;left:0;right:0;bottom:calc(var(--liftfoot,0px) + var(--kb,0px));z-index:49;display:flex!important;flex-wrap:nowrap!important;align-items:center;gap:8px;overflow-x:auto;overflow-y:hidden;padding:12px calc(var(--sar) + 12px) 12px calc(var(--sal) + 12px);margin:0;height:auto;background:#0d0d0e;border:0;border-top:1px solid var(--line);border-radius:0;scrollbar-width:none;scroll-snap-type:x proximity}
+#deskhost.lift #cmpBar::-webkit-scrollbar{display:none}
+#deskhost.lift #cmpBar,#deskhost.lift #dtools,#deskhost.lift #ttools,#liftdock{scroll-padding:0 calc(var(--sar) + 12px) 0 calc(var(--sal) + 12px)} /* (the first tile keeps its margin when the row snaps) */
+#deskhost.lift #cmpBar>*{flex:none;scroll-snap-align:start}
+#deskhost.lift #cmpBar .tspacer{display:none}
+#deskhost.lift #cmpBar .cmpseg{display:flex;gap:6px;border:0;background:none;padding:0}
+#deskhost.lift #cmpBar .mini{min-height:48px;border-radius:99px;padding:0 18px;font:600 15px var(--body);border:1px solid var(--line);background:var(--card);color:var(--text2);white-space:nowrap;box-shadow:none}
+#deskhost.lift #cmpBar .cmpseg .mini.on{background:#f4f4f2;border-color:#f4f4f2;color:#141005}
+#deskhost.lift #cmpBar .dopt{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--text2);min-height:48px;padding:0 14px;border-radius:99px;background:var(--card);border:1px solid var(--line)}
+#deskhost.lift #cmpBar .dopt input[type=range]{width:120px;min-height:40px;accent-color:var(--acc)}
+#deskhost.lift #cmpBar .dopt[hidden]{display:none}
+#deskhost.lift .cmp .chandle:after{content:"";width:48px;height:48px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23141005' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 7l-5 5 5 5M15 7l5 5-5 5'/%3E%3C/svg%3E") center/26px no-repeat;box-shadow:0 4px 14px #000a}
+#deskhost.lift .cmp .ctag{font-size:14px;padding:6px 12px;border-radius:99px}
+/* (A3-12) the Keep switch stays on one line: at iPhone SE width it says "Keep building" (the (i) explains the camera) */
+.sw.one .ot{min-width:0}
+.sw.one .ot b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:380px){.sw.one .kcam{display:none}}
+/* (A3-7) "Open now" on a project: an amber outline, not a filled amber badge */
+.pcard .now{background:#000c;color:#fff;box-shadow:inset 0 0 0 1.5px var(--acc)}
+
+/* ===== v3.74 D3: the phone catches up with rounds B and C (NEXT-LEVEL N16, second half) ===== */
+/* (notes: amber budget) the After tag and the Render badge are neutral: a dark pill with a thin amber edge, not filled */
+.cmp .tag.r{background:#000000b3;color:#fff;box-shadow:inset 0 0 0 1.5px var(--acc)}
+.kind.r{background:#000000b3;color:#fff;box-shadow:inset 0 0 0 1.5px #faaf29b3}
+/* Versions 1 | 2 | 4 beside Render (N7): neutral segments, the chosen one white */
+.vers{display:flex;align-items:center;gap:12px;margin:0 0 10px}
+.vers .vl{font:600 15px var(--body);color:var(--text2);flex:none}
+.vers .seg{flex:1;padding:0}
+.vers .seg button{min-height:44px;font-size:17px}
+.vers .seg button.on{background:#f4f4f2;border-color:#f4f4f2;color:#141005}
+.vers .seg button[disabled]{opacity:.35}
+/* the job's progress (V.jobClock) on the waiting picture and in the pill */
+.cmp .jprog{position:absolute;left:14px;right:14px;bottom:14px;height:6px;border-radius:99px;background:#ffffff26;overflow:hidden}
+.cmp .jprog i{display:block;height:100%;width:4%;border-radius:inherit;background:var(--acc);transition:width .9s linear}
+#jpill{background-image:linear-gradient(90deg,#faaf2933 var(--jp,0%),transparent var(--jp,0%))}
+/* the versions strip (N3, N7): a round's versions in one bordered group */
+.vstrip{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;margin:0 calc(-16px - var(--sar)) 14px calc(-16px - var(--sal));padding:2px calc(16px + var(--sar)) 6px calc(16px + var(--sal));scrollbar-width:none}
+.vstrip::-webkit-scrollbar{display:none}
+.vgrp{display:flex;gap:10px;flex:none;position:relative;padding:26px 8px 8px;border:1px solid var(--line2);border-radius:16px}
+.vglab{position:absolute;left:10px;top:5px;font:600 12px var(--body);color:var(--mute);letter-spacing:.02em;white-space:nowrap}
+.vth{flex:none;width:120px;scroll-snap-align:start;text-align:left;color:var(--text2)}
+.vth .vpic{position:relative;display:block;border-radius:12px;overflow:hidden;border:2px solid transparent;background:var(--card)}
+.vth .vpic img{display:block;width:100%;height:84px;object-fit:contain;background:#000}
+.vth.on .vpic{border-color:var(--acc)}
+.vth small{display:block;margin-top:5px;font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vth.on small{color:var(--text)}
+.ttl,.cap b.ttl,.cap small.ttl,.vth small.ttl,.upk small.ttl{display:flex;min-width:0;max-width:100%;white-space:pre}
+.ttl .ttlh{flex:0 1 auto;min-width:2em;overflow:hidden;text-overflow:ellipsis;white-space:pre}
+.ttl .ttlt{flex:0 0 auto;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:pre}
+.vmk{position:absolute;left:5px;top:5px;font:700 11px var(--body);padding:3px 7px;border-radius:99px;background:#000c;color:#fff;box-shadow:inset 0 0 0 1.5px var(--acc)}
+.vfav{position:absolute;right:5px;top:5px;width:20px;height:20px;color:var(--acc)}
+.vfav svg.i{width:20px;height:20px}
+.rchip.mk{color:var(--text2)}
+.rchip.mk.on{color:var(--text);box-shadow:inset 0 0 0 1.5px var(--text)}
+/* tweak and relight chips (N8) */
+.twbox{margin:4px 0 16px}
+.twhead{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.twhead small{color:var(--mute);font-size:13.5px}
+.twseg{padding:0;flex:none}
+.twseg button{min-height:44px}
+.twseg button.on{background:#f4f4f2;border-color:#f4f4f2;color:#141005}
+.twchips{margin:0 calc(-16px - var(--sar)) 0 calc(-16px - var(--sal));padding:2px calc(16px + var(--sar)) 4px calc(16px + var(--sal))}
+.twchips .twc{display:inline-flex;align-items:center;gap:8px}
+.twchips .twc.run{opacity:.75;color:var(--text)}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid #ffffff40;border-top-color:var(--acc);animation:vlspin .9s linear infinite}
+@keyframes vlspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}.cmp .jprog i{transition:none}}
+/* Keep / Discard / Keep both under a change that came back */
+.decide{margin:-2px 0 14px;padding:14px;border-radius:var(--r);background:var(--card);border:1px solid var(--line2)}
+.decide p{margin:0 0 10px;color:var(--text2);font-size:14.5px;line-height:1.4}
+.decide p b{color:var(--text);font:600 16px var(--head)}
+.decide .row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.decide .btn{min-height:48px;padding:0 6px;font-size:15px}
+.decide .btn.on{background:var(--text);color:var(--bg);box-shadow:none;font-weight:700}
+.acts .act[hidden]{display:none}
+/* Pick the best (N9): two versions stacked, tap the better one */
+#duel .ucount{text-align:center;margin:0 0 10px}
+.ucell{display:block;width:100%;position:relative;border-radius:var(--r);overflow:hidden;background:#000;border:1px solid var(--line2);margin-bottom:12px;touch-action:none}
+.ucell img{display:block;width:100%;height:calc((100vh - 250px - var(--sat) - var(--sab)) / 2);min-height:150px;object-fit:contain}
+.ucap{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;padding:26px 14px 12px;background:linear-gradient(#0000,#000d);text-align:left}
+.ucap b{font:600 16px/1.25 var(--head);color:#fff;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ucap small{flex:none;font:600 13px var(--body);color:#141005;background:#f4f4f2;padding:6px 10px;border-radius:99px}
+.uwin{border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--line2);margin-bottom:16px}
+.uwin img{display:block;width:100%;max-height:44vh;object-fit:contain;background:#000}
+.uwin p{margin:0;padding:12px 14px;color:var(--text2);font-size:15px}
+.uwin p b{color:var(--text)}
+.upicks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.upk{position:relative;border-radius:12px;overflow:hidden;background:var(--card);border:2px solid transparent;text-align:left}
+.upk img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.upk small{display:block;padding:6px 8px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)}
+.upk.on{border-color:var(--acc)}
+.uend{margin-top:16px;gap:10px}
+.uend .btn{justify-content:center}
+/* Brush: "What should be here?" chips over the words (the desktop's quick chips) */
+.achips{margin:0 calc(-16px - var(--sar)) 4px calc(-16px - var(--sal));padding:0 calc(16px + var(--sar)) 8px calc(16px + var(--sal))}
+.achips button,.wchips button{min-height:44px;font-size:14.5px;padding:0 14px}
+.wchips{flex-wrap:wrap;overflow:visible}
+/* History: Select, then what the chosen pictures can do */
+#ySel{min-width:72px;padding:0 14px;font:600 16px var(--body);color:var(--text);width:auto}
+#history.selmode .card .del{display:none}
+.card .selmk{position:absolute;right:8px;top:8px;width:30px;height:30px;border-radius:50%;border:2px solid #fff;background:#0008;display:grid;place-items:center;color:transparent}
+.card .selmk svg.i{width:18px;height:18px}
+.card.chosen .selmk{background:#fff;border-color:#fff;color:#141005}
+.card.chosen{box-shadow:inset 0 0 0 3px var(--acc)}
+.selbar .selcount{margin:0 0 8px;color:var(--text2);font-size:14.5px;text-align:center}
+.selacts{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 -8px}
+.selacts::-webkit-scrollbar{display:none}
+.selacts .dt{flex:none;background:var(--card);margin:0 2px}
+.selacts .dt.bad{color:var(--bad)}
+/* Setups on the Make screen */
+.linkrow{display:block;width:100%;min-height:44px;margin:-2px 0 8px;text-align:left;padding:0 4px;color:var(--acc);font:600 15px var(--body)}
+/* History full screen (Drive-only): the small preview soft, with a line saying the picture is coming */
+#pview.softpv .vz img{filter:blur(6px)}
+#pview.softpv .vimg:after{content:"Getting the full picture from Google Drive…";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#000c;color:#fff;font:600 15px var(--body);padding:10px 16px;border-radius:99px;white-space:nowrap}
+/* (notes) the lifted Compare and Preview never show the desktop's own Picture view tools (background, Fit, Present) */
+#deskhost.lift #vtools,#deskhost.lift .vtools{display:none!important}
+/* Present (N3): the desktop's own Present, full screen over everything; its close button finger-sized, inside the safe areas */
+#deskhost .present{position:fixed;inset:0;z-index:80;pointer-events:auto;touch-action:none}
+#deskhost .present .prclose{top:calc(var(--sat) + 10px)!important;right:calc(var(--sar) + 10px)!important;width:48px!important;height:48px!important}
+#deskhost .present .prcap{padding-bottom:calc(var(--sab) + 12px);padding-right:calc(var(--sar) + 20px);padding-left:calc(var(--sal) + 16px)}
+#deskhost .present .prhint{display:none}
+/* Make a presentation (the desktop's stepper): a bottom sheet over the phone, steps one sideways row, finger-sized */
+#deskhost .pflow{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:auto!important;max-height:calc(100% - var(--sat) - 70px);z-index:46;border-radius:22px 22px 0 0;padding:14px calc(var(--sar) + 14px) calc(var(--sab) + 14px) calc(var(--sal) + 14px);pointer-events:auto;box-shadow:0 -20px 50px #000a}
+#deskhost .pflow .pfhead{flex-wrap:wrap}
+#deskhost .pflow .pftitle{font-size:18px;flex:1}
+#deskhost .pflow .pfsteps{order:3;flex:1 1 100%;scrollbar-width:none}
+#deskhost .pflow .pfstep{min-height:44px;font-size:15px}
+#deskhost .pflow .pffold,#deskhost .pflow .pfclose{width:44px;height:44px;min-height:44px}
+#deskhost .pflow .pfintro{font-size:15px}
+#deskhost .pflow .pfcard,#deskhost .pflow .pfcard .pfthumb{width:calc(50vw - 26px)}
+#deskhost .pflow .pfcell{width:calc(50vw - 26px)}
+#deskhost .pflow .pftiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+#deskhost .pflow .pffoot{flex-wrap:wrap}
+#deskhost .pflow .pffoot .pfwhy{flex:1 1 100%;text-align:left;font-size:14px}
+#deskhost .pflow .pffoot .mini{min-height:44px;min-width:44px}
+#deskhost .pflow .pfx{width:44px;height:44px;min-height:44px}
+#deskhost .pflow .pffoot .mini{flex:1;font-size:15px}
+/* the Options board on a phone: views in a narrow first column, each option a 240 px column, the grid scrolls sideways */
+#deskhost #optModal .optgrid{grid-template-columns:118px repeat(var(--cols),240px);overflow-x:auto;margin:12px calc(-1 * var(--sar) - 16px) 12px 0;padding-right:16px;scrollbar-width:none}
+#deskhost #optModal .optgrid::-webkit-scrollbar{display:none}
+#deskhost #optModal .optview img{max-width:100%}
+#deskhost #optModal .pfseg{display:flex}
+#deskhost #optModal .pfseg .mini{flex:1;padding:0 8px;font-size:14px}
+/* Recently deleted from Settings: only the desktop's list shows */
+#deskhost .phhide{display:none!important}
+/* the status panel from Settings: a bottom sheet */
+#deskhost .stpanel{position:fixed!important;left:0!important;right:0!important;top:auto!important;bottom:0!important;width:auto!important;max-height:80vh;overflow:auto;z-index:60;border-radius:22px 22px 0 0;padding-bottom:calc(var(--sab) + 16px);pointer-events:auto}
+#deskhost .stpanel button{min-height:44px}
+/* v3.74 D3 fixes */
+/* Present: the caption row (logo, name, "1 / 1") stays inside the 16 px gutter and the safe areas; the counter wraps under the name */
+#deskhost .present .prcap{left:calc(var(--sal) + 16px)!important;right:calc(var(--sar) + 16px)!important;bottom:calc(var(--sab) + 16px)!important;padding:0!important;flex-wrap:wrap;gap:6px 12px}
+#deskhost .present .prcap .prtext{flex:1 1 0;min-width:0;overflow-wrap:anywhere}
+#deskhost .present .prcap .prcount{flex:none;margin-left:auto}
+/* Make a presentation: a real sheet (grab bar, its title, the screen behind dimmed while it is open) */
+#deskhost .pflow:not(.folded){box-shadow:0 -20px 50px #000a,0 0 0 100vmax #000b}
+#deskhost .pflow::before{content:"";align-self:center;width:44px;height:5px;border-radius:9px;background:#ffffff38;margin:-6px 0 2px;flex:none}
+#deskhost .pflow.narrow .pftitle,#deskhost .pflow .pftitle{display:block;white-space:normal}
+/* short phones (iPhone SE): Versions 1 | 2 | 4 sits beside Render, so the "What to make" cards show above the fold */
+@media (max-height:700px){
+  #pic .foot .wrap{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:center}
+  #pic .foot .does{grid-column:1 / -1;margin:0}
+  #pic .foot .vers{margin:0}
+  #pic .foot .vers .vl{display:none}
+  #pic .foot .vers .seg button{min-width:44px;padding:0 10px}
+  #pic .foot #pGo{grid-column:2}
+}
+/* the status sheet: an iPhone never connects SketchUp, so its row is left out here (trust.js rows carry data-row) */
+#deskhost .stpanel .strow[data-row="su"]{display:none}
+
+/* ===== v3.74 final: the phone (release review) ===== */
+/* (phone-01) Make a presentation: the sheet takes the free height (presentflow.js place() sets a desktop max-height inline),
+   so the Pick step shows the versions to tap; Review full screen is the desktop's, so it stays on the desktop */
+#deskhost .pflow{max-height:calc(100% - var(--sat) - 70px)!important}
+#deskhost .pflow .pfbody{flex:1 1 auto}
+#deskhost .pflow .pfreview{display:none}
+/* the footer: why on its own line, then Back | Next side by side */
+#deskhost .pflow .pffoot .pfwhy{order:-1}
+#deskhost .pflow .pffoot>span:not(.pfwhy):empty{display:none}
+/* (phone-02) the stepper's buttons in the phone's own look: .btn sec, Next as .btn pri; round fold and close buttons */
+#deskhost .pflow .mini{min-height:48px;border-radius:var(--r2);border:1px solid var(--line2);background:var(--card);color:var(--text);font:600 16px var(--body);padding:0 16px;box-shadow:none}
+#deskhost .pflow .mini.primary.pfnext{background:var(--acc);border-color:var(--acc);color:#141005}
+#deskhost .pflow .mini.primary.pfnext:disabled{opacity:.42}
+#deskhost .pflow .pffold,#deskhost .pflow .pfclose{border-radius:50%;border:0;background:var(--card2);padding:0;display:grid;place-items:center}
+#deskhost .pflow .pfverpic{border-radius:var(--r2)}
+/* (phone-04) the Options board: views in a narrow column, Option A whole and the next option peeking in from the right
+   (a line above the grid says to swipe, phone.js) */
+#deskhost #optModal .optgrid{grid-template-columns:96px repeat(var(--cols),calc(100vw - var(--sal) - var(--sar) - 32px - 96px - 48px));scroll-snap-type:x proximity;scroll-padding-left:106px}
+#deskhost #optModal .optcol{scroll-snap-align:start}
+#deskhost #optModal .pfseg .mini{padding:0 4px;min-width:0;font-weight:500}
+#deskhost #optModal .phswipe{margin:4px 0 -4px;color:var(--text2);font-size:14.5px}
+/* (phone-10) the summary above Render says what the switch says on a narrow phone; Versions keeps its label over the circles */
+@media (max-width:380px){.lockchip .kcam{display:none}}
+@media (max-height:700px){
+  #pic .foot .vers{flex-direction:column;align-items:stretch;gap:3px}
+  #pic .foot .vers .vl{display:block;font-size:13px;line-height:1;text-align:center}
+  #pic .foot .vers .seg{flex:none}
+}
+/* (phone-12) strip thumbs at the picture's own shape (no black bars) */
+.vgrp,.vstrip{align-items:flex-start}
+/* the round's heading stays readable at the strip's left edge while the group is scrolled part off it (sticky in its row) */
+.vgrp{display:grid;grid-auto-flow:column;grid-auto-columns:max-content;column-gap:0;row-gap:5px;padding:6px 8px 8px}
+.vgrp .vglab{position:sticky;left:10px;top:auto;grid-row:1;grid-column:1 / span 4;justify-self:start}
+.vgrp .vth{grid-row:2}
+.vgrp .vth+.vth{margin-left:10px}
+.vth .vpic img{height:auto;max-height:150px;object-fit:cover}
+/* (phone-13) desktop pop-ups: phone button weight and room, the setup footer line wraps, notes boxes padded, a grab bar on
+   the status sheet */
+.dk .modal .mini,.dk .mostrip .mini,#deskhost .stpanel .mini{font-family:var(--body);font-weight:600}
+.dk .mocard .mobtns{flex-direction:column}
+.dk .mocard .mobtns .mini{flex:none;min-height:44px;padding:0 10px;white-space:nowrap}
+.dk .setupmodal .surow small{white-space:normal;overflow:visible}
+.dk .modal textarea{padding:10px 12px;border-radius:var(--r2)}
+#deskhost .stpanel::before{content:"";display:block;width:44px;height:5px;margin:4px auto 2px;border-radius:9px;background:#ffffff38}

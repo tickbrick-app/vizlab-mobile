@@ -1,4 +1,4 @@
-/* VizLab 3.73.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
+/* VizLab 3.74.0: web/*.js in web/index.html's order, joined for VizLab Mobile by build_mobile.py (not edited). */
 
 /* ===== web/data.js ===== */
 // VizLab static data
@@ -136,10 +136,20 @@ const I = {
 };
 
 window.VLD = {
-  VERSION: "3.73.0",
+  VERSION: "3.74.0",
   // v3.69 (FR20): what changed, in plain words, 2-5 lines per version. The first open after an update shows "VizLab updated:
   // see what's new" (shell.js), and the Tutorial starts with a What's new chapter. Add the new version's lines at every release.
   NEWS: {
+    "3.74.0": [
+      "Look and feel: one calm set of colours, icons and type; amber only for the next step; pictures keep their true shape everywhere.",
+      "Studio layout: Canvas | Picture in the title bar (E) shows a picture big with its versions along the bottom; P presents full screen; a view and its renders form one stack; the right panel starts with a small header, so the presets sit higher.",
+      "Faster loop: Versions 1 | 2 | 4 by Render; Tweak and Relight chips (Lighter, Dusk, Golden hour…) change this picture in one click, with Keep / Discard; Pick the best in Review (A, P, H); Brush (B) on the big picture; names say what made each picture.",
+      "Presentations: Make a presentation… takes your views to a laid-out sheet; Options board; a Client pack file with before/after sliders that opens anywhere, offline.",
+      "Materials: try up to 4 materials on the same surfaces in one go, cladding quick-picks, Describe it draws a swatch, and Lift into SketchUp turns a material you like into a texture.",
+      "Expert speed: actions work on the whole selection with counts (Shift+U, X, F2, Ctrl+C), saved Setups, a History of changes, Ctrl+K commands and Ctrl+. to repeat; ? shows the keys for where you are first.",
+      "Reliability: a status pill (Is everything working?), plain-words failure cards, renders that wait for the internet, a ring with the time left, and Recently deleted for 30 days.",
+      "iPhone: Draw, Materials and Touch-ups full screen with big tools, pinch and double-tap zoom, renders in the background, simpler Sheets and Library; Versions, Tweak and Relight, Pick the best, the brush, Present, material options and Setups on the phone too.",
+    ],
     "3.73.0": ["With Google Drive connected, your projects, renders, Library and History pictures are kept only in your Drive: this device keeps just the list of projects and small previews, and opening a project fetches its pictures (Settings › Google Drive to keep full copies here too)", "The title bar says Saved to Drive once Drive has your change; offline, it says Not saved to Drive yet, keeps your work in the window and sends it as soon as it can"],
     "3.72.0": ["With Google Drive connected, the office catalogue (furniture, materials, collections, saved scenes and presets, with their pictures) and your keys and settings come to every PC and phone you connect: no key to paste on a new device (Settings › Google Drive can switch the keys off)", "VizLab.exe on a new PC: Sign in to ChatGPT in one click from the welcome card or Settings › At a glance"],
     "3.71.0": ["Save to Google Drive: connect your Drive in Settings and your projects and pictures follow you to every device, iPhone included (a copy stays on each device for offline work)"],
@@ -1240,6 +1250,10 @@ V.suCall = (name, ...a) => { try { if (window.sketchup && window.sketchup[name])
 V.msgLog = [];
 V.toast = (msg, err = false, ms = 3500, o = {}) => {
   const box = V.$("#toast"); msg = String(msg ?? "");
+  // (v3.74 A2, robust-01) a red message still carrying an AI service's raw text ("Google 429: …", "Failed to fetch") from
+  // any older caller is put into plain words here; the raw text goes under Details
+  const rawm = err && !o.detail && V.explainError ? /^(.{0,70}?:\s)?((?:Google|fal\.ai|Tripo|ChatGPT)[: ]+\d{3}\b[\s\S]*|Failed to fetch[\s\S]*|NetworkError[\s\S]*|[\s\S]*QuotaExceededError[\s\S]*|Google returned no image[\s\S]*)$/.exec(msg) : null;
+  if (rawm) { o = Object.assign({}, o, { detail: rawm[2] }); msg = V.errLine(rawm[2], rawm[1] ? rawm[1].replace(/:\s$/, "") : ""); }
   [...box.children].forEach((x) => x._msg === msg && x._close(true)); // the same message again replaces the old one
   const L = V.msgLog;
   if (L[0] && L[0].msg === msg) { L[0].at = Date.now(); L[0].n++; } else { L.unshift({ msg, err: !!err, at: Date.now(), n: 1 }); L.length = Math.min(L.length, 20); }
@@ -1247,11 +1261,14 @@ V.toast = (msg, err = false, ms = 3500, o = {}) => {
   const acts = (o.actions && o.actions.length ? o.actions : o.action ? [o.action] : []).filter((a) => a && a.label && a.run), act = acts[0], stay = ms === 0; let t, due = 0, left = 0;
   const close = (now) => { clearTimeout(t); if (el._gone) return; el._gone = true; if (now) return el.remove(); el.classList.add("out"); setTimeout(() => el.remove(), 220); };
   const arm = (d) => { clearTimeout(t); due = Date.now() + d; if (!stay) t = setTimeout(close, d); };
-  const el = V.h("div", { class: "toast" + (err ? " err" : ""), role: err ? "alert" : "status", onmouseenter: () => { clearTimeout(t); left = due - Date.now(); }, onmouseleave: () => arm(Math.max(2500, left)) },
+  // (v3.74 A2, robust-01) o.detail: the raw text from the AI service, folded under a small "Details" button
+  const det = o.detail ? V.h("div", { class: "tdetail", hidden: true }, String(o.detail).slice(0, 600)) : null;
+  const el = V.h("div", { class: "toast" + (err ? " err" : "") + (det ? " hasdet" : "") + (acts.length ? " hasact" : ""), role: err ? "alert" : "status", onmouseenter: () => { clearTimeout(t); left = due - Date.now(); }, onmouseleave: () => arm(Math.max(2500, left)) },
     V.h("span", { class: "tmsg" }, msg),
     ...acts.map((a) => V.h("button", { class: "tact", onclick: () => { close(); a.run(); } }, a.label)),
-    V.h("button", { class: "tx", title: "Close", "aria-label": "Close", onclick: () => close() }, "×"));
-  el._msg = msg; el._close = close; el._err = !!err; el._stay = stay; el._key = o.key || ""; el._canvas = !!o.canvasOnly;
+    det ? V.h("button", { class: "tdet", type: "button", "aria-expanded": "false", onclick: (e) => { det.hidden = !det.hidden; e.currentTarget.setAttribute("aria-expanded", String(!det.hidden)); clearTimeout(t); } }, "Details") : null,
+    V.h("button", { class: "tx", title: "Close", "aria-label": "Close", onclick: () => close() }, "×"), det);
+  el._msg = msg; el._close = close; el._err = !!err; el._stay = stay; el._key = o.key || ""; el._canvas = !!o.canvasOnly; el._undo = acts.some((a) => /^(Undo|Redo)$/.test(a.label)); el._at = Date.now(); el._view = document.body.dataset.view || "canvas";
   box.append(el); arm(Math.max(ms, Math.min(10000, msg.length * 55), act || err ? 8000 : 0));
   const live = [...box.children].filter((x) => !x._gone && x !== el);
   while (live.length > 2) {
@@ -1269,11 +1286,74 @@ V.clearToasts = (errOnly = false) => { [...V.$("#toast").children].forEach((x) =
 // Esc on the canvas closes the newest message first (true when there was one), before it clears the selection
 // close the messages given the same o.key (e.g. "savefail": every save-failure message once a save works again)
 V.closeToastKey = (key) => { const t = V.$("#toast"); if (!t) return; [...t.children].forEach((x) => { if (!x._gone && x._key === key) x._close(); }); };
+// (v3.74 C4, loop-10/12) the messages with an Undo or Redo button: an undo makes the canvas ones stale (their Undo would undo the
+// step before), and another project opening makes them all stale
+V.closeUndoToasts = (canvasOnly) => { const t = V.$("#toast"); if (!t) return; [...t.children].forEach((x) => { if (!x._gone && x._close && x._undo && (!canvasOnly || x._canvas)) x._close(); }); };
 // (C1, PG-20) a message whose button only works on the canvas (o.canvasOnly, e.g. "Removed 2 pictures · Undo") goes when
 // another page (Sheets, Library, Projects…) opens; it stays in Recent messages
-new MutationObserver(() => { const v = document.body.dataset.view; if (v && v !== "canvas") [...V.$("#toast").children].forEach((x) => { if (!x._gone && x._canvas) x._close(); }); })
+// (whole-09) and a plain message about what you did on the page you left (Review's "… is the pick; 1 set aside") goes when
+// the page changes too; red ones and ones with a button stay, and one said as the new page opened (within 400 ms, e.g. "Laid out 4 picks") stays
+new MutationObserver(() => { const v = document.body.dataset.view || "canvas", now = Date.now(); [...V.$("#toast").children].forEach((x) => { if (x._gone || !x._close) return; if ((v !== "canvas" && x._canvas) || (!x._err && !x._stay && !x.querySelector(".tact") && x._view && x._view !== v && now - (x._at || 0) > 400)) x._close(); }); })
   .observe(document.body, { attributes: true, attributeFilter: ["data-view"] });
 V.closeTopToast = () => { const live = [...V.$("#toast").children].filter((x) => !x._gone && x._close); if (!live.length) return false; live[live.length - 1]._close(); return true; };
+// (v3.74 A2) a message kept in Recent messages (Activity) without showing it, e.g. a failure its card already shows
+V.logMsg = (msg, err = false) => { const L = V.msgLog; msg = String(msg || ""); if (L[0] && L[0].msg === msg) { L[0].at = Date.now(); L[0].n++; } else { L.unshift({ msg, err: !!err, at: Date.now(), n: 1 }); L.length = Math.min(L.length, 20); } };
+
+// ---------- v3.74 A2 (N15, robust:big:1, robust-01): every failure in plain words ----------
+// V.explainError(e or text) -> { kind, title, advice, detail, wait, auto, actions }. kind: quota | freetier | busy | safety |
+// noimage | network | badkey | denied | nokey | model | storage | badfile | timeout | stopped | interrupted | other.
+// title and advice are for people; detail is the raw text (shown only under Details); wait: seconds before Try again is
+// worth it (quota); auto: a busy or limited Google job VizLab retries by itself (local.js); actions: what the failure
+// card and the message offer first ("settings", "words", "space", "retry"). The phone's own version is mobile/phone.js errOf.
+const trimDot = (s) => String(s || "").replace(/^(Error|TypeError|DOMException):\s*/i, "").replace(/\s+/g, " ").trim().replace(/\.+$/, "");
+V.explainError = (e) => {
+  if (e && e.kind && e.title && e.advice != null) return e; // (already explained)
+  const raw = String((e && e.message) || e || "").trim(), m = trimDot(raw), here = V.desk ? "this PC" : /iPhone|iPad|Android/i.test(navigator.userAgent || "") ? "this device" : "this PC";
+  const out = (kind, title, advice, o = {}) => Object.assign({ kind, title, advice, detail: raw && raw !== advice && raw !== title ? raw : "", wait: 0, auto: false, actions: ["retry"] }, o);
+  const off = navigator.onLine === false;
+  const g = /^(Google|fal\.ai|Tripo|ChatGPT)[: ]+(\d{3})\b:?\s*([\s\S]*)$/i.exec(m) || /^HTTP (\d{3})$/.exec(m) && [m, "Google", /^HTTP (\d{3})$/.exec(m)[1], ""];
+  const who = g ? (/^fal/i.test(g[1]) ? "fal.ai" : g[1]) : "Google";
+  if (g) {
+    const st = +g[2], t = g[3] || "";
+    if (st === 429 && /limit:\s*0\b|free[_ -]?tier/i.test(t)) return out("freetier", "This key can't make pictures yet", "Switch its Google project to the paid tier in AI Studio, then press Try again.", { actions: ["settings", "retry"] });
+    if (st === 429) return out("quota", `${who}'s limit reached for now`, "Wait a minute and try again.", { wait: 45, auto: who === "Google" });
+    if (st >= 500) return out("busy", `${who} is busy`, "Try again in a moment.", { wait: 10, auto: who === "Google" });
+    if ((st === 400 && /api[_ ]?key/i.test(t)) || st === 401) return out("badkey", `${who} didn't accept the key`, "Check it was copied in full in Settings.", { actions: ["settings"] });
+    if (st === 403) return out("denied", "This key can't make pictures yet", /billing/i.test(t) ? "Google says billing isn't set up for this key's project." : `${who} says this key isn't allowed to do this. Check the key in Settings, or ask whoever looks after the office key.`, { actions: ["settings"] });
+    if (st === 404) return out("model", "This AI model isn't available to your key", "Choose Nano Banana as the AI model, or try again later.");
+    if (st === 400 && /safety|blocked|prohibit/i.test(t)) return out("safety", `${who} wouldn't make this one`, "Its safety filter stopped it. Try other words, or leave out people, logos or brand names.", { actions: ["words", "retry"] });
+    return out("other", `${who} couldn't do this one`, t ? trimDot(t).slice(0, 160) : "Try again, or try different words.");
+  }
+  if (/returned no (image|video)|no image returned|didn't send a picture|no output returned/i.test(m)) {
+    if (/SAFETY|PROHIBIT|BLOCK|RECITATION|OTHER/i.test(m)) return out("safety", "Google wouldn't make this one", "Its safety filter stopped it. Try other words, or leave out people, logos or brand names.", { actions: ["words", "retry"] });
+    return out("noimage", "No picture came back", "Try again, or try different words.");
+  }
+  if (/QuotaExceeded|quota (has been )?exceeded|storage (aborted|.*full)|NS_ERROR_DOM_QUOTA|disk is full/i.test(m)) return out("storage", `${here === "this PC" ? "This PC's" : "This device's"} storage for VizLab is full`, "Free up space, or download the pictures you need.", { actions: ["space", "retry"] });
+  if (/Add your Google Gemini API key|Google key first|needs a Google key/i.test(m)) return out("nokey", "No Google key yet", "Add the office Google key in Settings.", { actions: ["settings"] });
+  if (/needs a fal\.ai API key/i.test(m)) return out("nokey", "This AI model needs a fal.ai key", "Add it in Settings, or choose Nano Banana, which works with your Google key.", { actions: ["settings"] });
+  if (/timed? ?out|took too long/i.test(m)) return out("timeout", "It took too long", "The AI service didn't answer in 4 minutes. Try again: it is usually quicker.");
+  if (/^Stopped\b/i.test(m)) return out("stopped", "Stopped", "You stopped this one. Press Try again to make it again.");
+  if (/^Interrupted\b|page was closed/i.test(m)) return out("interrupted", "Stopped when VizLab was closed", "The window was closed while this was being made. Press Try again to make it again.");
+  // (a failed card never starts by itself: the waiting ones say so on their own card, V.makingText)
+  if (off || /failed to fetch|networkerror|network error|load failed|network request failed|couldn't reach|internet|ERR_INTERNET|ERR_NETWORK/i.test(m)) return off ? out("network", "No internet connection", "You're offline. Press Try again when you're back online.") : out("network", "Couldn't reach the AI service", "Check the internet connection, then press Try again.");
+  if (/image load failed|couldn't open|not a picture|decode/i.test(m)) return out("badfile", "Couldn't open the picture", "VizLab reads JPEG, PNG, WebP and PDF. For an iPhone HEIC photo, export it as JPEG first.", { actions: [] });
+  return out("other", "That didn't work", m ? m.charAt(0).toUpperCase() + m.slice(1, 220) + (m.length > 220 ? "…" : "") : "Something went wrong. Try again.", { detail: "" });
+};
+// one line for a message: "Render failed: Google's limit reached for now. Wait a minute and try again."
+V.errLine = (e, what) => { const x = V.explainError(e); return x.kind === "other" && !x.detail ? (what ? what + ": " : "") + x.advice.replace(/([^.!?…])$/, "$1.") : (what ? what + ": " : "") + x.title + ". " + x.advice; };
+// a failure message with the buttons its kind needs (o.retry: what Try again does; o.what: "Render failed", o.ms)
+V.failToast = (e, o = {}) => {
+  const x = V.explainError(e), acts = [];
+  for (const a of x.actions) {
+    if (a === "settings" && V.openSettings) acts.push({ label: "Open Settings", run: () => V.openSettings("#setGkey") });
+    else if (a === "space" && V.freeUpSpace) acts.push({ label: "Free up space…", run: () => V.freeUpSpace() });
+    else if (a === "retry" && o.retry) acts.push({ label: "Try again", run: o.retry });
+  }
+  V.toast(V.errLine(x, o.what), true, o.ms == null ? 0 : o.ms, { detail: x.detail, actions: acts.slice(0, 2), key: o.key });
+  return x;
+};
+// (robust-12) AbortSignal.timeout(ms) is Chromium 103+: this works in SketchUp 2021-2023's Chromium 92 too
+V.timeoutSignal = (ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; };
 
 // ---------- API ----------
 V.api = async (action, body = {}, retried = false) => {
@@ -1373,21 +1453,148 @@ V.node = (id) => V.G.nodes.find((n) => n.id === id);
 V.parents = (id) => V.G.edges.filter((e) => e.to === id).map((e) => V.node(e.from)).filter(Boolean);
 V.children = (id) => V.G.edges.filter((e) => e.from === id).map((e) => V.node(e.to)).filter(Boolean);
 V.NODE_W = 280; V.NODE_IMG_H = 210; V.NODE_H = 262; // v3.69 (was 180 / 135 / 172): the one source of the picture size on the canvas (canvas.js passes it to the CSS)
-
-// undo / redo for the canvas: each step is a copy of nodes, edges and groups. A new change clears the redo list.
-const undoStack = [], redoStack = [];
-const graphNow = () => JSON.stringify({ nodes: V.G.nodes, edges: V.G.edges, groups: V.G.groups });
-V.paintUndo = () => { const u = document.getElementById("tUndo"), r = document.getElementById("tRedo"); if (u) u.disabled = !undoStack.length; if (r) r.disabled = !redoStack.length; };
-V.snapshot = () => { undoStack.push(graphNow()); if (undoStack.length > 40) undoStack.shift(); redoStack.length = 0; V.paintUndo(); };
-V.snapshotRaw = (o) => { undoStack.push(JSON.stringify(o)); if (undoStack.length > 40) undoStack.shift(); redoStack.length = 0; V.paintUndo(); };
-const restore = (s) => { const o = JSON.parse(s); V.G.nodes = o.nodes; V.G.edges = o.edges; V.G.groups = o.groups; V.sel = V.sel.filter((id) => V.node(id)); V.changed(); V.render(); V.selectionChanged && V.selectionChanged(); V.paintUndo(); };
-V.undo = () => {
-  const s = undoStack.pop(); if (!s) return V.toast("Nothing to undo", false, 1400);
-  redoStack.push(graphNow()); restore(s);
+// v3.74 B1 (N2, visual:V02): every card takes its height from its picture. n.ar (width / height) is learnt when the picture
+// loads (canvas.js) and kept with the node; a picture still being made takes the shape it was asked for (its settings, or
+// the picture it is made from). Heights are clamped to 0.5..1.6 of the width (letterboxed beyond that); V.NODE_IMG_H /
+// V.NODE_H stay the default for a picture whose shape isn't known yet.
+V.CAP_H = V.NODE_H - V.NODE_IMG_H; // the caption under the picture
+V.expectAr = (n) => {
+  if (!n) return null;
+  const st = (n.retry && n.retry.settings) || {};
+  if (st.paper && V.PAPER[st.paper]) { const [a, b] = V.PAPER[st.paper]; return st.orient === "portrait" ? b / a : a / b; }
+  const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(String(st.aspect_ratio || ""));
+  if (m && +m[2]) return +m[1] / +m[2];
+  const p = V.parents(n.id)[0];
+  if (p && p.ar) return p.ar;
+  if (n.type === "video" || n.type === "model" || n.type === "world") return 16 / 9;
+  return null;
 };
-V.redo = () => {
-  const s = redoStack.pop(); if (!s) return V.toast("Nothing to redo", false, 1400);
-  undoStack.push(graphNow()); restore(s);
+V.nodeAr = (n) => (n && n.ar) || (n && n.status !== "done" ? V.expectAr(n) : null);
+V.nodeImgH = (n) => { const ar = V.nodeAr(n); if (!ar) return V.NODE_IMG_H; return Math.round(Math.min(V.NODE_W * 1.6, Math.max(V.NODE_W * 0.5, V.NODE_W / ar))); };
+V.nodeH = (n) => V.nodeImgH(n) + V.CAP_H;
+
+// undo / redo for the canvas: each step is a copy of nodes, edges and groups (v3.74 B1: and the canvas's UI flags, V.G.ui,
+// so Ctrl+Z after Tidy draws the version stacks gathered again as they were, not as rows on top of each other). A new
+// change clears the redo list.
+// v3.74 C4 (N14, power:big:3, PW-04): every step has a name. V.snapshot(label) / V.snapshotRaw(o, label) take one ("Move 3
+// pictures"); a step given none is named from what changed between it and the next one (pictures added, removed, moved,
+// favourites, set aside, folded, renamed, grouped, spread), so every caller gets a real name. V.pushStep(label, {undo, redo})
+// puts a change that isn't in the graph on the same timeline (a scene, a setup); V.undoGroup(label, fn) makes everything fn
+// does one step (a selection action on 6 pictures). V.undoList() reads the timeline for the History of changes pop-up and
+// V.undoTo(i) goes back (or forward) to a step. Undo and Redo say what they did ("Undone: Remove 3 pictures · Redo").
+const undoStack = [], redoStack = [];
+const graphNow = () => JSON.stringify({ nodes: V.G.nodes, edges: V.G.edges, groups: V.G.groups, ui: V.G.ui || {} });
+const UNDO_MAX = 40;
+let undoHold = 0;
+const stepOf = (s, label, fx) => ({ s, label: label || "", t: Date.now(), fx: fx || null });
+const pushUndo = (e) => { const p = undoStack[undoStack.length - 1]; if (p && !p.label && !e.label && !p.fx && !e.fx && e.t - p.t < 600 && !redoStack.length) { p.t = e.t; delete p._lab; return; } // (several changes at once, e.g. Render 3 views: one step)
+  undoStack.push(e); if (undoStack.length > UNDO_MAX) undoStack.shift(); redoStack.length = 0; V.paintUndo(); };
+V.paintUndo = () => { const u = document.getElementById("tUndo"), r = document.getElementById("tRedo"), hb = document.getElementById("tHist"); if (u) u.disabled = !undoStack.length; if (r) r.disabled = !redoStack.length; if (hb) hb.disabled = !undoStack.length && !redoStack.length; };
+V.snapshot = (label) => { if (undoHold) return; pushUndo(stepOf(graphNow(), typeof label === "string" ? label : "")); };
+V.snapshotRaw = (o, label) => { if (undoHold) return; pushUndo(stepOf(JSON.stringify(o), label)); };
+V.pushStep = (label, fx) => { if (undoHold) return; pushUndo(stepOf(graphNow(), label, fx)); };
+V.undoGroup = async (label, fn) => {
+  const was = undoHold ? null : graphNow();
+  if (was) pushUndo(stepOf(was, label));
+  undoHold++;
+  try { return await fn(); } finally { undoHold--; if (was && undoStack.length && undoStack[undoStack.length - 1].s === was && graphNow() === was) { undoStack.pop(); V.paintUndo(); } } // (nothing changed: no empty step)
+};
+// a name from what changed between two copies of the graph
+const pl = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+function diffName(a, b) {
+  let A, B; try { A = JSON.parse(a); B = JSON.parse(b); } catch (e) { return "Change on the canvas"; }
+  const am = new Map((A.nodes || []).map((n) => [n.id, n])), bm = new Map((B.nodes || []).map((n) => [n.id, n]));
+  const added = (B.nodes || []).filter((n) => !am.has(n.id)), gone = (A.nodes || []).filter((n) => !bm.has(n.id));
+  const title = (n) => { try { return (V.nodeTitle && V.nodeTitle(V.node(n.id) || n)) || n.label || "picture"; } catch (e) { return n.label || "picture"; } }; // (the live picture where it still is: its number in the set)
+  if (added.length) {
+    const ks = added.map((n) => n.kind), par = (B.edges || []).filter((e) => added.some((n) => n.id === e.to)).map((e) => am.get(e.from) || bm.get(e.from)).filter(Boolean);
+    const from = [...new Set(par.map((p) => p.id))], of = from.length === 1 ? " " + title(par[0]) : from.length > 1 ? ` ${pl(from.length, par.every((p) => p.capture || /SketchUp view|Revit view/.test(p.label || "")) ? "view" : "picture")}` : "";
+    if (gone.length && added.length === gone.length) return "Try again";
+    // (whole-11) a tweak or relight chip is named for what it did: "Lighter: View 1 · Daylight", "Relight View 1 · Daylight at golden hour"
+    const tw = added.map((n) => n.retry && n.retry.settings && n.retry.settings.tweak).filter(Boolean);
+    if (tw.length === added.length && tw.every((t) => t.id === tw[0].id)) return tw[0].row === "relight" ? `Relight${of || (added.length > 1 ? " " + pl(added.length, "picture") : "")} at ${String(tw[0].name).toLowerCase()}` : `${tw[0].name}: ${(of || " " + pl(added.length, "picture")).trim()}`;
+    if (ks.every((k) => k === "upscale") || added.every((n) => /upscal/i.test(n.label || ""))) return "Upscale" + (of || " " + pl(added.length, "picture"));
+    if (ks.every((k) => k === "video" || k === "vupscale")) return "Video from" + (of || " a picture");
+    if (ks.every((k) => k === "3d" || k === "world")) return "3D from" + (of || " a picture");
+    if (ks.every((k) => k === "source")) return (added.every((n) => n.capture || /SketchUp view|Revit view/.test(n.label || "")) ? "Capture " : "Add ") + (added.length === 1 ? title(added[0]) : pl(added.length, "picture"));
+    if (ks.some((k) => k === "render" || k === "edit" || k === "create")) return (ks.includes("render") || !ks.includes("edit") ? "Render" : "Edit") + (of || (added.length > 1 ? " " + pl(added.length, "picture") : ""));
+    return "Add " + pl(added.length, "picture");
+  }
+  if (gone.length) return "Remove " + pl(gone.length, "picture");
+  let moved = 0, favOn = 0, favOff = 0, rej = 0, unrej = 0, fold = 0, unfold = 0, named = null, other = 0;
+  for (const n of B.nodes || []) {
+    const o = am.get(n.id); if (!o) continue;
+    if (o.x !== n.x || o.y !== n.y) moved++;
+    if (!!o.fav !== !!n.fav) n.fav ? favOn++ : favOff++;
+    if (!!o.rejected !== !!n.rejected) n.rejected ? rej++ : unrej++;
+    if (!!o.collapsed !== !!n.collapsed) n.collapsed ? fold++ : unfold++;
+    if ((o.label || "") !== (n.label || "")) named = n;
+    else if (JSON.stringify(o) !== JSON.stringify(n)) other++;
+  }
+  if (favOn) return "Favourite " + pl(favOn, "picture");
+  if (favOff) return "Take the star off " + pl(favOff, "picture");
+  if (rej) return "Set aside " + pl(rej, "picture");
+  if (unrej) return "Bring back " + pl(unrej, "picture");
+  if (fold) return "Fold away versions";
+  if (unfold) return "Show versions";
+  if (named) return `Rename to "${String(named.label || "").slice(0, 30)}"`;
+  const ga = (A.groups || []).length, gb = (B.groups || []).length;
+  if (gb > ga) return ("Group " + (((B.groups || [])[gb - 1] || {}).title || "")).trim();
+  if (gb < ga) return "Ungroup";
+  if (JSON.stringify(A.groups) !== JSON.stringify(B.groups)) return "Change a group";
+  if ((B.edges || []).length > (A.edges || []).length) return "Link two pictures";
+  const sp = (G) => Object.keys((G.ui || {}).spread || {}).filter((x) => ((G.ui || {}).spread || {})[x]).length;
+  const sa = JSON.stringify((A.ui || {}).spread || {}), sb = JSON.stringify((B.ui || {}).spread || {});
+  if (moved > 1 && sa !== sb) return "Tidy up";
+  if (moved) return "Move " + pl(moved, "picture");
+  if (sa !== sb) return sp(B) > sp(A) ? "Spread versions" : "Gather versions";
+  if (other) return "Change " + pl(other, "picture");
+  return "Change on the canvas";
+}
+// the name of undo step i (the change from its copy to the next step's, or to now)
+const nameOf = (i) => {
+  const e = undoStack[i]; if (!e) return "";
+  if (e.label) return e.label;
+  if (e._lab && i < undoStack.length - 1) return e._lab;
+  const lab = diffName(e.s, i < undoStack.length - 1 ? undoStack[i + 1].s : graphNow());
+  if (i < undoStack.length - 1) e._lab = lab;
+  return lab;
+};
+V.undoName = () => nameOf(undoStack.length - 1);
+V.redoName = () => (redoStack.length ? redoStack[redoStack.length - 1].label : "");
+// the timeline, oldest first: { i, label, t, done } for each step (done: before now), then the redo steps (done false)
+V.undoList = () => [...undoStack.map((e, i) => ({ i, label: nameOf(i), t: e.t, done: true })), ...redoStack.slice().reverse().map((e, j) => ({ i: undoStack.length + j, label: e.label, t: e.t, done: false }))];
+const restore = (s) => { const o = JSON.parse(s); V.G.nodes = o.nodes; V.G.edges = o.edges; V.G.groups = o.groups; if (o.ui) V.G.ui = { ...(V.G.ui || {}), spread: o.ui.spread || {} }; V.sel = V.sel.filter((id) => V.node(id)); V.changed(); V.render(); V.selectionChanged && V.selectionChanged(); V.paintUndo(); };
+const undoOne = () => {
+  const i = undoStack.length - 1; if (i < 0) return "";
+  const lab = nameOf(i), e = undoStack.pop();
+  if (e.fx) { try { e.fx.undo(); } catch (er) {} redoStack.push(Object.assign(e, { label: lab, t: Date.now() })); V.paintUndo(); }
+  else { redoStack.push(stepOf(graphNow(), lab)); restore(e.s); }
+  return lab;
+};
+const redoOne = () => {
+  const r = redoStack.pop(); if (!r) return "";
+  if (r.fx) { try { r.fx.redo(); } catch (er) {} undoStack.push(Object.assign(r, { s: graphNow(), t: Date.now() })); V.paintUndo(); }
+  else { undoStack.push(stepOf(graphNow(), r.label)); restore(r.s); }
+  return r.label;
+};
+const sayUndo = (msg, again) => { V.closeToastKey("undostep"); V.closeUndoToasts(true); V.toast(msg, false, 3000, { key: "undostep", action: again, canvasOnly: true }); }; // (one at a time: Ctrl+Z pressed again replaces it)
+V.undo = (o = {}) => {
+  if (!undoStack.length) return V.toast("Nothing to undo", false, 1400);
+  const lab = undoOne();
+  if (!o.quiet) sayUndo(`Undone: ${lab}`, { label: "Redo", run: () => V.redo() });
+};
+V.redo = (o = {}) => {
+  if (!redoStack.length) return V.toast("Nothing to redo", false, 1400);
+  const lab = redoOne();
+  if (!o.quiet) sayUndo(`Redone: ${lab}`, { label: "Undo", run: () => V.undo() });
+};
+// go to step i of V.undoList(): the state just after it (i = -1: before the first step)
+V.undoTo = (i) => {
+  const now = undoStack.length - 1; let k = 0, lab = "";
+  const q = (s) => (/["“”]/.test(s) ? s : `"${s}"`); // (loop-12: a step named with quotes, Rename to "Front garden", gets no second pair)
+  if (i < now) { while (undoStack.length - 1 > i && undoStack.length) { lab = undoOne(); k++; } if (k) sayUndo(k === 1 ? `Undone: ${lab}` : `Back ${k} steps, to before ${q(lab)}`, { label: "Redo", run: () => V.undoTo(i + k) }); }
+  else if (i > now) { while (undoStack.length - 1 < i && redoStack.length) { lab = redoOne(); k++; } if (k) sayUndo(k === 1 ? `Redone: ${lab}` : `Forward ${k} steps, to ${q(lab)}`, { label: "Undo", run: () => V.undoTo(i - k) }); }
 };
 
 V.addNode = (n) => {
@@ -1407,10 +1614,18 @@ V.removeNodes = (ids) => {
   V.sel = V.sel.filter((i) => !set.has(i));
 };
 // free spot to the right of a parent for k new nodes
+// v3.74 B1 (N5): a picture made from one other joins its version stack (canvas.js V.stackSlot says where that is: the
+// stack's own place, or the end of its spread row); the tree layout below is kept for everything else
 V.placeChildren = (parent, k) => {
+  if (V.stackSlot) { const s = V.stackSlot(parent, k); if (s) return s; }
+  return placeTree(parent, k);
+};
+V.placeTree = (parent, k) => placeTree(parent, k);
+const hOf = (n) => (V.nodeH ? V.nodeH(n) : V.NODE_H);
+function placeTree(parent, k) {
   let x = parent.x + V.NODE_W + 90;
   const kids = V.children(parent.id);
-  let y = kids.length ? Math.max(...kids.map((c) => c.y)) + V.NODE_H + 24 : parent.y - ((k - 1) * (V.NODE_H + 24)) / 2;
+  let y = kids.length ? Math.max(...kids.map((c) => c.y + hOf(c))) + 24 : parent.y - ((k - 1) * (V.NODE_H + 24)) / 2;
   // (v3.69 J-presentation N2) a view in a row of views (a batch): its versions go in a column straight under it, so each
   // view's renders sit with their own view rather than under the next one; only when nothing else is below it
   const src = (n) => n !== parent && n.type === "image" && !V.parents(n.id).length;
@@ -1418,18 +1633,20 @@ V.placeChildren = (parent, k) => {
   const row = V.G.nodes.filter((n) => (n === parent || src(n)) && Math.abs(n.y - parent.y) < V.NODE_H / 2), rx0 = Math.min(...row.map((n) => n.x)), rx1 = Math.max(...row.map((n) => n.x));
   const below = V.G.nodes.some((n) => src(n) && n.x > rx0 - V.NODE_W && n.x < rx1 + V.NODE_W && n.y > parent.y + V.NODE_H / 2); // (a grid of views: as before, to the right)
   if (!V.parents(parent.id).length && rowRight && !below && (!kids.length || kids.every((c) => Math.abs(c.x - parent.x) < 10))) {
-    x = parent.x; y = kids.length ? Math.max(...kids.map((c) => c.y)) + V.NODE_H + 24 : parent.y + V.NODE_H + 60;
+    x = parent.x; y = kids.length ? Math.max(...kids.map((c) => c.y + hOf(c))) + 24 : parent.y + hOf(parent) + 60;
   }
   const out = [];
   for (let i = 0; i < k; i++) {
     let yy = y + i * (V.NODE_H + 24);
-    // nudge down if overlapping something
-    for (let tries = 0; tries < 30 && V.G.nodes.some((n) => Math.abs(n.x - x) < V.NODE_W + 10 && Math.abs(n.y - yy) < V.NODE_H + 6); tries++) yy += V.NODE_H + 24;
+    // nudge down if overlapping something (each picture at its own height, where it is drawn: a version gathered into a
+    // stack counts at the stack's card, not at its own saved place underneath, canvas.js V.nodeBox)
+    const bx = (n) => (V.nodeBox ? V.nodeBox(n) : { x: n.x, y: n.y, h: hOf(n) });
+    for (let tries = 0; tries < 30 && V.G.nodes.some((n) => { const b = bx(n); return Math.abs(b.x - x) < V.NODE_W + 10 && b.y < yy + V.NODE_H + 6 && b.y + b.h + 6 > yy; }); tries++) yy += V.NODE_H + 24;
     out.push({ x, y: yy });
     y = yy - i * (V.NODE_H + 24);
   }
   return out;
-};
+}
 
 // ---------- persistence ----------
 // v3.69 (D10, FR3, PG-06, J-returning-R6): the title bar says what is happening: "Saving…", "Saved" (with the time, fading
@@ -1441,6 +1658,8 @@ const SAVE_TEXT = { saving: "Saving…", saved: "Saved", part: "Saved · picture
 const paintSave = (st, tip = "", text) => {
   const el = V.$("#saveState"); if (!el) return;
   clearTimeout(fadeT); el.className = "savestate" + (st ? " " + st : ""); el.textContent = text || SAVE_TEXT[st] || ""; el.title = tip; el.disabled = st !== "bad" && st !== "part";
+  if (el.textContent) el.removeAttribute("aria-hidden"); else el.setAttribute("aria-hidden", "true"); // (v3.74 robust-20: no nameless button while empty)
+  if (V.paintStatus) V.paintStatus(); // (v3.74 A2: the status pill follows the save state)
   if (st === "saved") fadeT = setTimeout(() => el.classList.add("old"), 3000);
 };
 const where = () => (V.cfg.mode === "cloud" ? "on the VizLab server" : (V.desk ? "on this PC" : "in this browser on this PC") + (V.drive && V.drive.on() ? ", and copied to your Google Drive" : ""));
@@ -1466,9 +1685,14 @@ async function autoName() {
 }
 // (the "Project saved as …" message with its Rename button goes once the project has a name of its own)
 V.renameProject = (name) => { name = String(name || "").trim().slice(0, 80); if (!name) return; V.project.name = name; V.updateTitle(); V.changed(true); if (V.realProjectName()) { V.closeToastKey("autoname"); V.closeToastKey("nameit"); } };
-window.addEventListener("beforeunload", (e) => { if (pending || saving || saveBad) { e.preventDefault(); e.returnValue = ""; } });
+window.addEventListener("beforeunload", (e) => { if (pending || saving || saveBad || (V.jobsHere && V.jobsHere().length)) { e.preventDefault(); e.returnValue = ""; } }); // (v3.74 robust-05: and renders this page is making)
+// (v3.74 A2, robust-04) leaving the page or putting it in the background (a phone drops background tabs freely): save now
+const flushNow = () => { if (pending && !saving) { try { V.save(); } catch (e) {} } };
+document.addEventListener("visibilitychange", () => { if (document.hidden) flushNow(); });
+window.addEventListener("pagehide", flushNow);
 V.graphForSave = () => ({
-  nodes: V.G.nodes.filter((n) => V.cfg.mode !== "cloud" || !(n.url || "").startsWith("data:")).map((n) => ({ ...n, _local: undefined })),
+  // (v3.74 B1) a capture placeholder (n._ph, canvas.js V.capturePlaceholder) is never kept: the view replaces it when it lands
+  nodes: V.G.nodes.filter((n) => !n._ph && (V.cfg.mode !== "cloud" || !(n.url || "").startsWith("data:"))).map((n) => ({ ...n, ...((V.savedPlace && V.savedPlace(n)) || {}), _local: undefined, _phT: undefined, _glide: undefined })), // (_glide: a card mid-glide on the canvas; its own x/y are the saved ones. IB-2: a card a spread row pushed is saved where the gather puts it back, canvas.js V.savedPlace)
   edges: V.G.edges, groups: V.G.groups, view: V.G.view, look: V.G.look || null, sheets: V.G.sheets || null, library: V.G.library || null, scene: V.G.scene || null,
   // v3.69 C1 (RN6): pictures left out of this save, and ones already missing when it was opened, so a reopen can say so
   missing: V.G.nodes.filter((n) => V.cfg.mode === "cloud" && (n.url || "").startsWith("data:")).length + (V.project.missing || 0),
@@ -1511,8 +1735,16 @@ V.save = async () => {
     }
   } catch (e) {
     saveBad = e; console.warn(e);
-    paintSave("bad", `Couldn't save: ${e.message}. Your work is still here in this window. Click to try again.`);
-    if (!toldFail) { toldFail = true; V.toast(`Your project couldn't be saved: ${e.message}. Your work is still here; download any pictures you need now.`, true, 0, { key: "savefail", action: { label: "Try again", run: () => V.save() } }); }
+    // (v3.74 A2, robust-08) in plain words, with Free up space for a full disk; tried again by itself every 30 s
+    const x = V.explainError(e), why = x.kind === "other" ? trimDot(e.message) : x.title;
+    paintSave("bad", `Couldn't save: ${why}. Your work is still here in this window. VizLab tries again by itself; click to try now.`);
+    // (A2-11) offline: the banner, the pill and "Not saved · Try again" already say it, and it saves again on 'online'
+    if (!toldFail && !(navigator.onLine === false && x.kind === "network")) {
+      toldFail = true;
+      const acts = x.kind === "storage" ? [{ label: "Free up space…", run: () => (V.freeUpSpace ? V.freeUpSpace() : V.save()) }, { label: "Try again", run: () => V.save() }] : [{ label: "Try again", run: () => V.save() }];
+      V.toast(`Your project couldn't be saved: ${why}. ${x.kind === "storage" ? x.advice : "Your work is still here; VizLab tries again by itself."}`, true, 0, { key: "savefail", actions: acts, detail: x.detail });
+    }
+    clearTimeout(V._saveRetryT); V._saveRetryT = setTimeout(() => { if (saveBad && !saving) V.save(); }, 30000);
   }
   saving = false;
   const waiting = saveWait.splice(0);
@@ -1521,18 +1753,23 @@ V.save = async () => {
   return ok;
 };
 // "Saved · 2 pictures not uploaded": send them again, then save
-async function retryUploads() {
+async function retryUploads(quiet) {
   const ups = V.G.nodes.filter((n) => n.type === "image" && (n.url || "").startsWith("data:"));
   let bad = 0;
   for (const n of ups) { try { const u = await V.uploadDataUrl(n.url); if (u && !u.startsWith("data:")) n.url = u; else bad++; } catch { bad++; } }
   await V.save();
-  if (bad) V.toast(`${bad} picture${bad > 1 ? "s" : ""} still couldn't be uploaded. Download ${bad > 1 ? "them" : "it"} to keep a copy.`, true, 0);
+  if (bad && !quiet) V.toast(`${bad} picture${bad > 1 ? "s" : ""} still couldn't be uploaded. Download ${bad > 1 ? "them" : "it"} to keep a copy.`, true, 0);
+  return V.project.left || 0; // (v3.74 final, loop-01: shell.js leaveOk asks before leaving pictures that are still not uploaded)
 }
+V.retryUploads = retryUploads;
+// (v3.74 final, expert-unuploaded) the pictures that never reached the server, said once when the project opens and on a click
+const tellMissing = () => { const k = V.project.missing; if (!k) return; V.toast(`${k} picture${k > 1 ? "s" : ""} in this project ${k > 1 ? "were" : "was"} not uploaded before it was closed, so ${k > 1 ? "they are" : "it is"} missing. Bring ${k > 1 ? "them" : "it"} in again if you still have ${k > 1 ? "them" : "it"} (a download, or SketchUp).`, false, 12000, { key: "missingpics", action: { label: "Got it, hide this", run: () => { V.project.missing = 0; V.changed(true); } } }); };
+V.tellMissing = tellMissing;
 V.$("#saveState") && V.$("#saveState").addEventListener("click", () => {
   if (saveBad) V.save(); else if (V.project.left) retryUploads();
-  else if (V.project.missing) { const k = V.project.missing; V.toast(`${k} picture${k > 1 ? "s" : ""} in this project ${k > 1 ? "were" : "was"} not uploaded before it was closed, so ${k > 1 ? "they are" : "it is"} missing. Bring ${k > 1 ? "them" : "it"} in again if you still have ${k > 1 ? "them" : "it"} (a download, or SketchUp).`, false, 12000, { key: "missingpics", action: { label: "Got it, hide this", run: () => { V.project.missing = 0; V.changed(true); } } }); }
+  else if (V.project.missing) tellMissing();
 });
-V.saveState = () => ({ pending, saving, bad: !!saveBad, left: V.project.left || 0 });
+V.saveState = () => ({ pending, saving, bad: !!saveBad, left: V.project.left || 0, missing: V.project.missing || 0 });
 V.paintSave = paintSave; // (v3.73 drive.js: "Saved to Drive" / "Not saved to Drive yet · Retry" when projects live only in Google Drive)
 // the project name in the title bar: "New project" before the first save; an automatic name shows grey with "Name it"
 V.updateTitle = () => {
@@ -1547,15 +1784,16 @@ V.loadProject = async (id) => {
   const g = p.graph || {};
   V.project = { id: p.id, name: p.name, opened: Date.now(), missing: Math.max(0, Number(g.missing) || 0) };
   V.G = { nodes: g.nodes || [], edges: g.edges || [], groups: g.groups || [], view: g.view || { x: 80, y: 80, z: 1 }, look: g.look || null, sheets: g.sheets || null, library: g.library || null, scene: g.scene || null };
-  V.sel = []; undoStack.length = redoStack.length = 0; V.paintUndo();
+  V.sel = []; undoStack.length = redoStack.length = 0; V.paintUndo(); V.closeUndoToasts(); // (the timeline starts again: no Undo/Redo from the last project)
   V.cfg.lastProject = p.id; V.store.set("lastProject", p.id);
   clearTimeout(saveT); pending = false; saveBad = null; toldFail = false;
   V.updateTitle(); if (V.project.missing) paintMissing(); else paintSave("saved", `Saved ${where()}. VizLab saves by itself after every change.`);
   V.render(); V.applyView(); V.resumeJobs(); V.selectionChanged();
+  if (V.project.missing) setTimeout(tellMissing, 600); // (v3.74 final, expert-unuploaded: said on reopen, not only on a click)
 };
 V.newProject = () => {
   V.project = { id: null, name: "unsaved", opened: Date.now() }; V.G = { nodes: [], edges: [], groups: [], view: { x: 80, y: 80, z: 1 } };
-  V.sel = []; undoStack.length = redoStack.length = 0; V.paintUndo(); V.cfg.lastProject = null; V.store.set("lastProject", null);
+  V.sel = []; undoStack.length = redoStack.length = 0; V.paintUndo(); V.closeUndoToasts(); V.cfg.lastProject = null; V.store.set("lastProject", null);
   clearTimeout(saveT); pending = false; saveBad = null; toldFail = false;
   V.updateTitle(); paintSave(""); V.render(); V.applyView(); V.selectionChanged();
   V.closeToastKey("autoname"); // (C1b fixer, C1b-3) its Rename would rename this new project, not the one it named
@@ -1571,7 +1809,7 @@ V.pendingJobIds = () => [...new Set([
   ...V.G.nodes.flatMap((n) => (n.drawing?.layers || []).filter(busy).map((l) => l.jobId)), // Draw edit layers
   ...(V.extraJobIds ? V.extraJobIds() : []), // e.g. AI selection masks
 ])];
-V.resumeJobs = () => { if (V.pendingJobIds().length) V.startPolling(); V.updateQueue(); };
+V.resumeJobs = () => { if (V.pendingJobIds().length) V.startPolling(); V.updateQueue(); if (V.G.nodes.some((n) => n.waitNet) && V.resumeNet) setTimeout(V.resumeNet, 1500); };
 V.startPolling = () => { if (!pollT) pollT = setInterval(V.poll, 3000); };
 V.poll = async () => {
   const ids = V.pendingJobIds();
@@ -1585,21 +1823,39 @@ V.poll = async () => {
   } catch (e) { console.warn(e); }
 };
 // update placeholder nodes for a job; returns true if anything changed
+const spentFix = new Set(); // (jobs whose cost was put right after another model made them)
 V.applyJob = (j) => {
   const lr = V.applyLayerJob ? V.applyLayerJob(j) : null; // job belongs to a Draw layer or selection
   if (lr != null) return lr;
   const nodes = V.G.nodes.filter((n) => n.jobId === j.id).sort((a, b) => a.outIndex - b.outIndex);
   if (!nodes.length) return false;
   if (j.status === "error") {
-    nodes.forEach((n) => { n.status = "error"; n.error = j.error; });
-    V.toast(`${n0label(nodes[0])} failed: ${j.error}`, true, 0);
+    // (v3.74 A2, robust-01/06) one plain message: the failed card says it when it is on screen; otherwise a message with
+    // the buttons its kind needs (Activity keeps it either way)
+    const x = V.explainError(j.error);
+    nodes.forEach((n) => { n.status = "error"; n.error = j.error; n.failedAt = Date.now(); n.note = ""; n.netWait = false; });
+    if (!V.G.nodes.some((n) => n.waitNet || n.netWait)) V.closeToastKey("offline");
+    // (A2-03) a key Google turned down shows in the status pill and its panel, not only on the card
+    if (/^(badkey|denied|freetier)$/.test(x.kind) && V.cfg.mode !== "cloud") V.keyTrouble = { kind: x.kind, key: V.cfg.gkey || "", at: Date.now() };
+    // (A2-10) a failure that comes back at once arrives before the canvas has shown the new card (it fits or pans to it
+    // as it renders): look again once it has, so one failure gives one message
+    const label = n0label(nodes[0]), retry = nodes[0].retry && V.retry ? () => V.retry(nodes[0]) : null;
+    const seen = () => V.canvasShown && V.canvasShown() && V.onScreen && nodes.some((n) => V.node(n.id) && V.onScreen(n));
+    const tell = () => (seen() ? V.logMsg(V.errLine(x, label + " failed"), true) : V.failToast(x, { what: label + " failed", retry, key: "jobfail" }));
+    if (seen() || !(V.canvasShown && V.canvasShown())) tell(); else setTimeout(tell, V.motionOn && V.motionOn() ? 900 : 250);
     return true;
   }
   if (j.status !== "done") {
     let ch = false;
-    nodes.forEach((n) => { if (n.status !== j.status) { n.status = j.status; ch = true; } n.queue = j.queue_position; });
+    const netWas = nodes.some((n) => n.netWait);
+    nodes.forEach((n) => { if (n.status !== j.status) { n.status = j.status; ch = true; if (j.status === "running" && !n.ranAt) n.ranAt = Date.now(); } n.queue = j.queue_position; if ((n.note || "") !== (j.note || "") || (n.noteUntil || 0) !== (j.noteUntil || 0)) { n.note = j.note || ""; n.noteUntil = j.noteUntil || 0; ch = true; } if (!!n.netWait !== !!j.netWait) { n.netWait = !!j.netWait; ch = true; } });
+    // (v3.74 A2-01) a picture this page is making (local mode) found no connection: it waits and goes on by itself
+    if (j.netWait && !netWas) V.netBanner();
+    if (!j.netWait && netWas && !V.G.nodes.some((n) => n.waitNet || n.netWait)) V.closeToastKey("offline");
     return ch;
   }
+  nodes.forEach((n) => { n.netWait = false; });
+  if (!V.G.nodes.some((n) => (n.waitNet || n.netWait) && n.jobId !== j.id)) V.closeToastKey("offline");
   // done
   const outs = j.outputs || [];
   let paperJob = false;
@@ -1631,10 +1887,31 @@ V.applyJob = (j) => {
     // v3.69 (J-presentation-P9): an upscale keeps its picture's ★ and joins its group (a batch frame)
     if (fk === "upscale") nodes.slice(0, images.length).forEach((n) => { const p = V.parents(n.id)[0]; if (!p) return; if (p.fav) n.fav = true; const g = V.G.groups.find((x) => x.nodeIds.includes(p.id)); if (g && !g.nodeIds.includes(n.id)) g.nodeIds.push(n.id); });
   }
-  if (j.error) { V.toast(j.error.slice(0, 160), true, 7000); nodes.forEach((n) => (n.label = V.engineName(j.engine) + " · fal.ai")); } else V.toast(`${n0label(nodes[0])} ready`);
+  nodes.forEach((n) => { n.note = ""; delete n.tries; n.doneAt = Date.now(); });
+  // (v3.74 B1, N6) how long it really took, by AI model, kind and size, so the next one's ring and "about 40 s" are honest
+  if (V.jobClock) V.jobClock.record(j.engine || nodes[0].engine, fk, V.jobClock.sizeOf(nodes[0]), Date.now() - (nodes[0].sent || nodes[0].created || Date.now()));
+  if (j.provider === "google" && V.keyTrouble) V.keyTrouble = null; // (Google made a picture: the key is fine)
+  // (v3.74 A2-07) another Google model made it (the one asked for was busy): the picture, its hover card and the costs
+  // name the one that did (local.js sets j.engine to it and keeps j.asked_engine)
+  if (j.asked_engine) {
+    images.forEach((o, i) => {
+      const n = V.G.nodes.find((x) => x.jobId === j.id && x.outIndex === i) || nodes[i], e = o.engine || j.engine;
+      if (!n || !e || n.engine === e) return;
+      const was = V.engineName(n.engine);
+      if (n.label === was || n.label === was + " · Google") n.label = V.engineName(e) + (n.label === was ? "" : " · Google");
+      n.engine = e; n.askedEngine = j.asked_engine;
+    });
+    if (j.cost_asked != null && !spentFix.has(j.id)) { spentFix.add(j.id); V.spend += (+j.cost_estimate || 0) - (+j.cost_asked || 0); const sp = V.$("#spend"); if (sp) sp.textContent = V.money(V.spend); }
+  }
+  // (v3.74 B1, motion-07) the big result card shows the result itself: then "Render ready" goes to Recent messages only
+  const hero = V.lastMade === j.id && !model && images[0]?.type === "image" && !!V.heroReveal;
+  const ready = j.fellBack ? `${n0label(nodes[0])} ready · ${j.fellBack}` : `${n0label(nodes[0])} ready`; // (robust-02: "Nano Banana 2.1 was busy, so Nano Banana Pro made this one")
+  if (j.error) { V.toast(/^Google failed, sent to fal\.ai/.test(j.error) ? "Google couldn't make this one, so fal.ai made it instead" : V.errLine(j.error), false, 7000, { detail: j.error }); nodes.forEach((n) => (n.label = V.engineName(j.engine) + " · fal.ai")); }
+  else if (!hero) V.toast(ready, false, j.fellBack ? 7000 : 3500);
+  if (V.titleReady && !j.error) V.titleReady(ready); // (motion-11: "✓ Render ready · Clarman VizLab" while the window is in the background)
   if (V.SU && V.cfg.autosave && V.cfg.folder && !paperJob) outs.filter((o) => o.type !== "thumb").forEach((o, i) => V.suSave(o.url, V.fileName(fk, o, i), false));
   if (V.sel.length === 0 || nodes.some((n) => V.lastMade === n.jobId)) { V.sel = [nodes[0].id]; }
-  if (V.lastMade === j.id && !model && images[0]?.type === "image" && V.heroReveal) setTimeout(() => V.heroReveal(nodes[0]), 80);
+  if (hero) setTimeout(() => { const shown = V.heroReveal(nodes[0]); if (shown) V.logMsg(ready); else if (!j.error) V.toast(ready, false, j.fellBack ? 7000 : 3500); }, 80);
   // (v3.69 RN2) once it has landed, the new picture and the one it was made from (or the render you started from) are
   // both fully on the canvas, not one at the bottom edge and the other half off the top
   if (V.lastMade === j.id && !model && V.fit && V.onScreen) {
@@ -1726,17 +2003,104 @@ V.download = async (url, name, o = {}) => {
 };
 V.updateQueue = () => {
   const pend = V.G.nodes.filter((n) => n.status === "queued" || n.status === "running");
-  const ids = new Set(pend.map((n) => n.jobId));
+  const ids = new Set(pend.map((n) => n.jobId || n.sendId || n.id)); // (v3.74: a job waiting for the internet has no id yet)
   const b = V.$("#qBadge"); b.textContent = ids.size; b.hidden = !ids.size;
   const pop = V.$("#queuePop");
   if (!pop.hidden) V.drawQueue();
+  if (V.paintJobs) V.paintJobs(); // (v3.74 B1, N6: the rings on the cards, the Activity button and the title bar)
+};
+// ---------- v3.74 B1 (N6, motion:big:1): V.jobClock, honest expected times ----------
+// Records how long finished jobs really took, by kind, AI model and size (kv "jobclock" in this browser's VizLab storage,
+// the last 12 of each), and gives the expected time for the next one: the median of what it has seen (the model first, then
+// the kind at that size, then a table). V.jobClock.state(n) turns that into the stage (sending, queued, running), an eased
+// progress 0..1 that runs fast to 90% at the expected time and then creeps, never reaching 100 before the result lands,
+// and the time left. The same figures drive the ring on the card, the Activity rows and the title-bar chip.
+const JC_BASE = { render: { "1K": 30, "2K": 45, "4K": 70, "": 40 }, edit: { "1K": 30, "2K": 45, "4K": 70, "": 40 }, create: { "1K": 28, "2K": 40, "4K": 65, "": 35 }, upscale: { "": 45, "4K": 65 }, video: { "": 150 }, vupscale: { "": 240 }, "3d": { "": 150 }, world: { "": 240 } };
+const JC_KEEP = 12;
+let jcData = null, jcSaveT = 0;
+const jcLoad = () => {
+  if (jcData) return jcData;
+  jcData = V.store.get("jobclock", {}) || {};
+  if (V.localDB) V.localDB.get("kv", "jobclock").then((r) => { if (r && r.data && typeof r.data === "object") { for (const k of Object.keys(r.data)) if (!jcData[k] || jcData[k].length < r.data[k].length) jcData[k] = r.data[k]; } }).catch(() => {});
+  return jcData;
+};
+const jcSave = () => { clearTimeout(jcSaveT); jcSaveT = setTimeout(() => { try { V.store.set("jobclock", jcData); } catch (e) {} if (V.localDB) V.localDB.put("kv", { id: "jobclock", data: jcData, at: Date.now() }).catch(() => {}); }, 800); };
+const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2; };
+V.jobClock = {
+  key: (kind, engine, size) => `${kind || "render"}|${engine || "*"}|${size || ""}`,
+  sizeOf: (n) => { const st = (n && n.retry && n.retry.settings) || {}; return st.g4k ? "4K" : st.resolution ? String(st.resolution) : st.factor ? "x" + st.factor : ""; },
+  record(engine, kind, size, ms) {
+    if (!(ms > 800) || ms > 1800000) return;
+    const d = jcLoad(), put = (k) => { const a = d[k] || (d[k] = []); a.push(Math.round(ms)); while (a.length > JC_KEEP) a.shift(); };
+    put(this.key(kind, engine, size)); put(this.key(kind, "*", size));
+    jcSave();
+  },
+  // the expected time in ms
+  expect(engine, kind, size) {
+    const d = jcLoad(), own = d[this.key(kind, engine, size)], any = d[this.key(kind, "*", size)];
+    if (own && own.length >= 2) return median(own);
+    if (any && any.length >= 3) return median(any);
+    const t = JC_BASE[kind] || JC_BASE.render, base = (t[size] != null ? t[size] : t[""]) || 40;
+    const e = String(engine || ""), k = /codex|chatgpt/i.test(e) ? 2.2 : /pro/i.test(e) ? 1.5 : /flux|seedream/i.test(e) ? 0.8 : 1;
+    return base * k * 1000;
+  },
+  // { stage: sending | queued | running, p: 0..1, left: s (null when unknown), over: past 1.5x the expected time, expect: s }
+  state(n) {
+    const kind = V.kindOf(n.kind, n.retry && n.retry.settings), E = Math.max(5, this.expect(n.engine, kind, this.sizeOf(n)) / 1000);
+    const t = Math.max(0, (Date.now() - (n.sent || n.created || Date.now())) / 1000);
+    if (n.waitNet || n.netWait) return { stage: "waiting", p: 0.03, left: null, over: false, expect: E };
+    if (!n.jobId) return { stage: "sending", p: Math.min(0.06, (t / E) * 0.5), left: Math.max(5, E - t), over: false, expect: E };
+    if (n.status === "queued") return { stage: "queued", p: Math.min(0.1, 0.05 + (t / E) * 0.3), left: Math.max(E * 0.6, E - t), over: false, expect: E };
+    const q = Math.min(1, t / E), eased = 0.1 + 0.8 * (1 - (1 - q) * (1 - q));
+    const p = t <= E ? eased : 0.9 + 0.09 * (1 - Math.exp(-(t - E) / E));
+    return { stage: "running", p: Math.min(0.99, p), left: Math.max(0, E - t), over: t > 1.5 * E, expect: E, elapsed: t };
+  },
+  // "40 s", "2 min" (rounded so it doesn't flicker)
+  leftText: (s) => (s < 60 ? `${Math.max(5, Math.round(s / 5) * 5)} s` : s < 3600 ? `${Math.max(1, Math.round(s / 60))} min` : `${Math.round(s / 3600)} h`),
 };
 // v3.69: what a picture being made is doing, for its card on the canvas and for Activity: "Rendering… 0:42" (the time
 // since it was sent) or "Waiting · 3rd in line"
 const DOING = { render: "Rendering…", edit: "Rendering…", create: "Rendering…", upscale: "Upscaling…", video: "Making the video…", vupscale: "Upscaling the video…", "3d": "Making the 3D model…", world: "Making the 3D world…" };
 V.ordinal = (k) => k + (k % 100 >= 11 && k % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][k % 10] || "th");
 V.clock = (t0) => { const s = Math.max(0, Math.round((Date.now() - (t0 || Date.now())) / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-V.makingText = (n) => (n.status === "running" ? `${DOING[V.kindOf(n.kind, n.retry && n.retry.settings)] || "Making it…"} ${V.clock(n.sent || n.created)}` : n.queue ? `Waiting · ${V.ordinal(n.queue)} in line` : "Waiting…"); // (n.sent: when Try again sent it again, panel.js V.retry)
+V.DOING = DOING;
+// v3.74 B1 (N6): the stages: "Sending…", "Waiting in line" ("Waiting · 3rd in line"), "Rendering… about 40 s left",
+// "Rendering… nearly done", "Rendering… 1:12 · taking longer than usual" (past 1.5x the usual time), from V.jobClock
+const makingText0 = (n) => {
+  const st = V.jobClock.state(n), verb = DOING[V.kindOf(n.kind, n.retry && n.retry.settings)] || "Making it…";
+  if (st.stage === "sending") return "Sending…";
+  if (st.stage === "queued") return n.queue > 1 ? `Waiting · ${V.ordinal(n.queue)} in line` : "Waiting in line";
+  // (IB-7) while the time left is known it is said as time LEFT, with no running clock beside it (the two read as one total);
+  // the clock comes back once the usual time has passed
+  return st.over ? `${verb} ${V.clock(n.sent || n.created)} · taking longer than usual` : st.left > 3 ? `${verb} about ${V.jobClock.leftText(st.left)} left` : `${verb} nearly done`;
+};
+// v3.74 A2: "Waiting for internet" (robust-03), "Google busy · trying again in 0:08" (n.note from local.js, robust-02),
+// "3rd try" (robust-16); B1: "Capturing from SketchUp…" on a capture placeholder
+V.makingText = (n) => {
+  if (n.status === "capturing") return `Capturing from ${n.capture || "SketchUp"}…`;
+  if (n.waitNet || n.netWait) return navigator.onLine === false ? "Waiting for internet · starts when you're back online" : "Couldn't reach the AI service · trying again by itself";
+  let t = makingText0(n);
+  if (n.note) { const s = Math.max(0, Math.round(((n.noteUntil || 0) - Date.now()) / 1000)); t = String(n.note).replace("{in}", Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")); }
+  if (n.tries > 1) t = V.ordinal(n.tries) + " try · " + t;
+  return t;
+};
+// one line for the title bar and the Activity button: "Rendering · about 40 s", "2 being made · about 2 min", null when idle
+V.jobsSummary = () => {
+  const mk = V.G.nodes.filter((n) => n.status === "queued" || n.status === "running"), seen = new Set(), jobs = [];
+  for (const n of mk) { const k = n.jobId || n.sendId || n.id; if (!seen.has(k)) { seen.add(k); jobs.push(n); } }
+  if (!jobs.length) return null;
+  const sts = jobs.map((n) => V.jobClock.state(n)), p = sts.reduce((s, x) => s + x.p, 0) / sts.length;
+  const left = Math.max(...sts.map((x) => (x.left == null ? 0 : x.left))), over = sts.every((x) => x.over), wait = jobs.some((n) => n.waitNet || n.netWait);
+  let text;
+  if (wait) text = navigator.onLine === false ? "Waiting for internet" : "Can't reach the AI service";
+  else if (jobs.length === 1) {
+    const st = sts[0], verb = (DOING[V.kindOf(jobs[0].kind, jobs[0].retry && jobs[0].retry.settings)] || "Making it…").replace(/…$/, "").replace(/^Making the /, "Making the ");
+    text = st.stage === "sending" ? "Sending…" : st.stage === "queued" ? "Waiting in line" : over ? `${verb} · taking longer than usual` : st.left > 3 ? `${verb} · about ${V.jobClock.leftText(st.left)} left` : `${verb} · nearly done`;
+  } else text = `${jobs.length} being made` + (over ? " · taking longer than usual" : left > 3 ? ` · about ${V.jobClock.leftText(left)} left` : " · nearly done");
+  // short: the narrow title bar's form ("40 s left", "2 min left", "in line", "sending", "taking longer")
+  const st0 = sts[0], short = wait ? "offline" : jobs.length === 1 && st0.stage === "sending" ? "sending" : jobs.length === 1 && st0.stage === "queued" ? "Waiting" : over ? "taking longer" : left > 3 ? V.jobClock.leftText(left) + " left" : "nearly done";
+  return { n: jobs.length, p, left, over, text, short: (jobs.length > 1 ? jobs.length + " · " : "") + short, wait };
+};
 const agoText = (t) => { const s = (Date.now() - (t || Date.now())) / 1000; return s < 45 ? "just now" : s < 3600 ? Math.max(1, Math.round(s / 60)) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
 // v3.69 Activity (it was "Versions"; the pop-up from the canvas toolbar): what is being made, what finished (the last 30)
 // and the recent messages. A row has a small picture, the picture's name, when, and its state; a failed one has Try again.
@@ -1744,7 +2108,7 @@ const agoText = (t) => { const s = (Date.now() - (t || Date.now())) / 1000; retu
 V.drawQueue = () => {
   const pop = V.$("#queuePop"); pop.innerHTML = "";
   const jobs = {};
-  V.G.nodes.filter((n) => n.jobId).forEach((n) => (jobs[n.jobId] = jobs[n.jobId] || n));
+  V.G.nodes.filter((n) => n.jobId || (n.sendId && (n.waitNet || n.status === "error"))).forEach((n) => { const k = n.jobId || n.sendId; jobs[k] = jobs[k] || n; }); // (v3.74: and jobs that never got sent)
   const all = Object.values(jobs).sort((a, b) => (b.created || 0) - (a.created || 0));
   const making = all.filter((n) => n.status === "queued" || n.status === "running"), done = all.filter((n) => !making.includes(n)).slice(0, 30);
   const go = (n) => () => {
@@ -1754,14 +2118,23 @@ V.drawQueue = () => {
   };
   const title = (n) => (V.nodeTitle ? V.nodeTitle(n) : n.label) || n0label(n);
   const row = (n) => {
-    const th = n.thumb || n.poster || (n.type === "image" && n.status === "done" ? n.url : "");
-    return V.h("div", { class: "qitem" + (n.status === "error" ? " err" : ""), onclick: go(n), title: n.status === "error" && n.error ? n.error : null },
-      V.h("span", { class: "qth" + (th ? "" : " none"), style: th ? `background-image:url("${th}")` : "" }),
-      V.h("span", { class: "qtx" }, V.h("b", {}, title(n)), V.h("small", {}, agoText(n.sent || n.created))),
-      n.status === "error" ? V.h("span", { class: "qs bad" }, "Failed") : V.h("span", { class: "qs" + (n.status === "done" ? " ok" : "") }, n.status === "done" ? "✓" : V.makingText(n)),
-      n.status === "error" && n.retry ? V.h("button", { class: "qretry", onclick: (e) => { e.stopPropagation(); V.retry(n); } }, "Try again") : null);
+    const x = n.status === "error" ? V.explainError(n.error) : null, mk = n.status === "queued" || n.status === "running";
+    // (v3.74 B1, motion-10) a picture being made shows the picture it is made from, with a scan line and a progress bar
+    const src = mk ? (V.parents(n.id)[0] || {}).thumb || "" : "";
+    const th = n.thumb || n.poster || (n.type === "image" && n.status === "done" ? n.url : "") || src;
+    const st = mk ? V.jobClock.state(n) : null, fresh = n.status === "done" && n.doneAt && Date.now() - n.doneAt < 2500;
+    return V.h("div", { class: "qitem" + (x ? " err" : "") + (mk ? " making" : "") + (fresh ? " fresh" : ""), "data-q": n.id, onclick: go(n), title: x ? x.title + ". " + x.advice + (x.detail ? "\n\n" + x.detail : "") : null },
+      V.h("span", { class: "qth" + (th ? "" : " none") + (mk && src ? " src" : ""), style: th ? `background-image:url("${th}")` : "" }, mk && src ? V.h("i", { class: "qscan" }) : null),
+      V.h("span", { class: "qtx" }, V.h("b", {}, title(n)), V.h("small", {}, x ? x.title : agoText(n.sent || n.created))),
+      x ? V.h("span", { class: "qs bad" }, "Failed") : V.h("span", { class: "qs" + (n.status === "done" ? " ok" : "") }, n.status === "done" ? V.h("i", { class: "ic ic-check", "aria-label": "Done" }) : V.makingText(n)),
+      x && n.retry ? V.h("button", { class: "qretry", onclick: (e) => { e.stopPropagation(); V.retry(n); } }, "Try again") : null,
+      mk && V.stopJob ? V.h("button", { class: "qstop", title: "Stop making this one (it stays on the canvas with Try again)", onclick: (e) => { e.stopPropagation(); V.stopJob(n); } }, "Stop") : null,
+      mk ? V.h("span", { class: "qbar", "aria-hidden": "true" }, V.h("i", { style: `width:${Math.round(st.p * 100)}%` })) : null);
   };
-  pop.append(V.h("div", { class: "qtop" }, V.h("b", {}, "Activity"), V.h("button", { class: "qx", title: "Close (Esc)", "aria-label": "Close", onclick: () => (pop.hidden = true) }, "×")));
+  const failed = V.G.nodes.filter((n) => n.status === "error");
+  pop.append(V.h("div", { class: "qtop" }, V.h("b", {}, "Activity"),
+    failed.length && V.removeFailed ? V.h("button", { class: "qclear", title: "Take every picture that couldn't be made off the canvas (Undo brings them back)", onclick: () => V.removeFailed() }, `Remove failed pictures (${failed.length})`) : null,
+    V.h("button", { class: "qx", title: "Close (Esc)", "aria-label": "Close", onclick: () => (pop.hidden = true) }, "×")));
   if (making.length) pop.append(V.h("div", { class: "qhead" }, `Being made (${making.length})`), ...making.map(row));
   if (done.length) pop.append(V.h("div", { class: "qhead" }, "Finished"), ...done.map(row));
   if (!all.length) pop.append(V.h("div", { class: "hint qnone" }, "Nothing made yet in this project. Renders, edits, upscales, videos and 3D models are listed here while they are made, and when they are done."));
@@ -1777,6 +2150,64 @@ V.showMessages = () => {
   const pop = V.$("#queuePop"); pop.hidden = false; V.drawQueue();
   const hd = V.$("#msgHead"); if (hd) pop.scrollTop = hd.offsetTop - 8;
 };
+// v3.74 A2 (robust-11): Stop a picture being made: a job run in this page is cancelled (local.js V.localStop); the
+// picture stays as a failed card with Try again. A job on a server carries on there, but its answer is no longer used.
+V.stopJob = (n) => {
+  if (!n) return;
+  const id = n.jobId, ns = V.G.nodes.filter((x) => x === n || (id && x.jobId === id && (x.status === "queued" || x.status === "running")));
+  if (id && V.localStop) V.localStop(id);
+  ns.forEach((x) => { x.status = "error"; x.error = "Stopped"; x.failedAt = Date.now(); x.note = ""; x.waitNet = false; if (x.jobId) x.jobId = "stopped:" + x.jobId; });
+  V.render(); V.changed(); V.updateQueue(); if (V.selectionChanged) V.selectionChanged(true);
+  V.toast(ns.length > 1 ? `Stopped ${ns.length} pictures` : "Stopped", false, 3000);
+};
+// (robust-16) "Remove failed pictures (3)": Activity and Ctrl+K
+V.removeFailed = () => {
+  const ids = V.G.nodes.filter((n) => n.status === "error").map((n) => n.id); if (!ids.length) return V.toast("No failed pictures on the canvas", false, 2000);
+  V.snapshot(); V.removeNodes(ids); V.render(); V.selectionChanged && V.selectionChanged(); V.changed(); V.updateQueue();
+  V.toast(`Removed ${ids.length} failed picture${ids.length > 1 ? "s" : ""}`, false, 8000, { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true });
+};
+// ---------- v3.74 A2 (robust-03): offline, the jobs wait and start by themselves when the connection is back ----------
+// (a TypeError from a bad request, e.g. "Failed to execute 'fetch' on 'Window': Invalid value" from a key with a stray
+// character, is not the network: it fails as itself)
+V.isNetErr = (e) => {
+  const m = String((e && e.message) || e || "");
+  if (/Failed to execute|Invalid (value|header|name)|is not a valid|Illegal invocation|not supported/i.test(m)) return false;
+  return navigator.onLine === false || /(^|:\s)(Failed to fetch|NetworkError|Load failed|Network request failed)/i.test(m);
+};
+// the one banner: "You're offline" only when the browser says so; online but nothing answers = "Couldn't reach"
+// (a plain message then, not a red one: VizLab is dealing with it)
+V.netBanner = () => (navigator.onLine === false
+  ? V.toast("You're offline. Your renders will start when the connection is back.", true, 0, { key: "offline" })
+  : V.toast("Couldn't reach the AI service · VizLab is trying again by itself", false, 0, { key: "offline" }));
+const offlineBanner = () => V.netBanner();
+const NET_TRIES = 8; // online but unreachable: tried every 15 s for 2 minutes, then it fails as itself (with Try again)
+V.waitForNet = (ns) => {
+  const off = navigator.onLine === false;
+  ns.forEach((n) => { n.netTries = off ? 0 : (n.netTries || 0) + 1; });
+  if (!off && ns.some((n) => n.netTries > NET_TRIES)) {
+    ns.forEach((n) => { n.status = "error"; n.error = "Couldn't reach the AI service (tried for 2 minutes)"; n.waitNet = false; n.netTries = 0; n.failedAt = Date.now(); n.note = ""; });
+    V.closeToastKey("offline"); V.updateQueue();
+    if (!(V.canvasShown && V.canvasShown() && V.onScreen && ns.some((n) => V.onScreen(n)))) V.failToast(ns[0].error, { what: "Couldn't send it", retry: ns[0].retry && V.retry ? () => V.retry(ns[0]) : null, key: "jobfail" });
+    return;
+  }
+  ns.forEach((n) => { n.status = "queued"; n.waitNet = true; n.error = null; n.note = ""; });
+  offlineBanner(); V.updateQueue();
+  if (!off) setTimeout(resumeNet, 15000); // (the browser thinks it is online: try again soon)
+};
+let resuming = false;
+async function resumeNet() {
+  if (resuming) return; resuming = true;
+  try {
+    const waiting = V.G.nodes.filter((n) => n.waitNet && n.retry), seen = new Set(); let k = 0;
+    for (const n of waiting) { const key = n.sendId || n.jobId || n.id; if (seen.has(key) || !n.waitNet) continue; seen.add(key); if (V.retry && (await V.retry(n))) k++; }
+    if (k) { V.closeToastKey("offline"); V.toast(`Connected again · ${k} render${k > 1 ? "s" : ""} started`, false, 5000); }
+  } finally { resuming = false; }
+}
+window.addEventListener("online", () => { V.closeToastKey("offline"); if (V.G.nodes.some((n) => n.waitNet)) setTimeout(resumeNet, 600); if (saveBad && !saving) setTimeout(() => { if (saveBad && !saving) V.save(); }, 900); }); // (A2-11: an unsaved project goes up again too)
+window.addEventListener("offline", () => { if (V.G.nodes.some((n) => n.status === "queued" || n.status === "running")) offlineBanner(); });
+V.resumeNet = resumeNet;
+// pictures being made in this page (local mode: the browser itself is talking to Google), for the close warning
+V.jobsHere = () => V.G.nodes.filter((n) => (n.status === "queued" || n.status === "running") && (n.waitNet || (V.localRunsHere && n.jobId && V.localRunsHere(n.jobId))));
 
 // ---------- pop-ups always on top ----------
 // Dialogs share one layer, so one opened from another (a colour picker from a picker, a confirm from a dialog)
@@ -1787,7 +2218,7 @@ let popZ = 100;
 V.paintModalUp = () => {
   const ms = [...document.querySelectorAll(".modal:not([hidden])")], t = V.$("#toast"); if (!t) return;
   document.body.classList.toggle("modalup", !!ms.length);
-  const st = t.style; st.top = st.bottom = st.left = st.right = st.transform = st.maxWidth = st.alignItems = ""; t.classList.remove("narrow");
+  const st = t.style; st.top = st.bottom = st.left = st.right = st.transform = st.maxWidth = st.alignItems = ""; t.classList.remove("narrow", "tuck");
   if (!ms.length) return;
   const top = ms.sort((a, b) => (+getComputedStyle(b).zIndex || 0) - (+getComputedStyle(a).zIndex || 0))[0], box = top.querySelector(".mbox") || top;
   const r = box.getBoundingClientRect(), H = innerHeight, W = innerWidth, need = Math.min(t.offsetHeight || 50, 160) + 12;
@@ -1797,18 +2228,145 @@ V.paintModalUp = () => {
   else if (W - r.right >= 160 || r.left >= 160) { // (C1b fixer, C1b-1: 160 so the Scene panel at 1366 px, 183 px each side, still gets them beside it, wrapped)
     const right = W - r.right >= r.left; t.classList.add("narrow"); st.top = "52px"; st.bottom = "auto"; st.transform = "none"; st.maxWidth = (right ? W - r.right : r.left) - 16 + "px";
     if (right) { st.left = "auto"; st.right = "8px"; st.alignItems = "flex-end"; } else { st.left = "8px"; st.alignItems = "flex-start"; } }
+  // (v3.74 D2, PW-14) no room round the dialog (the ? sheet, a big window): messages never sit over it. Plain ones wait in
+  // Recent messages; a failure or one with a button (Undo) goes small in the bottom right corner
+  else { [...t.children].forEach((x) => { if (!x._gone && !x._err && x._canvas && x._close) x._close(true); }); // (v3.74 final, deliver-toast-covers-board: a canvas message's Undo is stale over a dialog; it stays in Recent messages)
+    t.classList.add("narrow", "tuck"); st.top = "auto"; st.bottom = "12px"; st.left = "auto"; st.right = "12px"; st.transform = "none"; st.maxWidth = "min(420px, 40vw)"; st.alignItems = "flex-end"; }
 };
 addEventListener("resize", () => V.paintModalUp());
-new MutationObserver(() => V.paintModalUp()).observe(document.body, { childList: true }); // (dialogs added or removed)
+// ---------- v3.74 A2 (robust-09, robust:big:4): V.modal, every dialog keeps the keyboard ----------
+// V.modal(el, {label, opener}): role=dialog, aria-modal, aria-labelledby (its first heading) or aria-label; while it is
+// open the page behind is inert (Chromium 102+; older SketchUp windows get aria-hidden, and Tab is kept inside by hand),
+// and when it closes the keyboard goes back to the control that opened it. Every .modal gets it by itself when it
+// opens (the observers below); call it yourself only to name a dialog or to say which control opened it.
+const canInert = "inert" in HTMLElement.prototype;
+const FOCUSABLE = "button:not([disabled]), [href], input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1']), summary";
+const seenEl = (x) => !!(x.offsetWidth || x.offsetHeight || x.getClientRects().length) && getComputedStyle(x).visibility !== "hidden";
+V.modal = (el, o = {}) => {
+  if (!el) return el;
+  if (!el.getAttribute("role") || el.getAttribute("role") === "presentation") el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  if (o.label) el.setAttribute("aria-label", o.label);
+  else if (!el.hasAttribute("aria-label") && !el.hasAttribute("aria-labelledby")) {
+    const t = el.querySelector("h1, h2, h3, .mhead b, .mtitle");
+    if (t && t.textContent.trim()) { if (!t.id) t.id = "vm" + V.uid(); el.setAttribute("aria-labelledby", t.id); }
+  }
+  if (o.opener) el._opener = o.opener;
+  return el;
+};
+const openModals = () => [...document.querySelectorAll(".modal:not([hidden])")].filter(seenEl);
+V.topModal = () => openModals().sort((a, b) => (+getComputedStyle(b).zIndex || 0) - (+getComputedStyle(a).zIndex || 0))[0] || null;
+function paintInert() {
+  const open = openModals();
+  [...document.querySelectorAll("[data-vminert]")].forEach((x) => { if (!open.length || open.some((m) => x.contains(m))) { if (canInert) x.inert = false; x.removeAttribute("aria-hidden"); x.removeAttribute("data-vminert"); } });
+  if (!open.length) return;
+  document.querySelectorAll(".app, section.overlay").forEach((x) => {
+    if (x.closest(".modal") || open.some((m) => x.contains(m)) || x.hasAttribute("data-vminert")) return;
+    x.setAttribute("data-vminert", ""); x.setAttribute("aria-hidden", "true"); if (canInert) x.inert = true;
+  });
+}
+// (the last control with the keyboard outside a dialog: a dialog that takes the focus itself still knows its opener)
+let lastOut = null;
+document.addEventListener("focusin", (e) => { const t = e.target; if (t instanceof Element && !t.closest(".modal")) lastOut = t; }, true);
+document.addEventListener("pointerdown", (e) => { const t = e.target instanceof Element && e.target.closest(FOCUSABLE); if (t && !t.closest(".modal")) lastOut = t; }, true);
+const vmBackOf = (x) => {
+  for (let p = x; p && p.nodeType === 1; p = p.parentElement) {
+    if (p._vmBack) return p._vmBack;
+    if (p.hasAttribute("data-vmback")) return document.querySelector(p.getAttribute("data-vmback"));
+  }
+  return null;
+};
+function modalOpened(el) {
+  if (el._vmOpen) return; el._vmOpen = true;
+  V.modal(el);
+  const a = document.activeElement, was = el._opener && el._opener.isConnected ? el._opener : null;
+  const from = was || (a && a !== document.body && !el.contains(a) ? a : lastOut && !el.contains(lastOut) ? lastOut : null); // (lastOut may be a menu row already removed)
+  if (!was) el._opener = from && from.isConnected ? from : null;
+  // (A2-17) an opener inside a panel that closes as the dialog opens (the status panel's Details…): the keyboard goes back
+  // to the control that panel names in data-vmback (its pill) instead. (v3.74 D2) A menu built on the fly (Library ▾,
+  // a layer's ⋯, a scene's ⋯) names its button as _vmBack on itself or its rows, so the keyboard goes back there
+  el._openerAlt = vmBackOf(from);
+  paintInert();
+  // the keyboard goes into the dialog: its first box to type in, else its main button, else its first control
+  setTimeout(() => { if (el.hidden || el.contains(document.activeElement)) return; const f = el.querySelector("input:not([type=hidden]):not([disabled]), select, textarea") || el.querySelector(".primary:not([disabled]), .wstart:not([disabled])") || [...el.querySelectorAll(FOCUSABLE)].find(seenEl); if (f && seenEl(f)) try { f.focus({ preventScroll: true }); } catch (e) {} }, 60);
+}
+function modalClosed(el) {
+  if (!el._vmOpen) return; el._vmOpen = false;
+  paintInert();
+  const ok = (x) => x && x.isConnected && seenEl(x) && !x.closest("[hidden],[inert]");
+  const back = ok(el._opener) ? el._opener : ok(el._openerAlt) ? el._openerAlt : null; el._opener = el._openerAlt = null;
+  const a = document.activeElement, lost = !a || a === document.body || el.contains(a) || !a.isConnected;
+  if (back && lost && !V.topModal()) requestAnimationFrame(() => { try { back.focus({ preventScroll: true }); } catch (e) {} });
+}
+// (v3.74 D2) Esc closes the dialog on top with its own × when nothing else took the key (Make elevation, True elevation and
+// any dialog without an Esc of its own). The dialog on top is noted as the key goes down, so a dialog that closed itself
+// on this Esc never takes the one under it along too. data-noesc on a .modal opts out.
+let escTop = null;
+addEventListener("keydown", (e) => { if (e.key === "Escape") escTop = V.topModal(); }, true);
+addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.defaultPrevented || e.repeat) return;
+  const m = V.topModal(); if (!m || m !== escTop || m.hasAttribute("data-noesc")) return;
+  if (document.querySelector(".ctx:not([hidden]), .tool-menu:not([hidden]), .summenu, .libmenu, .ralpop:not([hidden])")) return; // (a menu closes first)
+  const x = [...m.querySelectorAll(".mclose")].find((b) => seenEl(b) && !b.closest(".modal [hidden]") && b.closest(".modal") === m);
+  if (x) { e.preventDefault(); x.click(); }
+});
+// Tab and Shift+Tab stay inside the dialog on top
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab" || e.defaultPrevented || e.ctrlKey || e.altKey) return;
+  const m = V.topModal(); if (!m) return;
+  const f = [...m.querySelectorAll(FOCUSABLE)].filter((x) => seenEl(x) && !x.closest("[hidden]"));
+  if (!f.length) { e.preventDefault(); return; }
+  const i = f.indexOf(document.activeElement);
+  if (i < 0 || !m.contains(document.activeElement)) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); }
+  else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+  else if (e.shiftKey && i === 0) { e.preventDefault(); f[f.length - 1].focus(); }
+});
+new MutationObserver((ms) => {
+  V.paintModalUp(); // (dialogs added or removed)
+  ms.forEach((m) => { m.addedNodes.forEach((x) => { if (x.nodeType === 1 && x.matches(".modal") && !x.hidden) modalOpened(x); }); m.removedNodes.forEach((x) => { if (x.nodeType === 1 && x._vmOpen) modalClosed(x); }); });
+}).observe(document.body, { childList: true });
 new MutationObserver((ms) => ms.forEach((m) => {
   const el = m.target;
   if (!el.matches(".modal, .ralpop")) return;
   V.paintModalUp();
+  if (el.matches(".modal")) { if (el.hidden) modalClosed(el); else modalOpened(el); }
+  if (el.matches(".keysheet") && !el.hidden) [...(V.$("#toast") || { children: [] }).children].forEach((x) => { if (!x._gone && !x._err && !x.classList.contains("hasact") && x._close) x._close(); }); // (v3.74 D2, PW-14: the ? sheet opens clear of plain messages; Undo and failures stay)
   if (el.hidden) { if (!document.querySelector(".modal:not([hidden]), .ralpop:not([hidden])")) popZ = 100; return; }
   el.style.zIndex = ++popZ;
   el.querySelectorAll(".mclose:not([title])").forEach((b) => { b.title = "Close (Esc)"; b.setAttribute("aria-label", "Close"); }); // v3.69 (P2): every × says what it does
   if (!el.contains(document.activeElement)) requestAnimationFrame(() => el.querySelector("input:not([type=hidden]), select, textarea")?.focus({ preventScroll: true }));
 })).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
+})();
+
+;
+
+/* ===== web/icons.js ===== */
+/* VizLab UI icons (v3.74 N1, visual:V09): ONE set for the interface, 24 grid, round caps, stroke 1.75, drawn by CSS masks
+   (style.css "v3.74 A1" section: --icon-<name> and .ic-<name>), so an icon takes the text colour and needs no SVG in the page.
+   The preset / scene pictograms (picons.js, envicons.js) are the other, illustrative family and stay as they are.
+   No Unicode glyphs (x, v, star, tick, ..., arrow) as icons in new UI: use these.
+     V.ico("chev")            -> '<i class="ic ic-chev" aria-hidden="true"></i>' (markup, for h(..., {html}) and templates)
+     V.icoEl("close", "sm")   -> the same as an element (extra classes: sm 16px, md 20px, lg 24px; default 1.15em)
+     V.icoLabel(el, "Settings", "chev") -> el reads "Settings" + the icon after it (before = true puts it first)
+   Every icon is shown on the kit page (tools/testkit/kit.html). */
+(() => {
+const V = window.V || (window.V = {});
+V.ICONS = ["close", "chev", "chev-up", "chev-right", "chev-left", "check", "star", "star-fill", "more", "arrow", "arrow-left",
+  "warn", "plus", "minus", "info", "search", "download", "dot"];
+const cls = (name, extra) => "ic ic-" + name + (extra ? " " + extra : "");
+V.ico = (name, extra) => `<i class="${cls(name, extra)}" aria-hidden="true"></i>`;
+V.icoEl = (name, extra) => {
+  const i = document.createElement("i");
+  i.className = cls(name, extra); i.setAttribute("aria-hidden", "true");
+  return i;
+};
+V.icoLabel = (el, text, name, before) => {
+  if (!el) return el;
+  el.textContent = "";
+  const t = document.createTextNode(text), i = V.icoEl(name);
+  if (before) el.append(i, " ", t); else el.append(t, " ", i);
+  return el;
+};
 })();
 
 ;
@@ -1825,6 +2383,9 @@ V.motionOn = () => V.cfg.motion !== false && !reduce.matches;
 const applyClass = () => document.body.classList.toggle("nomotion", !V.motionOn());
 applyClass(); reduce.addEventListener && reduce.addEventListener("change", applyClass);
 V.setMotion = (on) => { V.cfg.motion = !!on; V.store.set("motion", !!on); applyClass(); };
+// v3.74 A1 (motion:motion-20): every CSS loop pauses while the window is hidden (battery on the iPhone, CPU on office PCs)
+const hiddenClass = () => document.body.classList.toggle("pagehidden", document.hidden);
+document.addEventListener("visibilitychange", hiddenClass); hiddenClass();
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
 // run a DOM change as an animated view transition when the browser supports it
@@ -1855,21 +2416,100 @@ V.animateView = (to, ms = 560) => {
   camRaf = requestAnimationFrame(step);
 };
 
+// ---------- v3.74 B1 (N6, motion:big:3): the before/after wipe ----------
+// V.wipeReveal(imgEl, fromUrl, toUrl, opts): imgEl shows toUrl (the result); a copy of fromUrl (the source) lies over it
+// and an amber line wipes left to right (opts.ms, 700 by default, --e-out) to reveal the result. The overlay sits in
+// opts.host (a positioned element; the picture's parent by default: a canvas card's .nimg, the gallery stage). opts.at
+// starts part-way through (ms), for a card rebuilt mid-wipe. Returns a promise (done when the wipe ends) with .finish()
+// to cut it short. Settings > Animations off or prefers-reduced-motion: the result at once, no overlay.
+V.wipeReveal = (imgEl, fromUrl, toUrl, opts = {}) => {
+  let fin = () => {};
+  const p = new Promise((res) => {
+    const host = opts.host || (imgEl && imgEl.parentElement);
+    const instant = () => { if (imgEl && toUrl && imgEl.getAttribute("src") !== toUrl) imgEl.src = toUrl; res(); };
+    if (!imgEl || !fromUrl || !toUrl || fromUrl === toUrl || !V.motionOn() || !host) return instant();
+    const ms = opts.ms || 700, at = Math.max(0, opts.at || 0);
+    if (at >= ms) return instant();
+    if (imgEl.getAttribute("src") !== toUrl) imgEl.src = toUrl; // the result underneath
+    const src = h("img", { src: fromUrl, alt: "", draggable: "false" }), line = h("i", { class: "wline" });
+    const ov = h("div", { class: "wipe" + (host === imgEl.parentElement && opts.fill !== false ? " fill" : "") }, src, line);
+    if (!ov.classList.contains("fill")) { const r = imgEl.getBoundingClientRect(), hr = host.getBoundingClientRect(); Object.assign(ov.style, { left: r.left - hr.left + "px", top: r.top - hr.top + "px", width: r.width + "px", height: r.height + "px" }); }
+    host.append(ov);
+    const ease = "cubic-bezier(.22,1,.36,1)"; // --e-out
+    const a1 = src.animate([{ clipPath: "inset(0 0 0 0%)" }, { clipPath: "inset(0 0 0 100%)" }], { duration: ms, easing: ease, fill: "forwards" });
+    const a2 = line.animate([{ left: "0%", opacity: 1 }, { left: "100%", opacity: 1, offset: 0.94 }, { left: "100%", opacity: 0 }], { duration: ms, easing: ease, fill: "forwards" });
+    if (at) { a1.currentTime = at; a2.currentTime = at; }
+    let done = false;
+    fin = () => { if (done) return; done = true; try { a1.cancel(); a2.cancel(); } catch (e) {} ov.remove(); res(); };
+    a1.onfinish = () => setTimeout(fin, 40);
+    setTimeout(fin, ms - at + 500); // (whatever happens, the overlay goes)
+  });
+  p.finish = () => fin();
+  return p;
+};
+// the picture a result was made from (its main input), for the wipe
+V.sourceOf = (n) => { const p = n && V.parents(n.id).find((x) => x.type === "image" && x.status === "done" && (x.thumb || x.url)); return p ? p.thumb || p.url : null; };
+
+// (motion:big:2, motion-04) cause and effect: a ghost flies from the control that was pressed (Render, Capture) to the new
+// card's place on the canvas (350 ms, --e-out, scale .4 to 1), then the card itself takes over. Nothing when the card is
+// off screen (the canvas is panning to it), with Animations off, or when the card isn't drawn yet.
+V.flyIn = (fromEl, n, ms = 350) => {
+  if (!V.motionOn() || !fromEl || !n) return;
+  const el = $(`.node[data-id="${n.id}"] .nimg`); if (!el) return;
+  const a = fromEl.getBoundingClientRect(), b = el.getBoundingClientRect(), cv = $("#canvas").getBoundingClientRect();
+  if (!a.width || !b.width || b.right < cv.left || b.left > cv.right || b.bottom < cv.top || b.top > cv.bottom) return;
+  const g = h("div", { class: "flyghost", "aria-hidden": "true" });
+  Object.assign(g.style, { left: b.left + "px", top: b.top + "px", width: b.width + "px", height: b.height + "px" });
+  document.body.append(g);
+  const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = a.top + a.height / 2 - (b.top + b.height / 2);
+  const an = g.animate([{ transform: `translate(${dx}px,${dy}px) scale(.4)`, opacity: 0.9 }, { transform: "translate(0,0) scale(1)", opacity: 0.35 }], { duration: ms, easing: "cubic-bezier(.22,1,.36,1)", fill: "forwards" });
+  const done = () => g.remove(); an.onfinish = done; setTimeout(done, ms + 200);
+};
+
 // ---------- result reveal: big preview, then it flies into its node ----------
+// v3.74 B1 (motion-07): the card opens on the source picture and wipes to the result (700 ms), holds 1.2 s, then lands;
+// any key or click lands it at once. Returns true when it showed (core.js then keeps "Render ready" to Recent messages).
+let heroKey = null; // the showing card's key handler
+window.addEventListener("keydown", (e) => { if (heroKey) heroKey(e); }, true);
+// (B1-N1) something on top of the canvas: Present, Picture view, a window (the keys list, Review, Ctrl+K, a question), the
+// tour or the welcome card, a menu (right-click, the ? menu) or a page. The card does not show under them, and while it
+// shows, a key pressed with one of them open (or from inside one) goes on to it.
+const OVER = ".present:not([hidden]), .modal:not([hidden]), .keysheet:not([hidden]), .review:not([hidden]), .cmdk:not([hidden]), .tour:not([hidden]), .ralpop:not([hidden]), .ctx:not([hidden]), .overlay:not([hidden])";
+const OVER_IN = ".present, .modal, .keysheet, .review, .cmdk, .tour, .ralpop, .ctx, .overlay, [role=dialog], [role=menu], [aria-modal=true]";
+const heroCovered = () => document.body.classList.contains("presenting") || document.body.classList.contains("picview") || !!document.querySelector(OVER) || !!(V.welcomeOpen && V.welcomeOpen()) || !!(V.matTool && V.matTool.dialog && V.matTool.dialog());
 V.heroReveal = (n) => {
-  if (!V.motionOn() || !n || n.type !== "image" || !n.url || document.hidden) return;
-  if ($(".overlay:not([hidden])") || !$("#fsModal").hidden) return;
+  if (!V.motionOn() || !n || n.type !== "image" || !n.url || document.hidden) return false;
+  if ($(".overlay:not([hidden])") || !$("#fsModal").hidden || heroCovered()) return false;
   const cv = $("#canvas"), r = cv.getBoundingClientRect();
-  if (r.height < 360 || r.width < 480) return;
+  if (r.height < 360 || r.width < 480) return false;
   $(".hero")?.remove();
-  const img = h("img", { src: n.url, alt: "" });
+  const from = V.sourceOf(n);
+  const img = h("img", { src: from || n.url, alt: "" });
   const prompt = V.nodeSub ? V.nodeSub(n) : (n.prompt || "").replace(/^\[(Area|Draw)\] /, ""); // (v3.69: the scene and the words, not the tags)
   const ov = h("div", { class: "hero", title: "Click to continue" },
     h("div", { class: "hero-card" }, img, h("div", { class: "hero-cap" }, h("b", {}, (V.nodeTitle && V.nodeTitle(n)) || n.label || "Result"), prompt ? h("span", {}, prompt.length > 140 ? prompt.slice(0, 137) + "…" : prompt) : null)));
   cv.append(ov);
-  let hold = null, gone = false;
+  V.heroShowing = n.id;
+  let hold = null, gone = false, wipe = null;
+  // any key lands the card. Esc, Enter and Space land it and do nothing else (they don't go on to clear the selection,
+  // open Picture view or spread a stack: the canvas's own Esc rule would have unselected the result just made); a
+  // shortcut like R or D lands it and then runs. A modifier on its own (the start of Ctrl+Z) is not a key press.
+  // (heroKey: on window, capture phase, registered when this file loads, so it runs before Picture view's Enter and the
+  // canvas's Esc, which are registered later)
+  // (B1-N1) only the canvas's own keys are held back: with Present, a window or a menu open on top, or a key sent from
+  // inside one (or typed into a box), the card lands and the key goes on, so one Esc closes the ? menu or the keys list
+  // and one Space moves Present on
+  const onKey = (e) => {
+    if (/^(Shift|Control|Alt|Meta)$/.test(e.key)) return;
+    land();
+    const t = e.target instanceof Element ? e.target : null;
+    const passOn = !!t && (t.matches("input,textarea,select,[contenteditable],[contenteditable] *") || !!t.closest(OVER_IN));
+    if ((e.key === "Escape" || e.key === "Enter" || e.key === " ") && !passOn && !heroCovered() && !(e.ctrlKey || e.metaKey || e.altKey)) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+  };
+  heroKey = onKey;
   const land = () => {
-    if (gone) return; gone = true; clearTimeout(hold);
+    if (gone) return; gone = true; clearTimeout(hold); if (heroKey === onKey) heroKey = null; V.heroShowing = null;
+    if (wipe) wipe.finish(); if (img.getAttribute("src") !== n.url) img.src = n.url;
     let el = $(`.node[data-id="${n.id}"] .nimg`);
     const go = () => {
       el = $(`.node[data-id="${n.id}"] .nimg`);
@@ -1894,8 +2534,14 @@ V.heroReveal = (n) => {
     if (!b || b.right < r.left || b.left > r.right || b.bottom < r.top || b.top > r.bottom) { V.centerOn(n); setTimeout(go, 480); } else go();
   };
   ov.addEventListener("pointerdown", (e) => { e.stopPropagation(); land(); });
-  const start = () => { if (!gone) hold = setTimeout(land, 1700); };
-  if (img.complete) start(); else { img.onload = start; img.onerror = () => { gone = true; ov.remove(); }; }
+  const start = () => {
+    if (gone) return;
+    if (!from) { hold = setTimeout(land, 1700); return; }
+    // the entrance (heroIn, 700 ms) settles first, then the wipe, then a moment to take it in
+    hold = setTimeout(() => { if (gone) return; wipe = V.wipeReveal(img, from, n.url, { host: ov, ms: 700 }); wipe.then(() => { wipe = null; if (!gone) hold = setTimeout(land, 1200); }); }, 650);
+  };
+  if (img.complete) start(); else { img.onload = start; img.onerror = () => { gone = true; if (heroKey === onKey) heroKey = null; V.heroShowing = null; ov.remove(); }; }
+  return true;
 };
 
 // ---------- sliding indicator under tab rows ----------
@@ -2039,14 +2685,27 @@ async function gHeaders() {
 V.gHeaders = gHeaders;
 const needF = () => { if (!V.cfg.fkey) throw new Error("This needs a fal.ai API key (Settings). Nano Banana works with just your Google key."); };
 
-async function geminiImage(model, prompt, parts, s) {
+// v3.74 A2 (robust-11): each attempt has 4 minutes (an AbortController and setTimeout: Chromium 92 safe), and o.signal
+// (Stop) cancels it
+const G_TIMEOUT = 240000;
+async function geminiImage(model, prompt, parts, s, o = {}) {
   const imageConfig = { imageSize: ["1K", "2K", "4K"].includes(s.resolution) ? s.resolution : "2K" };
   if (s.aspect_ratio && s.aspect_ratio !== "auto") imageConfig.aspectRatio = s.aspect_ratio;
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST", headers: { ...(await gHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }, ...parts.map((p) => ({ inline_data: p }))] }], generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig } }),
-  });
-  const t = await r.text();
+  const ctl = new AbortController(); let late = false;
+  const tt = setTimeout(() => { late = true; ctl.abort(); }, o.timeout || V.gTimeout || G_TIMEOUT), stop = () => ctl.abort();
+  if (o.signal) { if (o.signal.aborted) stop(); else o.signal.addEventListener("abort", stop); }
+  let r, t;
+  try {
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST", headers: { ...(await gHeaders()), "Content-Type": "application/json" }, signal: ctl.signal,
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }, ...parts.map((p) => ({ inline_data: p }))] }], generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig } }),
+    });
+    t = await r.text();
+  } catch (e) {
+    if (late) throw new Error("Google timed out: no answer in 4 minutes");
+    if (o.signal && o.signal.aborted) throw new Error("Stopped");
+    throw e;
+  } finally { clearTimeout(tt); if (o.signal) o.signal.removeEventListener("abort", stop); }
   if (!r.ok) { let m = t.slice(0, 300); try { m = JSON.parse(t).error?.message || m; } catch {} throw new Error(`Google ${r.status}: ${m}`); }
   const d = JSON.parse(t), ps = d.candidates?.[0]?.content?.parts || [];
   const img = ps.filter((p) => !p.thought).map((p) => p.inlineData || p.inline_data).filter(Boolean).pop();
@@ -2122,20 +2781,111 @@ const live = new Map(); // jobs being worked on in this tab
 // references to their copies in Drive (and a small preview); the whole job stays in memory (live) for this session
 async function save(job) { live.set(job.id, job); await put("jobs", V.jobRec ? await V.jobRec(job) : job); }
 const full = async (j) => (j && V.jobFull ? V.jobFull(j) : j); // a record from this device with its pictures back (from Drive)
+// v3.74 A2 (robust-02, robust:big:1): one recovery engine for Google pictures made in this page. Busy (5xx) or limited
+// (429) answers are tried again twice (after ~8 s, then ~25 s, with jitter; the card says "Google busy · trying again in
+// 0:08"), then the next Google image model, as the phone does ("Nano Banana 2.1 was busy, so Nano Banana Pro made this
+// one"). A 400, a safety refusal, a bad key or a free-tier key is never retried. Stop (V.localStop) cancels at once.
+const G_ORDER = ["nano-banana-2.1", "nano-banana-pro", "nano-banana-2"];
+const ctlOf = new Map(); // job id -> AbortController (Stop)
+const gName = (id) => (V.engineName ? V.engineName(id) : id);
+const nap = (ms, sig) => new Promise((res) => { const t = setTimeout(res, ms); if (sig) sig.addEventListener("abort", () => { clearTimeout(t); res(); }); });
+V.localStop = (id) => { const c = ctlOf.get(id); if (c) c.abort(); const j = live.get(id); if (j && (j.status === "running" || j.status === "queued")) { j.status = "error"; j.error = "Stopped"; j.note = ""; j.netWait = false; save(j).catch(() => {}); } };
+V.localRunsHere = (id) => { const j = live.get(id); return !!(j && j.provider === "google" && (j.status === "running" || j.status === "queued")); };
+V.gRetryDelays = [8000, 25000]; // (the tests make these short)
+// (A2-01) no connection: the job waits ("Waiting for internet", status queued, job.netWait) and goes on by itself on the
+// 'online' event; while the browser says it is online but nothing answers, it tries every 15 s for 2 minutes, then fails
+V.gNetEvery = 15000;
+const NET_TRIES = 8;
+const waitOnline = (sig) => new Promise((res) => {
+  let t = 0;
+  const on = () => { clearTimeout(t); t = setTimeout(done, 400); };
+  const done = () => { clearTimeout(t); removeEventListener("online", on); sig.removeEventListener("abort", done); res(); };
+  addEventListener("online", on); sig.addEventListener("abort", done);
+  t = setTimeout(done, navigator.onLine === false ? 60000 : V.gNetEvery); // (offline: looked at again each minute anyway)
+});
+// (A2-08) with several versions, each one is its own call: the ones that came back are kept and only the missing ones are
+// asked for again (Google has charged for the ones made). (A2-07) the model that made each one is recorded.
+async function googleRounds(job, parts, n, sig) {
+  const order = [job.engine].concat(G_ORDER.filter((e) => e !== job.engine && G_MODELS[e]));
+  const outs = new Array(n).fill(null), by = new Array(n).fill(null);
+  let last = null, net = 0;
+  const fill = async (eng) => {
+    const todo = []; outs.forEach((o, i) => { if (!o) todo.push(i); });
+    const rs = await Promise.allSettled(todo.map(() => geminiImage(G_MODELS[eng], job.prompt, parts, job.settings, { signal: sig })));
+    const errs = [];
+    rs.forEach((r, x) => { if (r.status === "fulfilled") { outs[todo[x]] = r.value; by[todo[x]] = eng; } else errs.push(r.reason); });
+    return errs;
+  };
+  const finish = () => {
+    job.note = ""; job.noteUntil = 0; job.netWait = false;
+    const got = [], engs = [];
+    outs.forEach((o, i) => { if (o) { got.push(o); engs.push(by[i]); } });
+    const asked = job.engine, other = engs.filter((e) => e !== asked), say = [];
+    if (other.length) {
+      const allOther = other.length === engs.length, by1 = other[other.length - 1];
+      job.asked_engine = asked; job.cost_asked = job.cost_estimate; job.made_by = by1; job.engines_used = engs;
+      if (allOther && other.every((e) => e === by1)) job.engine = by1; // (History and Usage name the model that made them)
+      job.cost_estimate = Math.round(engs.reduce((s, e, i) => s + V.D.googleCost(e, Object.assign({}, job.settings, { num_images: 1 }), i ? 0 : parts.length), 0) * 1000) / 1000;
+      say.push(`${gName(asked)} was busy, so ${gName(by1)} made ${engs.length === 1 ? "this one" : allOther ? "them" : other.length + " of them"}`);
+    }
+    if (got.length < n) say.push(`${n - got.length} of the ${n} versions couldn't be made`);
+    if (say.length) job.fellBack = say.join(" · ");
+    return { got, engs };
+  };
+  for (let mi = 0; mi < order.length; mi++) {
+    const eng = order[mi];
+    for (let k = 0; k <= V.gRetryDelays.length; k++) {
+      if (sig.aborted) throw new Error("Stopped");
+      const errs = await fill(eng);
+      if (sig.aborted) throw new Error("Stopped");
+      if (!errs.length) return finish();
+      last = errs[0];
+      // no connection: wait for it, then ask the same model again (not counted as a try)
+      const ne = errs.find((e) => V.isNetErr && V.isNetErr(e));
+      if (ne) {
+        last = ne;
+        if (navigator.onLine !== false && ++net > NET_TRIES) { job.netWait = false; throw new Error("Couldn't reach Google (tried for 2 minutes)"); }
+        job.status = "queued"; job.netWait = true; job.note = ""; job.noteUntil = 0;
+        await waitOnline(sig);
+        if (sig.aborted) throw new Error("Stopped");
+        job.status = "running"; job.netWait = false; k--; continue;
+      }
+      net = 0;
+      const xs = errs.map((e) => (V.explainError ? V.explainError(e) : { kind: "other" }));
+      if (xs.some((x) => x.kind === "model")) break; // (not offered to this key: the next model)
+      const bad = xs.findIndex((x) => x.kind !== "busy" && x.kind !== "quota");
+      if (bad >= 0) { if (outs.some(Boolean)) return finish(); throw errs[bad]; } // (a refusal is never retried: the versions made are kept)
+      if (k < V.gRetryDelays.length) {
+        const wait = Math.round(V.gRetryDelays[k] * (0.85 + Math.random() * 0.3));
+        job.note = (xs.some((x) => x.kind === "quota") ? "Google's limit reached" : "Google busy") + " · trying again in {in}"; job.noteUntil = Date.now() + wait;
+        await nap(wait, sig); job.note = ""; job.noteUntil = 0;
+      }
+    }
+    if (mi < order.length - 1) { job.note = `${gName(eng)} was busy · trying ${gName(order[mi + 1])}`; job.noteUntil = 0; }
+  }
+  job.note = "";
+  if (outs.some(Boolean)) return finish();
+  if (last && V.explainError && V.explainError(last).kind === "busy") last = new Error("Google 503: Google is busy at the moment and every Google image model was tried");
+  throw last || new Error("Google couldn't make this one");
+}
 async function runGoogle(job, images) {
+  const c = new AbortController(); ctlOf.set(job.id, c);
   try {
     const parts = await Promise.all(images.map(toInline));
     const n = Math.min(Math.max(+job.settings.num_images || 1, 1), 4);
-    const outs = await Promise.all(Array.from({ length: n }, () => geminiImage(G_MODELS[job.engine], job.prompt, parts, job.settings)));
-    job.outputs = []; for (const o of outs) job.outputs.push({ url: await compact(o), type: "image" });
+    const { got, engs } = await googleRounds(job, parts, n, c.signal);
+    job.outputs = []; for (let i = 0; i < got.length; i++) job.outputs.push({ url: await compact(got[i]), type: "image", engine: engs[i] });
     job.status = "done";
   } catch (e) {
+    job.netWait = false;
+    if (c.signal.aborted || /^Stopped/.test(e.message)) { ctlOf.delete(job.id); job.status = "error"; job.error = "Stopped"; job.note = ""; await save(job); return; }
     if (job.settings.fallback && V.cfg.fkey) {
       try { await submitFal(job, (job.kind === "create" ? buildCreate : buildImage)(job.engine, job.prompt, images, job.settings)); job.error = "Google failed, sent to fal.ai instead: " + e.message; await save(job); return; }
       catch (e2) { e = new Error(e.message + " | fal.ai fallback failed: " + e2.message); }
     }
     job.status = "error"; job.error = e.message;
   }
+  ctlOf.delete(job.id);
   await save(job);
 }
 // Gemini Omni Flash video (Interactions API). One long request; the video comes back as a file to download.
@@ -2193,7 +2943,7 @@ async function submitCodex(job, images) {
 }
 // Modly (free, local): POST the picture to its API, poll the run, then export the mesh as GLB
 const MODLY = "http://127.0.0.1:8765";
-const modlyGet = async (path, ms = 8000) => { const r = await fetch(MODLY + path, { signal: AbortSignal.timeout(ms) }); if (!r.ok) throw new Error(`Modly ${r.status}: ${(await r.text()).slice(0, 200)}`); return r.json(); };
+const modlyGet = async (path, ms = 8000) => { const r = await fetch(MODLY + path, { signal: V.timeoutSignal(ms) }); /* (v3.74 robust-12: AbortSignal.timeout is Chromium 103+) */ if (!r.ok) throw new Error(`Modly ${r.status}: ${(await r.text()).slice(0, 200)}`); return r.json(); };
 V.modlyStatus = async () => {
   try { await modlyGet("/health", 2500); } catch { return { running: false }; }
   const models = await modlyGet("/model/all").catch(() => []), active = await modlyGet("/model/status").catch(() => null);
@@ -2588,9 +3338,13 @@ function hide() {
   if (cur) { unpark(cur); cur = null; }
   if (!box.hidden) { box.hidden = true; lastHide = Date.now(); }
 }
+let keyQuiet = false;
+document.addEventListener("keydown", () => { keyQuiet = true; }, { capture: true, passive: true });
+document.addEventListener("pointermove", (e) => { if (keyQuiet && (e.movementX || e.movementY)) keyQuiet = false; }, { capture: true, passive: true });
 let pressed = null; // a button just clicked shows no tip again until the mouse has left it (as the browser's own)
 document.addEventListener("pointerover", (e) => {
   if (e.pointerType === "touch" || e.buttons) return;
+  if (keyQuiet) return; // (v3.74 final, loop-08: after a key changed the view, a control that slid under a still mouse shows no tip)
   const el = target(e.target);
   if (pressed && el !== pressed) pressed = null;
   if (el === cur || (el && el === pressed)) return;
@@ -2606,6 +3360,26 @@ for (const ev of ["pointerdown", "wheel", "keydown", "scroll"]) document.addEven
 window.addEventListener("blur", hide);
 document.addEventListener("pointermove", () => { if (cur && !cur.isConnected) hide(); }, { passive: true }); // (the canvas rebuilds its pictures)
 V.tip = { show: (el) => { hide(); cur = el; park(el); show(el); }, hide, scopes: SCOPES, parse };
+
+// ---------- v3.74 A2 (robust-20, robust:big:4): screen-reader names for icon-only controls ----------
+// A button with no words of its own (an icon, ×, −, +3, ★) is named from its tooltip ("Zoom out (-)" -> "Zoom out"); the
+// name follows the tooltip when that changes. A name the code gave (aria-label without data-tipname) is left alone.
+const wordless = (el) => !/[A-Za-z]{2,}/.test((el.textContent || "").replace(/\s+/g, " "));
+function nameAll() {
+  document.querySelectorAll("button, [role=button], a[href]").forEach((el) => {
+    const mine = el.hasAttribute("data-tipname");
+    if (el.hasAttribute("aria-label") && !mine) return;
+    if (!wordless(el)) { if (mine) { el.removeAttribute("aria-label"); el.removeAttribute("data-tipname"); } return; }
+    const t = textOf(el); if (!t) return;
+    const p = parse(t), nm = (p.name || p.more || t).replace(/\s+/g, " ").trim().slice(0, 120);
+    if (nm && el.getAttribute("aria-label") !== nm) { el.setAttribute("aria-label", nm); el.setAttribute("data-tipname", ""); }
+  });
+}
+let nameT = 0;
+new MutationObserver(() => { if (!nameT) nameT = setTimeout(() => { nameT = 0; nameAll(); }, 400); })
+  .observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["title", "data-tip"] });
+setTimeout(nameAll, 0);
+V.nameControls = nameAll;
 
 // ---------- "Show labels on toolbars" (D8: Settings › Preferences, on by default) ----------
 V.toolbarLabels = () => V.store.get("toolbarLabels", true) !== false;
@@ -2673,19 +3447,35 @@ const zoomAt = (cx, cy, f) => {
 let vT; const viewDirty = () => { clearTimeout(vT); vT = setTimeout(() => V.project.id && V.changed(), 2500); };
 // the room Fit has: the canvas, less the row of buttons along the bottom of the small canvas beside the enlarged viewer
 // (Capture, Add, Fit, Activity, ⋯ and the zoom: about 56 px), so a fitted picture's caption is never under them
-const fitRoom = () => { const r = cv.getBoundingClientRect(); return { w: r.width, h: Math.max(80, r.height - (cv.closest("#pvSlot") ? 56 : 0)) }; };
+// (IB-9, IB-3) and, on the full canvas, less the tool rail standing over its right-hand side, so a card brought into view
+// (Fit, Find, a spread) is never framed under it
+const fitRoom = () => {
+  const r = cv.getBoundingClientRect(), small = !!cv.closest("#pvSlot"); let w = r.width;
+  const t = !small && cv.querySelector(".ctools"), b = t && t.getBoundingClientRect();
+  if (b && b.width && b.height > b.width && b.left > r.left + r.width / 2) { // (the column of buttons, not the Capture pill above it)
+    const ls = [...t.querySelectorAll(".ctool:not(.capbtn)")].map((e) => e.getBoundingClientRect()).filter((q) => q.width).map((q) => q.left);
+    if (ls.length) w = Math.max(80, Math.min(...ls) - r.left - 8);
+  }
+  return { w, h: Math.max(80, r.height - (small ? 56 : 0)) };
+};
 // the zoom Fit would use for these pictures (organise.js asks it too: the mini-map shows itself when it would be under 50%)
+// (v3.74 B1) every card at its own height, where it is DRAWN: a node (V.nodeBox: a gathered version is drawn on its stack's
+// card at the root, whatever its own saved x/y), or a plain {x, y} box (V.NODE_H tall)
+const boxOf = (n) => (n && n.id && V.nodeBox ? V.nodeBox(n) : { x: n.x, y: n.y, w: V.NODE_W, h: V.NODE_H });
+const boxH = (n) => boxOf(n).h;
 V.fitZoom = (nodes = V.visibleNodes()) => {
   const r = fitRoom(); if (!nodes.length || !r.w) return 1;
-  const minX = Math.min(...nodes.map((n) => n.x)) - 60, minY = Math.min(...nodes.map((n) => n.y)) - 90;
-  const maxX = Math.max(...nodes.map((n) => n.x + V.NODE_W)) + 60, maxY = Math.max(...nodes.map((n) => n.y + V.NODE_H)) + 40;
+  const bs = nodes.map(boxOf);
+  const minX = Math.min(...bs.map((b) => b.x)) - 60, minY = Math.min(...bs.map((b) => b.y)) - 90;
+  const maxX = Math.max(...bs.map((b) => b.x + V.NODE_W)) + 60, maxY = Math.max(...bs.map((b) => b.y + b.h)) + 40;
   return Math.min((r.w - 80) / (maxX - minX), (r.h - 40) / (maxY - minY));
 };
 V.fit = (nodes = V.visibleNodes ? V.visibleNodes() : V.G.nodes, animate = true, maxZ = 2) => {
   const r = fitRoom();
   if (!nodes.length) { V.stopCamera(); V.G.view = { x: 80, y: 80, z: 1 }; V.applyView(); return; }
-  const minX = Math.min(...nodes.map((n) => n.x)) - 60, minY = Math.min(...nodes.map((n) => n.y)) - 90;
-  const maxX = Math.max(...nodes.map((n) => n.x + V.NODE_W)) + 60, maxY = Math.max(...nodes.map((n) => n.y + V.NODE_H)) + 40;
+  const bs = nodes.map(boxOf);
+  const minX = Math.min(...bs.map((b) => b.x)) - 60, minY = Math.min(...bs.map((b) => b.y)) - 90;
+  const maxX = Math.max(...bs.map((b) => b.x + V.NODE_W)) + 60, maxY = Math.max(...bs.map((b) => b.y + b.h)) + 40;
   // (C1, A2 note) with the mini-map showing, the pictures fit beside it or above it, whichever keeps them larger
   let w = r.w, hh = r.h;
   const mm = V.mapShown && V.mapShown() && cv.querySelector(".minimap");
@@ -2697,13 +3487,26 @@ V.fit = (nodes = V.visibleNodes ? V.visibleNodes() : V.G.nodes, animate = true, 
   const z = Math.min(maxZ, Math.max(0.2, Math.min((w - 80) / (maxX - minX), (hh - 40) / (maxY - minY))));
   const to = { z, x: (w - (maxX - minX) * z) / 2 - minX * z, y: (hh - (maxY - minY) * z) / 2 - minY * z };
   if (animate) V.animateView(to); else { V.stopCamera(); V.G.view = to; V.applyView(); }
+  return to;
 };
 V.centerOn = (n) => {
-  const r = cv.getBoundingClientRect(), z = V.G.view.z;
-  V.animateView({ z, x: r.width / 2 - (n.x + V.NODE_W / 2) * z, y: r.height / 2 - (n.y + V.NODE_H / 2) * z }, 480);
+  const r = fitRoom(), z = V.G.view.z; // (clear of the tool rail, IB-9)
+  const b = boxOf(n);
+  V.animateView({ z, x: r.w / 2 - (b.x + V.NODE_W / 2) * z, y: r.h / 2 - (b.y + b.h / 2) * z }, 480);
 };
-// is the whole picture on screen?
-V.onScreen = (n) => { const r = cv.getBoundingClientRect(), v = V.G.view, sx = n.x * v.z + v.x, sy = n.y * v.z + v.y; return sx >= 0 && sy >= 0 && sx + V.NODE_W * v.z <= r.width && sy + V.NODE_H * v.z <= r.height; };
+// is the whole picture (the card it is drawn on) on screen?
+V.onScreen = (n) => { const r = fitRoom(), v = V.G.view, b = boxOf(n), sx = b.x * v.z + v.x, sy = b.y * v.z + v.y; return sx >= 0 && sy >= 0 && sx + V.NODE_W * v.z <= r.w && sy + b.h * v.z <= r.h; }; // (IB-9: clear of the tool rail)
+// (v3.74 final, loop-02 / deliver-usemat-under-tools) the selected cards brought into the clear canvas (left of the tool
+// column) when they are not wholly on show, never zooming in: after Review closes (Pick the best, Use these materials…)
+V.revealSel = () => {
+  if (!V.canvasShown || !V.canvasShown() || !V.sel.length || (V.pictureView && V.pictureView()) || document.body.classList.contains("reviewing")) return;
+  const cs = [...new Set(V.selNodes().filter((n) => !V.isHidden(n.id)).map((n) => { const st = V.stackOf(n); return st && st.gathered ? st.root : n; }))];
+  if (!cs.length || cs.every(V.onScreen)) return;
+  if (cs.length === 1) V.centerOn(cs[0]); else V.fit(cs, true, V.G.view.z);
+};
+let revT = 0, wasReviewing = false;
+new MutationObserver(() => { const r = document.body.classList.contains("reviewing"); if (wasReviewing && !r) { clearTimeout(revT); revT = setTimeout(V.revealSel, T_SLOW() + 120); } wasReviewing = r; })
+  .observe(document.body, { attributes: true, attributeFilter: ["class"] });
 // v3.69 zoom from the keyboard and the zoom control: about the middle of the canvas
 V.zoomBy = (f) => { const r = cv.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, f); };
 V.zoomTo = (z) => { const r = cv.getBoundingClientRect(), v = V.G.view, cx = r.width / 2, cy = r.height / 2, wx = (cx - v.x) / v.z, wy = (cy - v.y) / v.z; V.animateView({ z, x: cx - wx * z, y: cy - wy * z }, 380); viewDirty(); };
@@ -2750,35 +3553,325 @@ const engineName = (id) => {
 };
 V.engineName = engineName;
 const hm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-function nodeHTML(n) {
+
+// ---------- v3.74 B1 (N5, ia:big:4, journey-returning:big:5): version stacks ----------
+// A stack = a picture with no parents (a view, a photo, a drawing) or with two or more (a montage, an updated design), plus
+// everything made from it along single-parent chains (renders, edits, relights, upscales). On the canvas a stack is ONE
+// card: on top the version being made or that just failed, else the one selected, else the favourite, else the newest; the
+// earlier ones fan a few px behind, and a badge says "4 versions". Click the badge or tap Space (with the stack selected)
+// to spread it into a row to the right (--t-slow); click again or Esc to gather. Spread is a UI flag per open project
+// (V.G.ui.spread, never saved; true = spread by hand, "tidy" = a row Tidy laid out). Gathering changes NOTHING in the
+// graph: a gathered version keeps its own saved x/y and is only DRAWN on the stack's card at the root (V.nodeBox is the
+// drawn box; everything that places, fits, selects or hit-tests cards reads it), so an old project's arrangement, a
+// spread/gather round trip and Ctrl+Z after Tidy put every card back where it was. Only Tidy, a spread and a drag write
+// positions. Hidden versions (folded, set aside) are not members. Review, Find, Ctrl+A, the selection bar and the
+// right-click menu see every member.
+let stacks = new Map(), stackByNode = new Map();
+const animating = new Set(); // stacks mid-spread or mid-gather (drawn as separate cards while they glide, at n._glide)
+const drawnAt = new Map(); // where each picture's card was last drawn (a glide starts from there)
+const ROW_WRAP = 6, MIN_STACK = 2; // a stack gathers from the second version: a view with one render stays two cards (the before and the after)
+const mkTime = (n) => n.created || 0;
+function computeStacks() {
+  stacks = new Map(); stackByNode = new Map();
+  const vis = V.G.nodes.filter((n) => !hiddenNow.has(n.id)), visSet = new Set(vis.map((n) => n.id));
+  const up = (n) => V.parents(n.id).filter((p) => visSet.has(p.id));
+  const rootOf = (n) => { let x = n; const seen = new Set(); while (!seen.has(x.id)) { seen.add(x.id); const ps = up(x); if (ps.length !== 1) break; x = ps[0]; } return x; };
+  for (const n of vis) { const r = rootOf(n); let st = stacks.get(r.id); if (!st) { st = { id: r.id, root: r, members: [] }; stacks.set(r.id, st); } st.members.push(n); stackByNode.set(n.id, st); }
+  const spread = (V.G.ui && V.G.ui.spread) || {}, selSet = new Set(V.sel);
+  for (const st of stacks.values()) {
+    const rest = st.members.filter((m) => m !== st.root).sort((a, b) => mkTime(a) - mkTime(b) || V.G.nodes.indexOf(a) - V.G.nodes.indexOf(b));
+    st.members = [st.root, ...rest]; st.n = rest.length;
+    // open = spread out in a row (the flag, or mid-glide); gathered = one card; neither = loose cards (one version, or none)
+    st.open = st.n > 0 && (!!spread[st.id] || animating.has(st.id));
+    st.gathered = st.n >= MIN_STACK && !st.open;
+    if (!st.gathered) { st.top = null; continue; }
+    // on top: the one being made, else a failure that is the newest and fresh (its Try again is seen even though the
+    // selection is elsewhere; an older failure waits behind the good results), else the one selected, else the
+    // favourite, else the newest
+    // (the FIRST version being made: a round of A/B shows A while it gathers, as it does when done; loop-16)
+    // (a selected root does not count: after the stepper, Review or a click on the stack the view is selected, and the
+    // hero, a pick, the favourite or the newest stays on top; present-5)
+    const ms = st.members, busy = ms.find((m) => m.status === "queued" || m.status === "running" || m.status === "uploading" || m.status === "capturing"), sel = ms.filter((m) => selSet.has(m.id) && m !== st.root), last = ms[ms.length - 1];
+    const failed = last.status === "error" ? last : null, freshFail = failed && Date.now() - (failed.failedAt || 0) < 120000;
+    const rev = ms.slice(1).reverse();
+    st.top = busy || (freshFail ? failed : sel.length === 1 ? sel[0] : failed || rev.find((m) => m.hero) || rev.find((m) => m.pick) || rev.find((m) => m.fav) || last);
+  }
+}
+const stackOf = (n) => (n ? stackByNode.get(n.id) || null : null);
+const freshStacks = () => { hiddenNow = V.hiddenSet(); computeStacks(); };
+V.stackOf = (n) => { if (!stackByNode.size && V.G.nodes.length) freshStacks(); return stackOf(n); };
+V.stacks = () => { freshStacks(); return [...stacks.values()]; };
+V.stackSpread = (id) => !!(V.G.ui && V.G.ui.spread && V.G.ui.spread[id]);
+// the box a picture is DRAWN in: a gathered version's is its stack's card at the root (the top's height), whatever its own
+// saved x/y; a card mid-glide is at n._glide; anything else at its own place
+V.nodeBox = (n) => {
+  const st = stackByNode.get(n.id), g = !!(st && st.gathered), t = (g && st.top) || n, home = g && n !== st.root ? st.root : n, at = n._glide || home._glide || home;
+  return { x: at.x, y: at.y, w: V.NODE_W, h: V.nodeH(t), ih: V.nodeImgH(t) };
+};
+// the cards as drawn: one per loose picture, one per gathered stack (its root stands for it)
+const drawnCards = () => V.visibleNodes().filter((n) => { const st = stackByNode.get(n.id); return !(st && st.gathered && n !== st.root); });
+const hitBox = (a, b, m = 10) => a.x < b.x + V.NODE_W + m && b.x < a.x + V.NODE_W + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m;
+// the row a spread stack takes: the root stays put, its versions run to the right of it (k = 1, 2, …; up to 6 a line);
+// whatever is in the way there moves down (unoverlap, when the glide ends), so the row is always beside its root
+function rowGeom(st) {
+  const r = st.root, SX = V.NODE_W + 40, rowH = Math.max(V.NODE_H, ...st.members.map((m) => V.nodeH(m))) + 30;
+  return (k) => ({ x: r.x + (k % ROW_WRAP) * SX, y: r.y + Math.floor(k / ROW_WRAP) * rowH });
+}
+// where the members go when the stack spreads: their own saved places when those still make a row of separate cards
+// (none on the root or on each other, nothing else under them: an older project's own arrangement, or the row this stack
+// had before it was gathered), else a fresh row to the right
+function rowPositions(st) {
+  const ids = new Set(st.members.map((m) => m.id)), others = drawnCards().filter((o) => !ids.has(o.id)).map(V.nodeBox);
+  const own = st.members.map((m) => ({ x: m.x, y: m.y, h: V.nodeH(m) }));
+  const keep = own.every((a, i) => own.every((b, j) => j <= i || !hitBox(a, b, 0))) && own.every((a, i) => !i || !others.some((b) => hitBox(a, b, 0)));
+  const pos = rowGeom(st), out = new Map();
+  st.members.forEach((m, k) => out.set(m.id, keep ? { x: m.x, y: m.y } : pos(k)));
+  return out;
+}
+function tween(ms, step, done) {
+  const t0 = performance.now(), ease = (t) => 1 - Math.pow(1 - t, 3);
+  const f = () => { const k = ease(Math.min(1, (performance.now() - t0) / ms)); step(k); if (k < 1) requestAnimationFrame(f); else if (done) done(); };
+  requestAnimationFrame(f);
+}
+V.tween = tween;
+const T_SLOW = () => { const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--t-slow")); return v > 0 ? v : 340; };
+// glide the members of a stack to new places (--t-slow): drawn as separate cards meanwhile (n._glide, from where each was
+// last drawn), then a full redraw. write: the end places are kept as the cards' own (a spread: the row is the arrangement);
+// else (a gather) the cards only LOOK as if they moved: their own x/y stay as saved and the stack's card draws them at the
+// root. quiet: called from inside V.render (no redraw now; the one under way draws the glide's start).
+function glideStack(st, to, done, quiet, write) {
+  const from = new Map(st.members.map((m) => [m.id, drawnAt.get(m.id) || { x: V.nodeBox(m).x, y: V.nodeBox(m).y }]));
+  const fin = () => { animating.delete(st.id); for (const m of st.members) delete m._glide; if (write) for (const [id, p] of to) { const n = V.node(id); if (n) Object.assign(n, p); } V.render(); if (done) done(); };
+  if (!V.motionOn()) return fin();
+  animating.add(st.id); for (const m of st.members) m._glide = { ...from.get(m.id) }; if (!quiet) V.render(); // (the first frame draws the start, not the saved places)
+  tween(T_SLOW(), (k) => { for (const [id, p] of to) { const n = V.node(id), f = from.get(id); if (n && f) n._glide = { x: f.x + (p.x - f.x) * k, y: f.y + (p.y - f.y) * k }; } V.moveVisuals(); }, fin);
+}
+// cards a spread row pushed down out of its way (per stack: id -> {from, to}). Gathering the stack puts each back where it
+// was when it is still where the push left it (not dragged, tidied or undone since) and its old place is free again, so a
+// spread and a gather leave the canvas as it was.
+const pushedBy = new Map();
+// (IB-2) the place a SAVE keeps for a picture: a card a spread row pushed (and still where the push left it) is saved at
+// its place from before the push, as the gather would put it back. A spread is not saved, so a reopened project shows
+// the gathered layout whole, never the spread's pushed neighbours beside a gathered stack. null: its own x/y.
+const nearXY = (n, p) => Math.abs(n.x - p.x) < 1 && Math.abs(n.y - p.y) < 1;
+V.savedPlace = (n) => {
+  for (const ps of pushedBy.values()) { if (ps.g !== V.G) continue; const p = ps.get(n.id); if (p && nearXY(n, p.to)) return { x: p.from.x, y: p.from.y }; }
+  return null;
+};
+// (IB-3) the view before each spread and the one its framing went to (per stack). Gathering goes back to `before` while
+// the view is still `after` (not panned or zoomed since); otherwise it is left where the user put it.
+const frames = new Map();
+const cardSeen = (n) => { const r = cv.getBoundingClientRect(), v = V.G.view, b = V.nodeBox(n), cx = (b.x + V.NODE_W / 2) * v.z + v.x, cy = (b.y + b.h / 2) * v.z + v.y; return cx > 0 && cy > 0 && cx < r.width && cy < r.height; };
+function gatherView(stId) {
+  const f = frames.get(stId); frames.delete(stId); if (!f || f.g !== V.G || !f.after) return;
+  const v = V.G.view, same = Math.abs(v.x - f.after.x) < 2 && Math.abs(v.y - f.after.y) < 2 && Math.abs(v.z - f.after.z) < 0.005;
+  if (same && (Math.abs(v.x - f.before.x) >= 2 || Math.abs(v.y - f.before.y) >= 2 || Math.abs(v.z - f.before.z) >= 0.005)) V.animateView(f.before, 480);
+}
+// (NP-2) called as the gather STARTS, so a capture or placement during the gather's glide already sees the pushed cards
+// back home (not left at their pushed places, which made a diagonal); the gathering stack's versions count as on its root
+function putBack(stId, st) {
+  const ps = pushedBy.get(stId); pushedBy.delete(stId); if (!ps || ps.g !== V.G) return;
+  const going = new Set(st ? st.members.filter((m) => m !== st.root) : []);
+  const near = (n, p) => Math.abs(n.x - p.x) < 1 && Math.abs(n.y - p.y) < 1;
+  const moves = [];
+  for (const [id, p] of [...ps].sort((a, b) => a[1].from.y - b[1].from.y)) {
+    const n = V.node(id); if (!n || hiddenNow.has(id) || !near(n, p.to)) continue;
+    const bx = { x: p.from.x, y: p.from.y, h: V.nodeBox(n).h };
+    if (drawnCards().some((o) => o !== n && !going.has(o) && hitBox(bx, V.nodeBox(o), 0))) continue;
+    moves.push([n, { x: n.x, y: n.y }]); n.x = p.from.x; n.y = p.from.y; // (each one back before the next is checked)
+  }
+  if (!moves.length) return;
+  const end = () => { for (const [n] of moves) delete n._glide; V.render(); V.changed(); };
+  if (!V.motionOn()) return end();
+  for (const [n, f] of moves) n._glide = { ...f };
+  tween(T_SLOW(), (k) => { for (const [n, f] of moves) n._glide = { x: f.x + (n.x - f.x) * k, y: f.y + (n.y - f.y) * k }; V.moveVisuals(); }, end);
+}
+V.spreadStack = (rootId, on, animate = true) => {
+  if (!stacks.has(rootId)) freshStacks();
+  const st = stacks.get(rootId); if (!st || st.n < MIN_STACK) return false;
+  const ui = V.G.ui || (V.G.ui = {}); ui.spread = ui.spread || {};
+  if (on == null) on = !ui.spread[rootId];
+  if (!!ui.spread[rootId] === on) return false;
+  // spread: out to the row (kept as the cards' places); gather: the cards glide onto the root's card and nothing in the
+  // graph changes (their own places stay as saved)
+  const to = on ? rowPositions(st) : new Map(st.members.map((m) => [m.id, { x: st.root.x, y: st.root.y }]));
+  // (IB-3) the cards on screen before a spread stay on screen with its row (the badge, Space and the menu frame alike);
+  // a gather puts back the view from before the spread when it is still the one the spread left
+  const seen = on ? drawnCards().filter((n) => !st.members.includes(n) && cardSeen(n)) : [];
+  if (on) frames.set(st.id, { g: V.G, before: { ...V.G.view }, after: null });
+  if (on) ui.spread[rootId] = true; else delete ui.spread[rootId];
+  lastSpread = on ? rootId : lastSpread === rootId ? null : lastSpread; // (v3.74 final, loop-06: Esc with nothing selected gathers it)
+  if (!on) putBack(st.id, st); // (NP-2: at once, not after the glide, so a capture straight after Esc lands in the row)
+  const fin = () => {
+    if (!on) return gatherView(st.id); // (the pushed cards went back as the gather started: putBack below)
+    // (the cards the row pushes down are remembered, so gathering puts them back)
+    const ids = new Set(st.members.map((m) => m.id)), was = new Map(V.G.nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
+    if (unoverlap([...ids])) {
+      const ps = new Map(); for (const n of V.G.nodes) { const w = was.get(n.id); if (w && !ids.has(n.id) && (w.x !== n.x || w.y !== n.y)) ps.set(n.id, { from: w, to: { x: n.x, y: n.y } }); }
+      ps.g = V.G; // (the open project's: another project's pushes are never put back or saved here)
+      if (ps.size) pushedBy.set(st.id, ps); else pushedBy.delete(st.id);
+      V.render();
+    } else pushedBy.delete(st.id);
+    V.changed();
+    const bs = [...to.values()].map((p) => ({ x: p.x, y: p.y, h: V.nodeH(st.root) })).concat(seen.map(V.nodeBox));
+    const tgt = showBox(Math.min(...bs.map((b) => b.x)) - 20, Math.min(...bs.map((b) => b.y)) - 70, Math.max(...bs.map((b) => b.x)) + V.NODE_W + 20, Math.max(...bs.map((b) => b.y + b.h)) + 30);
+    const f = frames.get(st.id); if (f) f.after = tgt || { ...V.G.view }; };
+  if (!animate || !V.motionOn()) { if (on) for (const [id, p] of to) Object.assign(V.node(id), p); animating.delete(rootId); V.render(); fin(); return true; }
+  glideStack(st, to, fin, false, on);
+  return true;
+};
+// Esc: gathers the spread stack the selection lies in, when it lies in ONE stack spread by hand (the badge, Space or the
+// menu); a row Tidy laid out stays (the badge, Space or the menu gathers it), and with nothing selected nothing gathers.
+// True when one was gathered.
+let lastSpread = null;
+V.lastSpread = () => lastSpread;
+V.gatherStacks = (ids) => {
+  const ui = V.G.ui && V.G.ui.spread; if (!ui || !ids || !ids.length) return false;
+  const sts = [...new Set(ids.map((id) => stackByNode.get(id)).filter(Boolean))];
+  if (sts.length !== 1 || ui[sts[0].id] !== true) return false;
+  return V.spreadStack(sts[0].id, false);
+};
+// where a picture made from `parent` goes (core.js V.placeChildren asks first): its stack's place (gathered: on the root,
+// drawn as the stack's top while it is made), or the end of its spread row (stepping on past anything in the way)
+V.stackSlot = (parent, k) => {
+  freshStacks();
+  const st = stackOf(parent); if (!st) return null;
+  if (!st.open && st.n + k < MIN_STACK) return null; // (a first render sits beside its view: core.js placeTree)
+  if (!st.open) return Array.from({ length: k }, () => ({ x: st.root.x, y: st.root.y }));
+  const pos = rowGeom(st), taken = drawnCards().map(V.nodeBox), out = []; // (the end of the row it already has)
+  for (let j = st.members.length, i = 0; i < k && j < st.members.length + k + 12; j++) { const p = { ...pos(j), h: V.NODE_H }; if (taken.some((b) => hitBox(p, b, 0))) continue; out.push({ x: p.x, y: p.y }); taken.push(p); i++; }
+  while (out.length < k) out.push(pos(st.members.length + out.length));
+  return out;
+};
+
+// ---------- v3.74 B1 (N2): the picture's true shape ----------
+// n.ar is learnt the first time the picture loads; a card whose height then changes pushes what it now overlaps down
+// (older projects were laid out with every card 262 px tall): a light push-apart, never a shrink
+let arT = 0; const arChanged = [];
+const learnAr = (n) => (e) => {
+  const im = e.target, w = im.naturalWidth || im.videoWidth, hh = im.naturalHeight || im.videoHeight;
+  if (!w || !hh) return;
+  if (n.thumb && im.tagName === "IMG") V.upgradeThumb(n, w);
+  const ar = +(w / hh).toFixed(4);
+  if (n.ar && Math.abs(n.ar - ar) < 0.01) return;
+  const was = V.nodeImgH(n); n.ar = ar;
+  if (V.nodeImgH(n) === was) { V.changed(); return; }
+  arChanged.push(n.id); clearTimeout(arT);
+  arT = setTimeout(() => { const ids = arChanged.splice(0); unoverlap(ids); V.render(); V.changed(); }, 40);
+};
+function unoverlap(ids) {
+  // the cards as drawn: a gathered stack is one card at its root (the root moves for it); cards mid-glide are left out
+  // (their places are transient; glideStack's end runs this again)
+  const cards = drawnCards().filter((n) => { const st = stackByNode.get(n.id); return !(st && animating.has(st.id)); }); let moved = false;
+  const cardOf = (id) => { const st = stackByNode.get(id); return st && st.gathered ? st.root.id : id; };
+  ids = [...new Set(ids.map(cardOf))];
+  for (let pass = 0; pass < 40; pass++) {
+    let any = false;
+    for (const a of cards) {
+      if (pass === 0 && !ids.includes(a.id)) continue;
+      const ba = V.nodeBox(a);
+      for (const b of cards) {
+        if (b === a) continue;
+        const bb = V.nodeBox(b);
+        if (bb.x < ba.x + V.NODE_W + 10 && bb.x + V.NODE_W + 10 > ba.x && bb.y >= ba.y && bb.y < ba.y + ba.h + 12) { b.y = ba.y + ba.h + 16; any = moved = true; if (!ids.includes(b.id)) ids.push(b.id); }
+      }
+    }
+    if (!any) break;
+  }
+  return moved;
+}
+V.unoverlap = () => unoverlap(V.visibleNodes().map((n) => n.id));
+// (B1-N2) where a version goes when its saved place is taken: where a first render of `p` (its root, or the picture it
+// was made from) would go (core.js placeTree, as if the version were not there yet and with only the pictures on show),
+// else its own place; then straight down past any drawn card in the way
+function placeOut(n, p) {
+  let q = null;
+  if (p && V.placeTree) {
+    const N = V.G.nodes;
+    V.G.nodes = N.filter((x) => x !== n && !hiddenNow.has(x.id)); // (V.children / V.parents skip what is left out)
+    try { q = V.placeTree(p, 1)[0]; } finally { V.G.nodes = N; }
+  }
+  q = q ? { x: q.x, y: q.y } : { x: n.x, y: n.y };
+  const hh = V.nodeH(n), free = () => !drawnCards().some((o) => o !== n && hitBox({ x: q.x, y: q.y, h: hh }, V.nodeBox(o)));
+  for (let i = 0; i < 40 && !free(); i++) q.y += V.NODE_H + 24;
+  return q;
+}
+
+// ---------- v3.74 B1 (N6): the card of a picture being made ----------
+const RING = 125.66; // 2 * pi * 20
+const srcThumb = (n) => (V.sourceOf ? V.sourceOf(n) : null);
+// (the SVG goes in through innerHTML: V.h makes HTML-namespace elements, whose circles never draw)
+const ringSvg = (n) => { const p = n.status === "capturing" ? 0.18 : V.jobClock ? V.jobClock.state(n).p : 0; return h("i", { class: "nring", "data-ring": n.id, "aria-hidden": "true", html: `<svg viewBox="0 0 48 48"><circle class="rbg" cx="24" cy="24" r="20"/><circle class="rfg" cx="24" cy="24" r="20" style="stroke-dashoffset:${(RING * (1 - p)).toFixed(1)}"/></svg>` }); };
+const STACK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3.5" width="13.5" height="10" rx="1.5"/><path d="M4.5 8v10.5a2 2 0 0 0 2 2H17"/></svg>';
+function nodeHTML(n, st) {
   const el = h("div", { class: "node", "data-id": n.id });
   const img = h("div", { class: "nimg" });
+  const learn = learnAr(n);
   if (n.status === "done") {
-    if (n.type === "video") img.append(h("video", { src: n.url, muted: true, loop: true, playsinline: true, preload: "metadata" }));
-    else if (n.type === "model" || n.type === "world") img.append(h("img", { src: n.thumb || n.poster || "", alt: "", decoding: "async", onload: (e) => n.thumb && V.upgradeThumb(n, e.target.naturalWidth) }));
-    else img.append(h("img", { src: n.thumb || n.url, alt: "", draggable: "false", decoding: "async", onload: (e) => n.thumb && V.upgradeThumb(n, e.target.naturalWidth) }));
+    if (n.type === "video") img.append(h("video", { src: n.url, muted: true, loop: true, playsinline: true, preload: "metadata", onloadedmetadata: learn }));
+    else if (n.type === "model" || n.type === "world") img.append(h("img", { src: n.thumb || n.poster || "", alt: "", decoding: "async", onload: learn }));
+    else img.append(h("img", { src: n.thumb || n.url, alt: "", draggable: "false", decoding: "async", onload: learn }));
     if (n.type !== "image") img.append(h("span", { class: "ntype" }, { video: "▶ Video", world: "3D World" }[n.type] || "3D"));
+    // (motion:big:3) a result that has just landed opens on its source and wipes to the result (resumed part-way when the
+    // card is rebuilt mid-wipe); the before/after is the point of a render
+    if (fx.has("w" + n.id)) {
+      const age = performance.now() - fx.get("w" + n.id), from = wipeSrc.get(n.id), im = img.firstChild;
+      if (age < 1000 && from && im && im.tagName === "IMG" && V.wipeReveal) { el.classList.add("wiping"); V.wipeReveal(im, from, n.thumb || n.url, { host: img, at: age }).then(() => el.classList.remove("wiping")); }
+      else { fx.delete("w" + n.id); wipeSrc.delete(n.id); }
+    }
   } else if (n.status === "error") { // v3.69: what happened, and what to do about it, on the picture itself
-    img.append(h("div", { class: "nst err", title: n.error || "" }, h("b", {}, "Couldn't make it"), h("span", { class: "nwhy" }, n.error || "Something went wrong."),
-      h("div", { class: "nacts" }, n.retry ? h("button", { class: "nretry", "data-retry": n.id }, "Try again") : null, h("button", { class: "nrm", "data-remove": n.id }, "Remove"))));
-  } else if (n.status === "uploading") img.append(h("div", { class: "nst" }, h("div", {}, h("div", { class: "spin" }), "Uploading…")));
-  else { el.classList.add("pend"); img.append(h("div", { class: "phicon", title: n.status === "running" ? "Being made now" : n.queue ? `Waiting: ${V.ordinal(n.queue)} in line` : "Waiting to start", html: '<svg viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 13h14l-4.5-6-3.5 4.5-2.5-3z"/></svg><div class="spin"></div>' }), h("div", { class: "prog" }),
-    h("div", { class: "nwait", "data-wait": n.id }, V.makingText(n))); } // "Rendering… 0:42" / "Waiting · 3rd in line" (ticks below)
+    // (v3.74 A2, robust-01/10) in plain words (V.explainError), the buttons chosen by the kind of failure: a limit counts
+    // down before Try again, a safety refusal offers Change the words, a key problem Open Settings; raw text in the tooltip
+    const x = V.explainError ? V.explainError(n.error) : { title: "Couldn't make it", advice: n.error || "Something went wrong.", detail: "", actions: ["retry"], wait: 0 };
+    const until = x.wait && n.failedAt ? n.failedAt + x.wait * 1000 : 0, FIX = { settings: "Open Settings", words: "Change the words", space: "Free up space…" };
+    const bs = [];
+    x.actions.forEach((a) => { if (FIX[a]) bs.push(h("button", { class: "nsec", "data-fix": a, "data-nid": n.id }, FIX[a])); else if (a === "retry" && n.retry) bs.push(until > Date.now() ? h("button", { class: "nsec ncount", "data-retry": n.id, "data-until": until, disabled: true }, "Try again in " + V.clock(Date.now() - (until - Date.now()))) : h("button", { class: "nsec", "data-retry": n.id }, "Try again")); });
+    if (!bs.length && n.retry) bs.push(h("button", { class: "nsec", "data-retry": n.id }, "Try again"));
+    if (bs[0]) bs[0].classList.add("nfirst"); // (A2-15, N1: outlined, not amber: Render stays the one filled amber control)
+    img.append(h("div", { class: "nst err", title: x.title + ". " + x.advice + (x.detail ? "\n\n" + x.detail : "") }, h("b", {}, x.title), h("span", { class: "nwhy" }, x.advice),
+      h("div", { class: "nacts" }, ...bs, h("button", { class: "nrm", "data-remove": n.id }, "Remove"))));
+  } else if (n.status === "uploading") { // (motion-16) the picture itself at once, with a small "Uploading…" chip, not a grey box
+    img.append(h("img", { src: n.thumb || n.url, alt: "", draggable: "false", decoding: "async", onload: learn }), h("div", { class: "nup" }, h("div", { class: "spin" }), "Uploading…"));
+  } else { // queued | running, or a capture placeholder (capturing): the source picture under a scan line, the ring and the stage
+    el.classList.add("pend", n.status === "capturing" ? "capturing" : n.status === "running" ? "running" : "queued");
+    const src = n.status === "capturing" ? null : srcThumb(n);
+    if (src) img.append(h("img", { class: "nsrc", src, alt: "", draggable: "false", decoding: "async" }));
+    // (motion-22) several cards at once: each scan line starts at its own point, so a batch ripples rather than flashing together
+    let hsh = 0; for (const ch of n.id) hsh = (hsh * 31 + ch.charCodeAt(0)) % 3000;
+    img.append(h("i", { class: "nscan", "aria-hidden": "true", style: `animation-delay:-${hsh}ms` }), ringSvg(n), h("div", { class: "nwait", "data-wait": n.id }, V.makingText(n)),
+      n.status === "capturing" ? h("button", { class: "nstop", "data-cancelph": n.id, title: "Take this placeholder off the canvas (a view SketchUp still sends lands as a new picture)" }, "Cancel")
+        : V.stopJob ? h("button", { class: "nstop", "data-stop": n.id, title: "Stop making this one (it stays here with Try again)" }, "Stop") : null); // (v3.74 robust-11 Stop; A2 put it top right)
+  }
   if (n.fav) img.append(h("span", { class: "nfav", title: "A favourite (Shift+F takes the star off)" }, "★"));
-  const kids = V.children(n.id).length, setAside = V.children(n.id).filter((c) => c.rejected).length;
-  if (setAside) el.append(h("button", { class: "nrej", "data-unreject": n.id, title: "Versions set aside in Review: click to bring them back" }, `${setAside} set aside`));
-  if (n.collapsed) el.append(h("button", { class: "nfold shut", "data-fold": n.id, title: "Show the versions made from this" }, "+" + hiddenUnder(n.id)));
+  // badges: the versions made from this (fold / unfold), versions set aside in Review. On a stack card they stand for every member.
+  const ms = st && st.gathered ? st.members : [n];
+  const setAside = ms.reduce((k, m) => k + V.children(m.id).filter((c) => c.rejected).length, 0);
+  if (setAside) el.append(h("button", { class: "nrej", "data-unreject": st && st.gathered ? "stack:" + st.id : n.id, title: "Versions set aside in Review: click to bring them back" }, `${setAside} set aside`));
+  const folded = ms.filter((m) => m.collapsed), kids = V.children(n.id).length;
+  if (folded.length) el.append(h("button", { class: "nfold shut", "data-fold": folded[0].id, title: "Show the versions made from this" }, "+" + folded.reduce((k, m) => k + hiddenUnder(m.id), 0)));
+  else if (st && st.gathered) el.append(h("button", { class: "nfold", "data-fold": st.root.id, title: `Fold away the ${st.n} version${st.n > 1 ? "s" : ""} made from this` }, "−"));
   else if (kids) el.append(h("button", { class: "nfold", "data-fold": n.id, title: `Fold away the ${kids} version${kids > 1 ? "s" : ""} made from this` }, "−"));
+  // (N5) the stack: the earlier versions fanned behind, and the count badge (click: spread / gather)
+  if (st && st.n >= MIN_STACK && (st.gathered || st.root === n)) {
+    // (the fanned cards take a click too: it spreads the stack)
+    if (st.gathered) st.members.filter((m) => m !== st.top && m.status === "done" && (m.thumb || m.url)).slice(-2).reverse().forEach((m, i) => el.append(h("div", { class: "stfan f" + (i + 1), "data-stack": st.id, style: `background-image:url("${m.thumb || m.url}")`, "aria-hidden": "true" })));
+    // (IB-9) while Find is on, a gathered stack says how many of its versions match ("2 found")
+    const fk = st.gathered && V.nodeDim ? st.members.filter((m) => !V.nodeDim(m)).length : 0;
+    // (v3.74 final, expert-stack-badge-covers-try-again) a failure on top keeps its Try again / Remove clear: no badge while it shows
+    if (!(st.gathered && n.status === "error")) el.append(h("button", { class: "stbadge" + (st.open ? " open" : "") + (fk ? " found" : ""), "data-stack": st.id, "aria-expanded": st.open ? "true" : "false", title: st.open ? "Gather the versions back into one card (Space, Esc)" : `${st.n} versions of this picture${fk ? `, ${fk} found by Find` : ""}: click to spread them out in a row (Space)` },
+      h("i", { class: "stic", html: STACK_ICON }), `${st.n} versions`, fk ? h("span", { class: "stfound" }, `${fk} found`) : null, h("i", { class: "ic " + (st.open ? "ic-chev-up" : "ic-chev"), "aria-hidden": "true" })));
+    el.classList.add(st.open ? "stroot" : "stack");
+  }
   // (v3.69 J-materials N5) Draw layers are named in the caption line ("Render 2 · 1 Draw layer"), not on the picture
   const nDraw = V.hasDrawing && V.hasDrawing(n) ? (n.drawing.layers || []).filter((l) => l.visible !== false).length || 1 : 0;
   const drawTag = nDraw ? h("i", { class: "cdraw", title: "Has Draw layers (open Draw to change them)", html: '<svg viewBox="0 0 24 24"><path d="M20.7 4.3a1 1 0 0 0-1.4 0L10 13.6l1.4 1.4 9.3-9.3a1 1 0 0 0 0-1.4zM8.5 15c-1.9 0-3.5 1.6-3.5 3.5 0 .8-.6 1.5-1.5 1.5 1 1.2 2.4 2 4 2 2.8 0 5-2.2 5-5a3.5 3.5 0 0 0-4-2z"/></svg>' + `${nDraw} Draw layer${nDraw > 1 ? "s" : ""}` }) : null;
   el.append(img);
   // v3.69 link dots: only on the picture under the mouse or selected (CSS); the in-dot only where there is a link in
   // (or while a link is being dragged, .canvas.linking)
-  const nPar = V.parents(n.id).length, nIn = Math.max(1, Math.min(4, nPar));
+  const ih = V.nodeImgH(n), nPar = V.parents(n.id).length, nIn = Math.max(1, Math.min(4, nPar));
   for (let i = 0; i < nIn; i++) {
     const p = h("div", { class: "port in" + (nPar ? "" : " none"), "data-port": "in" });
-    if (nIn > 1) p.style.top = (V.NODE_IMG_H / 2 - ((nIn - 1) * 18) / 2 + i * 18 - 8) + "px";
+    if (nIn > 1) p.style.top = (ih / 2 - ((nIn - 1) * 18) / 2 + i * 18 - 8) + "px";
     el.append(p);
   }
   el.append(h("div", { class: "port out", "data-port": "out", "data-tip": "Link to another picture: drag this dot onto it (shows that one was made from this one)", "data-tip-pos": "right" }));
@@ -2787,19 +3880,23 @@ function nodeHTML(n) {
   const kind = V.pictureKind ? V.pictureKind(n) : "";
   const title = V.nodeTitle ? V.nodeTitle(n) : n.kind === "source" ? n.label || "Source" : n.label || engineName(n.engine);
   const sub = (V.nodeSub ? V.nodeSub(n) : String(n.prompt || "")) || (kind === "view" && n.created ? "Captured " + hm(n.created) : "");
-  el.append(h("div", { class: "cap" }, h("b", {}, title, drawTag ? " · " : "", drawTag), sub ? h("span", {}, sub.slice(0, 140)) : null));
+  el.append(h("div", { class: "cap" }, h("b", {}, title, drawTag ? " " : "", drawTag), sub ? h("span", {}, sub.slice(0, 140)) : null));
   // settings card on hover: the AI model first, then the settings, then when
   const when = n.created ? new Date(n.created).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
   const eng = n.engine ? engineName(n.engine) : "";
-  if (eng || n.meta || n.kind !== "source") el.append(h("div", { class: "nmeta" }, eng ? h("b", {}, eng) : null, n.meta ? h("span", {}, n.meta) : null, when ? h("span", {}, when) : null));
-  if (V.cmp && (V.cmp.a === n.id || V.cmp.b === n.id)) img.append(h("span", { class: "ncmp" }, V.cmp.a === n.id ? "A" : "B"));
+  const asked = n.askedEngine && n.askedEngine !== n.engine ? "asked for " + engineName(n.askedEngine) : ""; // (v3.74 D2: another model made it, A2-07)
+  if (eng || n.meta || n.kind !== "source") el.append(h("div", { class: "nmeta" }, eng ? h("b", {}, eng) : null, asked ? h("span", {}, asked) : null, n.meta ? h("span", {}, n.meta) : null, when ? h("span", {}, when) : null));
+  if (V.cmp && (V.cmp.a === n.id || V.cmp.b === n.id)) { img.append(h("span", { class: "ncmp" }, V.cmp.a === n.id ? "A" : "B")); el.classList.add("hascmp"); }
+  // the card's own height (the CSS reads --nih on the card before #world's default)
+  el.style.setProperty("--nih", ih + "px");
+  if (V.cardMarks) V.cardMarks(n, el); // (v3.74 C1 hook, review.js: pick / hero marks, a round's letter, rounds on the stack badge)
   return el;
 }
 // one-off effects (enter, reveal, select). Nodes are rebuilt on every render, so each effect remembers
 // when it started and later renders resume it part-way through instead of restarting or cutting it off.
-const fx = new Map(), seen = new Set(), seenEdges = new Set(), lastStatus = new Map();
-let lastSel = new Set(), bulkLoad = false;
-const FX_MS = { enter: 700, reveal: 1400, selin: 500, edge: 800 };
+const fx = new Map(), seen = new Set(), seenEdges = new Set(), lastStatus = new Map(), wipeSrc = new Map();
+let lastSel = new Set(), bulkLoad = false, gatheredWas = new Set(), tuckedWas = new Set(); // (tuckedWas: versions last drawn inside a gathered stack's card)
+const FX_MS ={ enter: 700, reveal: 1400, selin: 500, edge: 800 };
 const fxStart = (key) => fx.set(key, performance.now());
 const fxApply = (el, key, cls, cssVar) => {
   const t0 = fx.get(key); if (t0 == null) return;
@@ -2834,54 +3931,150 @@ V.render = () => {
   const animateNew = fresh.length <= 12; // don't animate a big project load
   bulkLoad = !animateNew;
   fresh.forEach((n, i) => { seen.add(n.id); if (animateNew) fx.set("e" + n.id, performance.now() + i * 45); });
+  computeStacks();
+  // a result made from two or more pictures lands beside its first input, not on it (its edges weren't there when it was placed)
+  for (const n of fresh) { if (hiddenNow.has(n.id)) continue; const ps = V.parents(n.id); if (ps.length >= 2 && V.G.nodes.some((o) => o !== n && !hiddenNow.has(o.id) && Math.abs(o.x - n.x) < 2 && Math.abs(o.y - n.y) < 2)) Object.assign(n, V.placeTree(ps[0], 1)[0]); }
+  // (N5) a stack that has just reached two versions in this session (a second render landing beside the first) gathers: the
+  // card beside the view glides onto the root's card (--t-slow) rather than jumping; nothing is written, its own place stays
+  // as saved. An opened project is drawn gathered at once (no glide, no move: its arrangement is kept underneath). A stack
+  // back down to one version (one removed, folded or set aside) lets go: a card left lying on the root (a version placed
+  // there while the stack was gathered) moves out beside it.
+  const glide = animateNew && !mode && V.motionOn(), onRoot = (st, m) => m !== st.root && Math.abs(m.x - st.root.x) < 2 && Math.abs(m.y - st.root.y) < 2;
+  for (const st of stacks.values()) {
+    if (st.gathered) { if (!gatheredWas.has(st.id) && glide && !fresh.includes(st.root) && st.members.some((m) => m !== st.root && drawnAt.has(m.id) && !onRoot(st, m))) glideStack(st, new Map(st.members.map((m) => [m.id, { x: st.root.x, y: st.root.y }])), () => { if (unoverlap([st.root.id])) V.render(); }, true, false); }
+    else if (!st.open && st.n && st.members.some((m) => onRoot(st, m))) {
+      const rp = rowPositions(st), to = new Map(st.members.filter((m) => onRoot(st, m)).map((m) => [m.id, rp.get(m.id)]));
+      // (v3.74 final, deliver-stack-overlap) a row place on another view's card (a batch: the views side by side) is not
+      // taken: the version goes under its own view instead (then straight down past anything there), so no neighbour moves
+      const ids = new Set(st.members.map((m) => m.id)), oth = drawnCards().filter((o) => !ids.has(o.id)).map(V.nodeBox);
+      for (const [id, p] of to) { const m = V.node(id), hh = V.nodeH(m); if (!oth.some((b) => hitBox({ x: p.x, y: p.y, h: hh }, b))) continue;
+        const q = { x: st.root.x, y: st.root.y + V.nodeH(st.root) + 40 }; for (let i = 0; i < 40 && oth.some((b) => hitBox({ x: q.x, y: q.y, h: hh }, b)); i++) q.y += V.NODE_H + 24; to.set(id, q); }
+      if (glide) glideStack(st, to, () => unoverlap([...to.keys()]), true, true); else { for (const [id, p] of to) Object.assign(V.node(id), p); unoverlap([...to.keys()]); }
+    }
+  }
+  // (B1-N2) a version that was drawn inside a gathered stack's card and is a card of its own again (its stack let go: a
+  // version removed, set aside or folded, or the picture it was made from removed) comes back at its own saved place.
+  // When another card lies there now (one a gather put back, a capture or a new picture placed while it was tucked away),
+  // it goes where a first render of its root goes instead (placeOut), gliding out of the stack's card; nothing else moves.
+  for (const n of V.G.nodes) {
+    if (!tuckedWas.has(n.id) || hiddenNow.has(n.id) || fresh.includes(n)) continue;
+    const st = stackByNode.get(n.id); if (!st || st.open || animating.has(st.id) || (st.gathered && n !== st.root)) continue;
+    const b = V.nodeBox(n); if (!drawnCards().some((o) => o !== n && hitBox(b, V.nodeBox(o), 0))) continue;
+    const q = placeOut(n, n !== st.root ? st.root : V.parents(n.id).find((x) => !hiddenNow.has(x.id)));
+    const end = () => { if (unoverlap([n.id])) V.render(); V.changed(); };
+    if (glide && !st.gathered) glideStack(st, new Map([[n.id, q]]), end, true, true);
+    else { Object.assign(n, q); unoverlap([n.id]); V.changed(); }
+  }
+  if (animating.size) computeStacks();
+  gatheredWas = new Set([...stacks.values()].filter((st) => st.gathered || animating.has(st.id)).map((st) => st.id));
+  tuckedWas = new Set(); for (const st of stacks.values()) if (st.gathered) st.members.forEach((m) => { if (m !== st.root) tuckedWas.add(m.id); });
   for (const n of V.G.nodes) {
     if (hiddenNow.has(n.id)) continue;
-    const el = nodeHTML(n);
-    el.style.left = n.x + "px"; el.style.top = n.y + "px";
-    if (V.nodeDim && V.nodeDim(n)) el.classList.add("dim");
-    if (selSet.has(n.id)) { el.classList.add("sel"); if (!lastSel.has(n.id) && !fresh.includes(n)) fxStart("s" + n.id); }
+    // what changed since the last time (for every visible picture, drawn or behind a stack's top)
     const was = lastStatus.get(n.id);
-    if (was && was !== "done" && n.status === "done") { fxStart("r" + n.id); landed = true; }
+    if (was && was !== "done" && n.status === "done") { fxStart("r" + n.id); landed = true; if (n.type === "image" && was !== "uploading") { const from = srcThumb(n); if (from) { fxStart("w" + n.id); wipeSrc.set(n.id, from); } } }
     // (v3.69 J-firstday-S8: a picture that has just started being made, or has just failed, is shown too, so its
     // "Rendering… 0:04" or its Try again is in view)
-    if ((was && was !== "error" && n.status === "error") || (!was && animateNew && (n.status === "queued" || n.status === "running"))) landed = true;
+    if ((was && was !== "error" && n.status === "error") || (!was && animateNew && (n.status === "queued" || n.status === "running" || n.status === "capturing"))) landed = true;
     lastStatus.set(n.id, n.status);
+    if (selSet.has(n.id) && !lastSel.has(n.id) && !fresh.includes(n)) fxStart("s" + n.id);
+    const st = stackByNode.get(n.id);
+    if (st && st.gathered && st.top !== n) continue; // (drawn as part of its stack's card)
+    const el = nodeHTML(n, st), bx = V.nodeBox(n); // (a gathered stack's card is drawn at its root)
+    el.style.left = bx.x + "px"; el.style.top = bx.y + "px";
+    const ms = st && st.gathered ? st.members : [n];
+    ms.forEach((m) => drawnAt.set(m.id, { x: bx.x, y: bx.y }));
+    if (V.nodeDim && ms.every((m) => V.nodeDim(m))) el.classList.add("dim");
+    if (ms.some((m) => selSet.has(m.id))) el.classList.add("sel");
     fxApply(el, "e" + n.id, "enter", "--d-enter");
     fxApply(el, "r" + n.id, "reveal", "--d-reveal");
     if (selSet.has(n.id)) fxApply(el, "s" + n.id, "selin", "--d-sel");
-    nodesL.append(el); nodeEls.set(n.id, el);
+    nodesL.append(el); ms.forEach((m) => nodeEls.set(m.id, el));
   }
   lastSel = selSet;
   drawGroups(); drawEdges();
   $("#emptyHint").hidden = V.G.nodes.length > 0;
+  // v3.74 A1 (N1 amber budget, visual:V12): style hooks: the watermark only on an empty canvas; Capture is the filled amber
+  // button only while the project has no SketchUp/Revit view (afterwards Render is the next action)
+  $("#canvas").classList.toggle("has-nodes", V.G.nodes.length > 0);
+  $("#canvas").classList.toggle("has-view", !!V.isCapture && V.G.nodes.some((n) => V.isCapture(n) && !n._ph));
   if (!V.G.nodes.length) paintRecent(); else recentFor = null; // (asked again the next time the canvas is empty)
   V.updateQueue();
-  paintSelBar(); tickWait();
-  // v3.69 (J-firstday-S8): with 3 pictures or fewer, a capture, an added picture, a picture just sent to be made and a
+  paintSelBar(); tickJobs();
+  // v3.69 (J-firstday-S8): with 3 cards or fewer, a capture, an added picture, a picture just sent to be made and a
   // result that has just landed (or failed) are shown big: the canvas fits them (never above 125%). Bigger canvases don't jump.
-  if (landed && !mode && V.visibleNodes().length <= 3 && V.canvasShown()) { clearTimeout(autoFitT); autoFitT = setTimeout(() => V.visibleNodes().length <= 3 && V.fit(V.visibleNodes(), true, 1.25), 60); }
+  const few = () => nodesL.childElementCount <= 3;
+  if (landed && !mode && few() && V.canvasShown()) { clearTimeout(autoFitT); autoFitT = setTimeout(() => few() && V.fit(V.visibleNodes(), true, 1.25), 60); }
   V.onRender && V.onRender();
 };
-// v3.69 a picture being made says so under its spinner: "Rendering… 0:42" (counting) or "Waiting · 3rd in line"
-let waitT = 0;
-function tickWait() {
-  const any = V.G.nodes.some((n) => n.status === "queued" || n.status === "running");
-  if (any && !waitT) waitT = setInterval(() => { document.querySelectorAll(".node .nwait").forEach((el) => { const n = V.node(el.dataset.wait); if (n) el.textContent = V.makingText(n); }); }, 1000);
-  else if (!any && waitT) { clearInterval(waitT); waitT = 0; }
+// v3.74 B1 (N6): once a second while something is being made: the stage text and ring on each card, the Activity rows,
+// the ring round the Activity button and the title-bar chip, all from V.jobClock
+let jobT = 0, chipWas = null;
+function tickJobs() {
+  const any = V.G.nodes.some((n) => n.status === "queued" || n.status === "running" || n.status === "capturing");
+  if (any && !jobT) jobT = setInterval(paintJobs, 1000);
+  else if (!any && jobT) { clearInterval(jobT); jobT = 0; }
+  paintJobs();
 }
+function paintJobs() {
+  nodesL.querySelectorAll(".nwait[data-wait]").forEach((el) => { const n = V.node(el.dataset.wait); if (n) { const t = V.makingText(n); if (el.textContent !== t) el.textContent = t; } });
+  nodesL.querySelectorAll(".nring[data-ring]").forEach((svg) => { const n = V.node(svg.dataset.ring); if (!n || n.status === "capturing" || !V.jobClock) return; const fg = svg.querySelector(".rfg"); if (fg) fg.style.strokeDashoffset = (RING * (1 - V.jobClock.state(n).p)).toFixed(1); });
+  const pop = $("#queuePop");
+  if (pop && !pop.hidden) pop.querySelectorAll(".qitem.making").forEach((row) => { const n = V.node(row.dataset.q); if (!n || (n.status !== "queued" && n.status !== "running")) return; const s = row.querySelector(".qs"), b = row.querySelector(".qbar i"); if (s) s.textContent = V.makingText(n); if (b) b.style.width = Math.round(V.jobClock.state(n).p * 100) + "%"; });
+  const sum = V.jobsSummary ? V.jobsSummary() : null, tq = $("#tQueue"), chip = $("#jobChip");
+  if (tq) { tq.classList.toggle("run", !!sum); tq.style.setProperty("--p", sum ? sum.p.toFixed(3) : "0"); }
+  if (chip) {
+    chip.hidden = !sum;
+    const tbar = chip.closest(".titlebar"); if (tbar) tbar.classList.toggle("jobon", !!sum); // (NP-1: the search box gives way only while the chip shows)
+    if (sum) {
+      chip.classList.toggle("over", !!sum.over); chip.classList.toggle("wait", !!sum.wait);
+      const t = chip.querySelector(".jtext"); if (t && t.textContent !== sum.text) t.textContent = sum.text;
+      const s = chip.querySelector(".jshort"); if (s && s.textContent !== sum.short) s.textContent = sum.short; // (a narrow title bar shows this one)
+      const fg = chip.querySelector(".rfg"); if (fg) fg.style.strokeDashoffset = (59.7 * (1 - sum.p)).toFixed(1);
+      chip.title = (sum.n === 1 ? "1 picture being made" : `${sum.n} pictures being made`) + ": click for Activity";
+      chip.setAttribute("aria-label", sum.text + ": click for Activity"); // (v3.74 D2: the name is the full words whichever form shows)
+    } else { // (v3.74 D2) nothing being made: no words left in the hidden chip (its two forms read "…40 s left40 s left" to a test or reader)
+      chip.querySelectorAll(".jtext, .jshort").forEach((x) => { if (x.textContent) x.textContent = ""; }); chip.removeAttribute("aria-label");
+    }
+  }
+  if (chipWas !== !!sum) { chipWas = !!sum; if (V.paintStatus) V.paintStatus(); } // (the status pill leaves "Rendering" to the chip)
+  paintTitle(sum);
+}
+// (motion-11) the window title while the user is in SketchUp: "◐ Rendering · about 40 s · Clarman VizLab", then "✓ Render ready ·
+// Clarman VizLab" until the window is looked at again. Anyone else's title is kept underneath (shell.js never sets one today).
+let titleMine = null, titleBase = null, readyTitle = "";
+function paintTitle(sum) {
+  if (document.title !== titleMine) titleBase = document.title; // (someone else set it: build on theirs)
+  const want = sum ? `◐ ${sum.text.replace(/…$/, "")} · ${titleBase}` : readyTitle && document.hidden ? `✓ ${readyTitle} · ${titleBase}` : titleBase;
+  if (document.title !== want) document.title = want;
+  titleMine = want;
+}
+V.titleReady = (what) => { readyTitle = document.hidden ? what : ""; paintTitle(V.jobsSummary ? V.jobsSummary() : null); };
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { readyTitle = ""; paintTitle(V.jobsSummary ? V.jobsSummary() : null); } });
+window.addEventListener("focus", () => { readyTitle = ""; paintTitle(V.jobsSummary ? V.jobsSummary() : null); });
+V.paintJobs = paintJobs;
+V.jobChipOn = () => { const c = $("#jobChip"); return !!c && !c.hidden; };
+const chipBtn = $("#jobChip");
+if (chipBtn) chipBtn.addEventListener("click", () => { V.setView && V.setView("canvas"); const p = $("#queuePop"); if (p) { p.hidden = false; V.drawQueue(); } });
+// boxes (x, y, ih = the picture's height) in, so the line meets each card at the middle of its picture
 function edgePath(a, b) {
-  const x1 = a.x + V.NODE_W + 4, y1 = a.y + V.NODE_IMG_H / 2, x2 = b.x - 4, y2 = b.y + V.NODE_IMG_H / 2;
+  const x1 = a.x + V.NODE_W + 4, y1 = a.y + (a.ih || V.NODE_IMG_H) / 2, x2 = b.x - 4, y2 = b.y + (b.ih || V.NODE_IMG_H) / 2;
   const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
   return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
 }
 function drawEdges() {
   edgeG.innerHTML = "";
-  const selSet = new Set(V.sel);
+  const selSet = new Set(V.sel), drawn = new Set();
   for (const e of V.G.edges) {
     const a = V.node(e.from), b = V.node(e.to); if (!a || !b || hiddenNow.has(a.id) || hiddenNow.has(b.id)) continue;
+    // (N5) a link inside a gathered stack is the stack itself; links into or out of it meet the stack's card once
+    const sa = stackByNode.get(a.id), sb = stackByNode.get(b.id);
+    if (sa && sa === sb && sa.gathered) continue;
+    const key = (sa && sa.gathered ? "s" + sa.id : a.id) + ">" + (sb && sb.gathered ? "s" + sb.id : b.id);
+    if (drawn.has(key)) continue; drawn.add(key);
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
     const pending = b.status === "queued" || b.status === "running";
-    p.setAttribute("d", edgePath(a, b)); p.setAttribute("class", "edge" + (selSet.has(a.id) || selSet.has(b.id) ? " hl" : "") + (pending ? " pending" : ""));
+    p.setAttribute("d", edgePath(V.nodeBox(a), V.nodeBox(b))); p.setAttribute("class", "edge" + (selSet.has(a.id) || selSet.has(b.id) ? " hl" : "") + (pending ? " pending" : "") + (sa && sa === sb ? " st" : ""));
     edgeG.append(p);
     if (!seenEdges.has(e.id)) { seenEdges.add(e.id); if (!bulkLoad) fxStart("g" + e.id); }
     if (!pending && fx.has("g" + e.id)) { p.style.setProperty("--len", Math.ceil(p.getTotalLength()) + 1); fxApply(p, "g" + e.id, "enter", "--d-edge"); }
@@ -2889,8 +4082,8 @@ function drawEdges() {
 }
 const groupBox = (g) => {
   const ns = g.nodeIds.map(V.node).filter((n) => n && !hiddenNow.has(n.id)); if (!ns.length) return null;
-  const p = 22;
-  return { x: Math.min(...ns.map((n) => n.x)) - p, y: Math.min(...ns.map((n) => n.y)) - p, x2: Math.max(...ns.map((n) => n.x + V.NODE_W)) + p, y2: Math.max(...ns.map((n) => n.y + V.NODE_H)) + p / 2 };
+  const p = 22, bs = ns.map(V.nodeBox);
+  return { x: Math.min(...bs.map((b) => b.x)) - p, y: Math.min(...bs.map((b) => b.y)) - p, x2: Math.max(...bs.map((b) => b.x + b.w)) + p, y2: Math.max(...bs.map((b) => b.y + b.h)) + p / 2 };
 };
 function drawGroups() {
   groupsL.innerHTML = "";
@@ -2915,8 +4108,16 @@ function drawGroups() {
 // cheap refresh while dragging
 V.moveVisuals = () => moveVisuals();
 function moveVisuals() {
-  for (const n of V.G.nodes) { const el = nodeEls.get(n.id); if (el) { el.style.left = n.x + "px"; el.style.top = n.y + "px"; } }
+  for (const n of V.G.nodes) { const el = nodeEls.get(n.id); if (el && el.dataset.id === n.id) { const b = V.nodeBox(n); el.style.left = b.x + "px"; el.style.top = b.y + "px"; } }
   drawGroups(); drawEdges();
+}
+// (motion:big:4) a card that goes leaves as a fading ghost (a clone in its own layer, gone in --t-med)
+let ghostL = null;
+function ghostOut(ids) {
+  if (!V.motionOn()) return;
+  if (!ghostL) { ghostL = h("div", { class: "ghosts", "aria-hidden": "true" }); world.append(ghostL); }
+  const done = new Set();
+  ids.forEach((id) => { const el = nodeEls.get(id); if (!el || done.has(el)) return; done.add(el); const g = el.cloneNode(true); g.classList.add("exit"); g.removeAttribute("data-id"); ghostL.append(g); setTimeout(() => g.remove(), 400); });
 }
 
 // ---------- selection ----------
@@ -2928,27 +4129,30 @@ V.groupSelected = async () => {
   let k = V.G.groups.length + 1; while (used.has("Group " + k)) k++;
   const name = await V.ask("Name this group", { value: "Group " + k, ok: "Group", text: "The name shows above the group on the canvas. Double-click it to change it later." });
   if (name == null) return;
-  V.snapshot();
+  V.snapshot(`Group "${(name.trim() || "Group " + k).slice(0, 30)}"`);
   V.G.groups.forEach((g) => (g.nodeIds = g.nodeIds.filter((i) => !ids.includes(i))));
   V.G.groups = V.G.groups.filter((g) => g.nodeIds.length);
   V.G.groups.push({ id: V.uid(), title: name.trim() || "Group " + k, nodeIds: ids });
   V.render(); V.changed();
 };
 V.ungroupSelected = () => {
-  V.snapshot();
+  V.snapshot("Ungroup");
   V.G.groups = V.G.groups.filter((g) => !g.nodeIds.some((i) => V.sel.includes(i)));
   V.render(); V.changed();
 };
-const ungroup = (g) => { V.snapshot(); V.G.groups = V.G.groups.filter((x) => x !== g); V.render(); V.changed(); V.toast(`"${g.title || "Group"}" ungrouped`, false, 6000, { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true }); };
+const ungroup = (g) => { V.snapshot(`Ungroup "${g.title || "Group"}"`); V.G.groups = V.G.groups.filter((x) => x !== g); V.render(); V.changed(); V.toast(`"${g.title || "Group"}" ungrouped`, false, 6000, { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true }); };
 V.inGroup = () => V.G.groups.some((g) => g.nodeIds.some((i) => V.sel.includes(i)));
 // v3.69: removing says what went, with Undo; 10 or more asks first. Captures and added pictures aren't in History, so
 // the message says so (once another project opens, Undo can't bring them back)
 const removeIds = (ids) => {
   const ns = ids.map(V.node).filter(Boolean); if (!ns.length) return;
   const k = ns.length, views = ns.some((n) => V.isCapture && V.isCapture(n)), own = ns.some((n) => n.kind === "source");
-  V.snapshot(); V.removeNodes(ns.map((n) => n.id)); V.render(); V.selectionChanged(); V.changed();
-  const why = views ? " (SketchUp views aren't kept in History)" : own ? " (added pictures aren't kept in History)" : "";
-  V.toast(`Removed ${k === 1 ? "1 picture" : k + " pictures"} from the canvas${why}`, false, 8000, { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true });
+  const binned = V.binPictures ? V.binPictures(ns) || 0 : 0; // (v3.74 A2, robust-14: kept 30 days in Recently deleted, Projects page and Ctrl+K)
+  ghostOut(ns.map((n) => n.id)); // (B1: the cards fade out rather than vanish)
+  V.snapshot(`Remove ${k === 1 ? `"${V.nodeTitle(ns[0])}"` : k + " pictures"}`); V.removeNodes(ns.map((n) => n.id)); V.render(); V.selectionChanged(); V.changed();
+  // (A2-05) the 30 days are promised only for what was kept: a failed or unfinished picture has nothing to bring back
+  const why = binned ? ` (Recently deleted keeps ${binned === k ? (k === 1 ? "it" : "them") : binned === 1 ? "the finished one" : `the ${binned} finished ones`} for 30 days)` : views ? " (SketchUp views aren't kept in History)" : own ? " (added pictures aren't kept in History)" : "";
+  V.toast(`Removed ${k === 1 ? "1 picture" : k + " pictures"}${document.getElementById("mtoast") ? "" : " from the canvas"}${why}`, false, 8000, { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true }); // (v3.74 final, phone-08: the phone has no canvas)
 };
 V.deleteSelected = async () => {
   if (!V.sel.length) return;
@@ -2989,10 +4193,16 @@ cv.addEventListener("pointerdown", (e) => {
   const fold = e.target.closest("[data-fold]");
   if (fold) { e.stopPropagation(); const n = V.node(fold.dataset.fold); if (n) V.toggleCollapse(n); return; }
   const unrej = e.target.closest("[data-unreject]");
-  if (unrej) { e.stopPropagation(); V.unreject(unrej.dataset.unreject); return; }
+  if (unrej) { e.stopPropagation(); const u = unrej.dataset.unreject; if (/^stack:/.test(u)) { const st = stacks.get(u.slice(6)); if (st) { V.snapshot(); st.members.forEach((m) => V.children(m.id).forEach((c) => delete c.rejected)); V.render(); V.changed(); } } else V.unreject(u); return; }
+  // (v3.74 B1, N5) the "4 versions" badge spreads or gathers the stack; Cancel on a capture placeholder takes it off
+  const sb = e.target.closest("[data-stack]"), cph = e.target.closest("[data-cancelph]");
+  if (sb || cph) { e.stopPropagation(); if (e.button) return; if (sb) V.spreadStack(sb.dataset.stack); else V.dropPlaceholder(cph.dataset.cancelph); return; }
   // v3.69 a failed picture's own buttons
   const rt = e.target.closest("[data-retry]"), rm = e.target.closest("[data-remove]");
-  if (rt || rm) { e.stopPropagation(); if (e.button) return; const n = V.node((rt || rm).dataset[rt ? "retry" : "remove"]); if (n) rt ? V.retry(n) : removeIds([n.id]); return; }
+  if (rt || rm) { e.stopPropagation(); if (e.button) return; if (rt && rt.disabled) return; const n = V.node((rt || rm).dataset[rt ? "retry" : "remove"]); if (n) rt ? V.retry(n) : removeIds([n.id]); return; }
+  // (v3.74 A2) Stop on a picture being made; a failed picture's Open Settings / Change the words / Free up space
+  const sp = e.target.closest("[data-stop]"), fx2 = e.target.closest("[data-fix]");
+  if (sp || fx2) { e.stopPropagation(); if (e.button) return; if (sp) { const n = V.node(sp.dataset.stop); if (n) V.stopJob(n); } else if (V.failFix) V.failFix(fx2.dataset.fix, V.node(fx2.dataset.nid)); return; }
   hideCtx(); V.stopCamera(); stopGlide(); zt = null;
   if (e.button === 2) return;
   const gp = e.target.closest("[data-gpal]"), gl = e.target.closest("[data-glock]"), gr = e.target.closest("[data-gren]"), gu = e.target.closest("[data-gung]");
@@ -3014,7 +4224,7 @@ cv.addEventListener("pointerdown", (e) => {
   if (e.button === 2) return;
   moved = false; start = { x: e.clientX, y: e.clientY, view: { ...V.G.view } };
   // pan: drag on empty space, hold Space, or drag with the middle mouse button (Shift / Ctrl + drag draws a selection box)
-  if (spacePan || e.button === 1) { mode = "pan"; start.noClear = true; cv.classList.add("panning"); return; }
+  if (spacePan || e.button === 1) { mode = "pan"; start.noClear = true; spaceUsed = true; cv.classList.add("panning"); return; }
   const port = e.target.closest(".port.out");
   const nodeEl = e.target.closest(".node");
   const ghead = e.target.closest("[data-ghead]");
@@ -3040,7 +4250,9 @@ cv.addEventListener("pointerdown", (e) => {
     if (add) { V.sel = V.sel.includes(id) ? V.sel.filter((x) => x !== id) : [...V.sel, id]; }
     else if (!V.sel.includes(id)) V.sel = [id];
     V.render(); V.selectionChanged();
-    mode = "drag"; dragIds = V.sel.includes(id) ? [...V.sel] : [id];
+    // (N5) a gathered stack moves as one: every version comes with the card
+    const st = stackByNode.get(id), stIds = st && st.gathered ? st.members.map((m) => m.id) : [id];
+    mode = "drag"; dragIds = V.sel.includes(id) ? [...new Set([...V.sel, ...stIds])] : stIds;
     const lockedIds = new Set(V.G.groups.filter((g) => g.locked).flatMap((g) => g.nodeIds));
     dragIds = dragIds.filter((i) => !lockedIds.has(i));
     dragIds.forEach((i) => { const n = V.node(i); n._ox = n.x; n._oy = n.y; });
@@ -3051,14 +4263,23 @@ cv.addEventListener("pointerdown", (e) => {
   // Shift / Ctrl + drag draws a selection box (and adds to the selection)
   if (!(e.shiftKey || e.ctrlKey || e.metaKey)) { mode = "pan"; track = []; sample(); cv.classList.add("panning"); return; }
   mode = "box"; start.add = true;
+  e.preventDefault(); try { const s = window.getSelection(); if (s && s.rangeCount) s.removeAllRanges(); } catch (er) {} // (v3.74 final, loop-04: no page text selected by the Shift+drag box)
 });
-// Space held = hand tool
-let spacePan = false;
+document.addEventListener("selectstart", (e) => { if (mode === "box" && !(e.target && e.target.closest && e.target.closest("input,textarea,[contenteditable]"))) e.preventDefault(); });
+// Space held = hand tool. (v3.74 B1, N5) a TAP of Space (no drag while it was down, under 400 ms) with one stack selected
+// spreads or gathers the stack; Space-drag still pans.
+let spacePan = false, spaceAt = 0, spaceUsed = false;
 document.addEventListener("keydown", (e) => {
-  if (e.key !== " " || e.target.matches("input,textarea,select,button") || V.viewerMode === "draw" || !V.canvasShown()) return; // (not on another page or behind a pop-up)
-  e.preventDefault(); if (!spacePan) { spacePan = true; cv.classList.add("grab"); }
+  if (e.key !== " " || (e.target.matches && e.target.matches("input,textarea,select,button")) || V.viewerMode === "draw" || !V.canvasShown()) return; // (not on another page or behind a pop-up; a key sent to the document itself has no .matches)
+  e.preventDefault(); if (!spacePan) { spacePan = true; spaceAt = performance.now(); spaceUsed = false; cv.classList.add("grab"); }
 });
-document.addEventListener("keyup", (e) => { if (e.key === " " && spacePan) { spacePan = false; cv.classList.remove("grab"); } });
+document.addEventListener("keyup", (e) => {
+  if (e.key !== " " || !spacePan) return;
+  spacePan = false; cv.classList.remove("grab");
+  if (spaceUsed || performance.now() - spaceAt > 400 || !V.canvasLive()) return;
+  const ns = V.selNodes ? V.selNodes() : [], st = ns.length ? stackByNode.get(ns[0].id) : null;
+  if (st && st.n >= MIN_STACK && ns.every((n) => stackByNode.get(n.id) === st)) V.spreadStack(st.id);
+});
 window.addEventListener("blur", () => { spacePan = false; cv.classList.remove("grab"); });
 cv.addEventListener("mousedown", (e) => { if (e.button === 1) e.preventDefault(); }); // no browser auto-scroll on middle-drag
 cv.addEventListener("pointermove", (e) => {
@@ -3089,7 +4310,7 @@ cv.addEventListener("pointermove", (e) => {
     Object.assign(b.style, { left: Math.min(start.x, e.clientX) - r.left + "px", top: Math.min(start.y, e.clientY) - r.top + "px", width: Math.abs(dx) + "px", height: Math.abs(dy) + "px" });
   } else if (mode === "link") {
     const a = V.node(linkFrom); const [wx, wy] = toWorld(e.clientX, e.clientY);
-    tmpEdge.setAttribute("d", edgePath(a, { x: wx + 4, y: wy - V.NODE_IMG_H / 2 }));
+    tmpEdge.setAttribute("d", edgePath(V.nodeBox(a), { x: wx + 4, y: wy - 8, ih: 16 }));
   }
 });
 const endPointer = (e) => {
@@ -3108,7 +4329,7 @@ const endPointer = (e) => {
   if (mode === "drag" && !moved && start.clicked && !start.mod && V.sel.length > 1) V.setSel([start.clicked]);
   if ((mode === "drag" || mode === "gdrag") && moved) {
     // snapshot old positions for undo
-    V.snapshotRaw({ nodes: V.G.nodes.map((n) => ({ ...n, x: dragIds.includes(n.id) ? n._ox : n.x, y: dragIds.includes(n.id) ? n._oy : n.y })), edges: V.G.edges, groups: V.G.groups });
+    V.snapshotRaw({ nodes: V.G.nodes.map((n) => ({ ...n, x: dragIds.includes(n.id) ? n._ox : n.x, y: dragIds.includes(n.id) ? n._oy : n.y })), edges: V.G.edges, groups: V.G.groups, ui: V.G.ui || {} }, `Move ${dragIds.length === 1 ? `"${V.nodeTitle(V.node(dragIds[0]))}"` : dragIds.length + " pictures"}`); // (B1: the spread flags go with it, as core.js graphNow; C4: named)
     V.changed();
     dragIds.forEach((id) => nodeEls.get(id)?.classList.remove("lift"));
   }
@@ -3118,14 +4339,14 @@ const endPointer = (e) => {
     else {
       const [x1, y1] = toWorld(Math.min(start.x, e.clientX), Math.min(start.y, e.clientY));
       const [x2, y2] = toWorld(Math.max(start.x, e.clientX), Math.max(start.y, e.clientY));
-      const hit = V.visibleNodes().filter((n) => n.x < x2 && n.x + V.NODE_W > x1 && n.y < y2 && n.y + V.NODE_H > y1).map((n) => n.id);
+      const hit = V.visibleNodes().filter((n) => { const b = boxOf(n); return b.x < x2 && b.x + V.NODE_W > x1 && b.y < y2 && b.y + b.h > y1; }).map((n) => n.id); // (the cards as drawn: a box over a stack takes every version)
       V.setSel(start.add ? [...new Set([...V.sel, ...hit])] : hit);
     }
   }
   if (mode === "link") {
     tmpEdge.setAttribute("d", ""); cv.classList.remove("linking");
     const t = document.elementFromPoint(e.clientX, e.clientY)?.closest(".node");
-    if (t && t.dataset.id !== linkFrom) { V.snapshot(); V.addEdge(linkFrom, t.dataset.id); V.render(); V.changed(); }
+    if (t && t.dataset.id !== linkFrom) { V.snapshot("Link two pictures"); V.addEdge(linkFrom, t.dataset.id); V.render(); V.changed(); }
   }
   const dragged = moved && (mode === "drag" || mode === "gdrag");
   mode = null; start = null;
@@ -3182,7 +4403,7 @@ function groupColours(g, cx, cy) {
 // The empty canvas keeps the short flat list. #ctx is shared with the Draw layer menu, the prompt menu and the capture
 // picker (bridge.js), which fill it with plain buttons.
 const ctx = $("#ctx");
-let sub = null, hovT = 0, own = null; // the open group { row, el, t }, the hover timer, this menu's first element
+let sub = null, hovT = 0, own = null, ctxBack = null; // the open group { row, el, t }, the hover timer, this menu's first element, the button that opened it (v3.74 D2)
 function hideCtx() { ctx.hidden = true; clearTimeout(hovT); sub = null; }
 const pic = (x) => !!x && x.status === "done" && x.type === "image";
 // (v3.69 P1) V.canCapture (guide.js): VizLab.exe defines window.sketchup too, so V.SU alone is not "connected" there
@@ -3239,7 +4460,8 @@ function nodeMenu(n) {
   const cmps = [two && ["Compare the two (A and B)", () => V.compareTwo(two)], cap && [`Compare with the ${V.viewName(cap)}`, () => V.compareWith(n, cap)],
     src && (!cap || src.id !== cap.id) && [cap ? "Compare with the picture it came from" : "Compare with the original", () => V.compareWith(n, src)]].filter(Boolean);
   const c0 = cmps.shift(), cmpTop = c0 && [c0[0], c0[1], "C"];
-  const dl = many.length > 1 && many.some((x) => x.id === n.id)
+  const multi = V.sel.length > 1 && V.sel.includes(n.id); // (v3.74 C4: then the menu's "Selection (k)" group has Download k and Add k to sheets)
+  const dl = !multi && many.length > 1 && many.some((x) => x.id === n.id)
     ? [`Download ${many.length} ${many.every((x) => x.type === "image") ? "pictures" : "files"}`, () => downloadMany(many)]
     : [img && V.cfg.logo.on ? "Download (with Clarman logo)" : "Download", () => V.downloadNode(n)];
   if (n.status === "error" && n.retry) T(["Try again", () => V.retry(n)], "canv");
@@ -3255,10 +4477,17 @@ function nodeMenu(n) {
   if (img && kind !== "view") T(["Upscale ×2", () => V.upscale2x(n)], "edit");
   if (!cap && cmpTop) T(cmpTop, "cmp");
   if (done && fam > 1) T(["Review versions", () => V.openReview(), "R"], "cmp");
+  // (v3.74 B1, N5) the version stack this picture is in, on the top level beside Review: spread it out or gather it, and
+  // select every version (the top level grows by these two, so Download and the rest still show)
+  // (IB-8) only while the selection lies within this stack (a wider one, Ctrl+A say, is not narrowed from here), and
+  // "Select the whole stack" only when part of it is selected
+  const stk0 = stackByNode.get(n.id), within = !!stk0 && V.sel.every((id) => stackByNode.get(id) === stk0);
+  const stk = within ? stk0 : null, inStack = !!(stk && stk.n >= MIN_STACK), whole = inStack && stk.members.every((m) => V.sel.includes(m.id));
+  if (inStack) { T([stk.open ? `Gather the ${stk.n} versions into one card` : `Spread out the ${stk.n} versions`, () => V.spreadStack(stk.id), "Space"], "canv"); if (!whole) T([`Select the whole stack (${stk.members.length})`, () => V.setSel(stk.members.map((m) => m.id))], "canv"); }
   if (done && !model) T(dl, "save");
   if (n.prompt && (cap || kind === "render" || kind === "new")) T(["Use this prompt", () => V.usePromptOf(n.prompt, undefined, n)], null); // (it is under Prompt too)
   if (img && (n.touchup || src || (V.cmp.a && V.cmp.a !== n.id))) T(["Touch-ups (paint the original back in)", () => V.setViewerMode("touch"), "U"], "edit");
-  if (sel.length) T([`Add to sheets${sel.length > 1 ? ` (${sel.length})` : ""}…`, () => V.openSheets(sel)], "save");
+  if (sel.length && !multi) T([`Add to sheets${sel.length > 1 ? ` (${sel.length})` : ""}…`, () => V.openSheets(sel)], "save");
   if (done && V.renameNode) T(["Rename…", () => V.renameAsk(n)], "canv");
   // Edit picture
   if (img && kind === "view") g.edit.push(["Upscale ×2", () => V.upscale2x(n)]);
@@ -3290,29 +4519,37 @@ function nodeMenu(n) {
     g.save.push([`Quick PDF (one picture a page)${V.sel.length > 1 ? ` (${V.sel.length})` : ""}`, () => V.exportPDF(V.selNodes())], ["Prompt record PDF (for the office)", () => V.exportPDF(V.selNodes(), { record: true })]);
   }
   if (img && V.libraryAdd) g.save.push(["Add to Library…", () => V.libraryAdd(n)]);
+  if (done && V.clientPackItem) g.save.push(...V.clientPackItem(n, sel)); // (v3.74 C2 hook, clientpack.js: the offline file for the client)
   if (model) {
     g.save.push(["Download 3D model (GLB)", () => V.download(n.url, V.fileName("3d", { type: "model" }, 0))]);
     (n.downloads || []).filter((o) => o.type === "file").forEach((o) => g.save.push([`Download as ${o.fmt.toUpperCase()}`, () => V.download(o.url, V.fileName("3d", o, 0))]));
   }
   // Canvas
-  const big = document.body.classList.contains("enlarged");
+  const big = V.pictureView ? V.pictureView() : document.body.classList.contains("enlarged"); // (v3.74 B2: Picture view replaced Enlarge)
   g.canv.push([n.fav ? "Unfavourite" : "Favourite", () => V.favNode(n)], ["Zoom to the " + ({ video: "video", model: "3D model", world: "3D world" }[n.type] || "picture"), () => V.zoomToNode(n)]);
   if (kids) g.canv.push([n.collapsed ? "Show the versions made from this" : "Fold away the versions made from this", () => V.toggleCollapse(n)]);
   if (V.sel.length > 1) g.canv.push(["Group selection", V.groupSelected, "Ctrl+G"]);
   if (V.inGroup()) g.canv.push(["Ungroup", V.ungroupSelected, "Ctrl+Shift+G"]);
-  g.canv.push(["Select all", () => V.setSel(V.visibleNodes().map((x) => x.id)), "Ctrl+A"], ["Fit everything", () => V.fit(), "F"], [big ? "Back to canvas" : "Enlarge the picture", () => V.setEnlarged(!big), "E"]);
-  // past 8 on top: to the top of its own group, in order
-  const extra = {};
-  top.slice(TOP_MAX).forEach(([it, home]) => home && (extra[home] = extra[home] || []).push(it));
+  g.canv.push(["Select all", () => V.setSel(V.visibleNodes().map((x) => x.id)), "Ctrl+A"], ["Fit everything", () => V.fit(), "F"], [big ? "Back to canvas" : "Picture view", () => V.setEnlarged(!big), "E"]);
+  // past 8 on top (10 on a picture in a stack): to the top of its own group, in order
+  const extra = {}, topMax = TOP_MAX + (inStack ? 2 : 0);
+  top.slice(topMax).forEach(([it, home]) => home && (extra[home] = extra[home] || []).push(it));
   Object.keys(extra).forEach((k) => (g[k] = [...extra[k], ...g[k]]));
-  return { top: top.slice(0, TOP_MAX).map(([it]) => it),
-    groups: [["Edit picture", g.edit], ["Drawings & 3D", g.dr], ["Prompt", g.pr], ["Compare", g.cmp], ["Save & share", g.save], ["Canvas", g.canv]].filter(([, its]) => its.some((x) => x !== "-")) };
+  return { top: top.slice(0, topMax).map(([it]) => it),
+    groups: [["Edit picture", g.edit], ["Relight", relightItems(n, kind)], ["Drawings & 3D", g.dr], ["Prompt", g.pr], ["Compare", g.cmp], ["Save & share", g.save], ["Canvas", g.canv]].filter(([, its]) => its.some((x) => x !== "-")) };
 }
+// (v3.74 D2, RET-7) "Relight ›" on a render: the Relight chips' lights (panel.js V.tweaks, the Light & time presets' own
+// words), always an edit of THIS picture, the rest kept. Not on a bare SketchUp/Revit view (render it first).
+function relightItems(n, kind) {
+  if (!V.tweaks || !V.tweak || n.type !== "image" || n.status !== "done" || !n.url || V.isCapture(n) || kind === "view") return [];
+  return V.tweaks().filter((t) => t.row === "relight").map((t) => [t.name, () => V.tweak(n, t.id)]);
+}
+let ctxKb = false; // true while a menu row chosen with the keyboard runs (a menu it opens then takes the keyboard)
 const hover = (fn) => { clearTimeout(hovT); hovT = setTimeout(fn, sub ? 220 : 70); }; // a moment's grace to reach an open group
 const ctxBtn = (it, top) => {
   if (it === "-") return h("hr");
   const [label, fn, key, cls, note] = it;
-  return h("button", { class: cls || "", onclick: () => { hideCtx(); fn(); }, onpointerenter: top ? (e) => e.pointerType === "mouse" && hover(closeSub) : null },
+  return h("button", { class: cls || "", onclick: (e) => { hideCtx(); ctxKb = e.detail === 0; try { fn(); } finally { ctxKb = false; } }, /* (C4v-01: detail 0 = Enter, not a click) */ onpointerenter: top ? (e) => e.pointerType === "mouse" && hover(closeSub) : null },
     note ? h("span", { class: "ctxl" }, label, h("small", {}, note)) : label, key ? h("kbd", {}, key) : null);
 };
 const room = () => [document.documentElement.clientWidth || innerWidth, document.documentElement.clientHeight || innerHeight]; // the window less any scrollbar
@@ -3337,12 +4574,33 @@ const groupRow = ([name, its]) => {
   b.open = (focus) => openSub(b, its, focus);
   return b;
 };
+// (IB-11) a picture's hover info box stays away while a menu is open and after it closes, until the mouse moves on the
+// canvas again; and while the mouse is on a stack's badge (its tooltip is the one layer shown then)
+let ctxQuiet = false;
+cv.addEventListener("pointermove", () => { if (ctxQuiet && ctx.hidden) { ctxQuiet = false; cv.classList.remove("hovquiet"); } });
+nodesL.addEventListener("pointerover", (e) => { const b = e.target.closest && e.target.closest(".stbadge"), nd = b && b.closest(".node"); if (nd) nd.classList.add("badgehov"); });
+nodesL.addEventListener("pointerout", (e) => { const b = e.target.closest && e.target.closest(".stbadge"), nd = b && b.closest(".node"); if (nd && !(e.relatedTarget && b.contains(e.relatedTarget))) nd.classList.remove("badgehov"); });
 function showCtx(x, y, id) {
+  ctxQuiet = true; cv.classList.add("hovquiet");
   if (id && !V.sel.includes(id)) { V.sel = [id]; V.render(); V.selectionChanged(); }
   const n = id && V.node(id);
   ctx.innerHTML = ""; sub = null; clearTimeout(hovT);
   if (n) {
-    const m = nodeMenu(n);
+    const m = nodeMenu(n), k = V.sel.length;
+    // v3.74 C4 (N14, power:big:1): with several pictures selected the menu has two parts. "Selection (k)": what works on
+    // them all, with counts (V.forSelection: one undo step, one message). "This picture": the picture right-clicked; using
+    // one of its items selects that picture alone first (an item that names the selection's count still acts on them all)
+    if (k > 1) {
+      ctx.append(h("div", { class: "ctxhead" }, `Selection (${k})`));
+      V.selActions().filter((a) => a.act !== "remove").forEach((a) => ctx.append(ctxBtn([a.label, () => runSel(a.act, parseFloat(ctx.style.left) || x, parseFloat(ctx.style.top) || y), a.key], true)));
+      ctx.append(ctxBtn(["Select instead: all views, latest renders, favourites…", () => smartMenu(x, y)], true));
+      ctx.append(h("hr")); ctx.append(h("div", { class: "ctxhead" }, h("span", {}, "This picture: "), h("b", {}, V.nodeTitle(n)), h("small", {}, "selects just this one")));
+      const forSel = (lab) => new RegExp(`\\(${k}\\)|selection|^Select|^Fit everything|^Ungroup|^Group`, "i").test(lab);
+      const one = (it) => (it === "-" || forSel(it[0]) ? it : [it[0], () => { V.setSel([n.id]); it[1](); }, ...it.slice(2)]);
+      m.top = m.top.map(one); m.groups = m.groups.map(([g, its]) => [g, its.map(one)]);
+      // (C4-1) its main actions fold into one row that opens beside the menu, so the whole menu fits a 1366x768 screen
+      if (m.top.length) { m.groups.unshift(["Main actions", m.top]); m.top = []; }
+    }
     m.top.forEach((it) => ctx.append(ctxBtn(it, true)));
     if (m.top.length && m.groups.length) ctx.append(h("hr"));
     m.groups.forEach((g) => ctx.append(groupRow(g)));
@@ -3351,12 +4609,13 @@ function showCtx(x, y, id) {
   placeCtx(x, y);
 }
 // a short flat menu of [label, run, key, cls] at x, y (the group heading, the zoom level, the small canvas's ⋯)
-function flatCtx(x, y, items) { ctx.innerHTML = ""; sub = null; clearTimeout(hovT); items.forEach((it) => ctx.append(ctxBtn(it, true))); placeCtx(x, y); }
+// (v3.74 D2: back = the title-bar button that opened it, e.g. ?: Esc and a dialog opened from a row give the keyboard back to it)
+function flatCtx(x, y, items, focus, back) { ctx.innerHTML = ""; sub = null; clearTimeout(hovT); items.forEach((it) => { const b = ctxBtn(it, true); if (back && b) b._vmBack = back; ctx.append(b); }); placeCtx(x, y); ctxBack = back || null; if (focus) { const b = ctx.querySelector(":scope > button"); if (b) b.focus(); } } // (focus: opened from the keyboard, so its first row has it, as a group's flyout does)
 function placeCtx(x, y) {
-  own = ctx.firstChild; ctx.style.left = ctx.style.top = "0px"; ctx.hidden = false; // measured at its full width, so nothing wraps near the edge
+  own = ctx.firstChild; ctxBack = null; ctx.style.left = ctx.style.top = "0px"; ctx.hidden = false; // measured at its full width, so nothing wraps near the edge
   const [W, H] = room(); ctx.style.left = Math.max(8, Math.min(x, W - ctx.offsetWidth - 8)) + "px"; ctx.style.top = Math.max(8, Math.min(y, H - ctx.offsetHeight - 8)) + "px";
 }
-V.flatMenu = (x, y, items) => flatCtx(x, y, items);
+V.flatMenu = (x, y, items, back, focus) => flatCtx(x, y, items, focus, back);
 cv.addEventListener("contextmenu", (e) => {
   e.preventDefault();
   if (e.target.closest(".ctools,.selbar,.zoomctl,.queue-pop,.cappop,.cvchip,.findbar,.minimap,.empty-hint button")) return; // (the canvas's own bars)
@@ -3375,7 +4634,8 @@ window.addEventListener("keydown", (e) => {
   if (k === "ArrowDown" || k === "ArrowUp") { const d = k === "ArrowDown" ? 1 : -1; bs[i < 0 ? (d > 0 ? 0 : bs.length - 1) : (i + d + bs.length) % bs.length].focus(); }
   else if (k === "ArrowRight" && !inSub && a && a.open) a.open(true);
   else if ((k === "ArrowLeft" || k === "Escape") && inSub) { const r = sub.row; closeSub(); r.focus(); }
-  else if (k === "Escape") { hideCtx(); cv.focus({ preventScroll: true }); }
+  else if (k === "Escape") { const b = ctxBack && ctxBack.isConnected && !ctxBack.closest("[hidden]") ? ctxBack : cv; hideCtx(); b.focus({ preventScroll: true }); }
+  else if (k === "ArrowLeft" || k === "ArrowRight") {} // (whole-01: on a plain row they do nothing, and never reach the canvas, which would step the selection)
   else return;
   e.preventDefault(); e.stopImmediatePropagation();
 }, true);
@@ -3397,10 +4657,10 @@ V.picking = () => !!pick;
 V.compareTwo = (ns) => { const [a, b] = [...ns].sort((x, y) => V.G.nodes.indexOf(x) - V.G.nodes.indexOf(y)); V.cmp.a = a.id; V.cmp.b = b.id; V.cmp.view = null; V.render(); V.setViewerMode("compare"); V.toast("Comparing A (the older) and B", false, 2500); };
 V.clearCompare = () => { V.cmp.a = V.cmp.b = null; V.render(); V.renderViewer(); };
 V.copyPromptOf = (n) => navigator.clipboard.writeText(V.nodePrompt(n)).then(() => V.toast(n.scene ? "Prompt and scene text copied" : "Prompt copied", false, 1500)).catch(() => V.toast("Couldn't copy", true));
-V.zoomToNode = (n) => { const r = cv.getBoundingClientRect(), z = 1.6; V.animateView({ z, x: r.width / 2 - (n.x + V.NODE_W / 2) * z, y: r.height / 2 - (n.y + V.NODE_H / 2) * z }); };
+V.zoomToNode = (n) => { const r = cv.getBoundingClientRect(), z = 1.6, b = boxOf(n); V.animateView({ z, x: r.width / 2 - (b.x + V.NODE_W / 2) * z, y: r.height / 2 - (b.y + b.h / 2) * z }); };
 V.favNode = (n) => { n.fav = !n.fav; V.render(); V.changed(); if (n.jobId) V.api("favourite", { id: n.jobId, value: n.fav }).catch(() => {}); };
 V.renameAsk = (n) => V.ask("Rename", { value: n.named ? n.label : "", placeholder: "e.g. Proposed street view", ok: "Rename",
-  text: "The name shows on the canvas and as the picture's title on Sheets. Leave it empty to go back to its first name." }).then((v) => { if (v == null) return; V.snapshot(); V.renameNode(n, v); V.render(); V.changed(); });
+  text: "The name shows on the canvas and as the picture's title on Sheets. Leave it empty to go back to its first name." }).then((v) => { if (v == null) return; V.snapshot(v.trim() ? `Rename to "${v.trim().slice(0, 30)}"` : "Rename back"); V.renameNode(n, v); V.render(); V.changed(); });
 
 $("#tUndo").onclick = () => V.undo();
 $("#tRedo").onclick = () => V.redo();
@@ -3428,19 +4688,35 @@ function paintSelBar() {
   const imgs = V.selImages(), done = ns.filter((n) => n.status === "done" && n.url), b = (label, run, title, cls) => h("button", { class: cls || "", title: title || null, onclick: run }, label);
   const pdf = done.some((n) => n.type === "image" || n.thumb) ? () => V.exportPDF(ns) : null, dl = done.length ? () => downloadMany(done) : null;
   // always one line: on a narrow canvas the labels get shorter (lv 1), then PDF and Download all fold under ⋯ (lv 2)
+  // v3.74 C4 (PW-01, PW-02): Select ▾ (smart selections), then the actions that work on them all, each with its count, through
+  // V.forSelection (one undo step, one message); the rarer ones under ⋯. On a narrow canvas the labels get shorter (lv 1),
+  // then PDF, Download, Group fold under ⋯ too (lv 2)
+  const acts = V.selActions(ns), A = (act) => acts.find((x) => x.act === act), sb = (act, S, ic) => { const x = A(act); if (!x) return null; const el = b(S ? x.short : x.label, (e) => { const r = e.currentTarget.getBoundingClientRect(); runSel(act, r.left, r.bottom + 4, e.detail === 0); }, `${x.label}${x.key ? ` (${x.key})` : ""}`, "sbact " + (x.cls || "")); if (ic) el.prepend(V.icoEl(ic), " "); return el; };
+  // (C4-4) levels, so Download stays on the line at 1366 and 1440: 0 full labels; 1 short labels ("Fav 3"); 2 Quick PDF and
+  // Group go under the ⋯ and Select is its icon; 3 Sheets goes under it too; 4 Download as well, and the star shows its count only
   const fill = (lv) => {
     const S = lv > 0; selbar.innerHTML = "";
-    selbar.append(...[h("b", {}, `${k} selected`),
-      imgs.length === 2 && k === 2 ? b(S ? "Compare" : "Compare the two", () => V.compareTwo(imgs), "Compare the two side by side, A (the older) and B (C)") : null,
-      imgs.length ? b(S ? "Sheets" : "Add to sheets", () => V.openSheets(imgs), "Add them to sheets: lay them out on presentation pages") : null,
-      ...(lv < 2 ? [pdf && b(S ? "PDF" : "Quick PDF", pdf, "Quick PDF: one page each, with their names, the project and the Clarman logo (Add to sheets makes the presentation PDF)"), dl && b(S ? "Download" : "Download all", dl, `Download the ${done.length} files`)]
-        : [(pdf || dl) && b("⋯", (e) => { const r = e.currentTarget.getBoundingClientRect(); flatCtx(r.left, r.bottom + 4, [pdf && ["Quick PDF (one picture a page)", pdf], dl && [`Download all (${done.length})`, dl]].filter(Boolean)); }, "More: PDF, Download all")]),
-      b(V.inGroup() && !S ? "Group again…" : "Group…", () => V.groupSelected(), "Put them in a named group (Ctrl+G)"),
-      b("Remove", () => V.deleteSelected(), "Take them off the canvas (Del)", "danger"),
-      h("button", { class: "sbx", title: "Clear the selection (Esc)", "aria-label": "Clear the selection", onclick: () => V.setSel([]) }, "×")].filter(Boolean));
+    const sel = b(lv >= 2 ? "" : "Select", (e) => { const r = e.currentTarget.getBoundingClientRect(); smartMenu(r.left, r.bottom + 4); }, "Select: all SketchUp views (Shift+A), the latest render of each view, the favourites, the failed ones", "sbsel");
+    if (lv >= 2) { sel.append(V.icoEl("check")); sel.setAttribute("aria-label", "Select"); }
+    sel.append(" ", V.icoEl("chev"));
+    const fav = sb("favourite", S, ns.filter((n) => n.status === "done").every((n) => n.fav) ? "star-fill" : "star");
+    if (fav && lv >= 4) { fav.lastChild.textContent = String(A("favourite").k); fav.setAttribute("aria-label", A("favourite").label); }
+    let mx = 0, my = 0;
+    const more = [lv >= 2 && pdf && ["Quick PDF (one picture a page)", pdf], lv >= 3 && imgs.length && [`Add ${imgs.length} to sheets…`, () => V.forSelection("sheets")],
+      lv >= 4 && A("download") && [A("download").label, () => V.forSelection("download"), "Ctrl+Shift+S"], lv >= 2 && ["Group…", () => V.groupSelected(), "Ctrl+G"],
+      ...["aside", "retry", "relight"].map((a) => A(a) && [A(a).label, (ev) => runSel(a, mx, my), A(a).key])].filter(Boolean);
+    selbar.append(...[h("b", {}, `${k} selected`), sel, fav, sb("upscale", S), sb("compare", S),
+      imgs.length && lv < 3 ? b(S ? `Sheets ${imgs.length}` : `Add ${imgs.length} to sheets`, () => V.forSelection("sheets"), "Add them to sheets: lay them out on presentation pages") : null,
+      lv < 2 && pdf ? b(S ? "PDF" : "Quick PDF", pdf, "Quick PDF: one page each, with their names, the project and the Clarman logo (Add to sheets makes the presentation PDF)") : null,
+      lv < 4 && dl ? b(`Download ${done.length}`, () => V.forSelection("download"), `Download the ${done.length} files (Ctrl+Shift+S)`) : null,
+      lv < 2 ? b(V.inGroup() && !S ? "Group again…" : "Group…", () => V.groupSelected(), "Put them in a named group (Ctrl+G)") : null,
+      more.length ? b("", (e) => { const r = e.currentTarget.getBoundingClientRect(); mx = r.left; my = r.bottom + 4; flatCtx(mx, my, more, e.detail === 0); }, "More: " + more.map((x) => x[0]).join(", ").replace(/…/g, ""), "sbmore") : null,
+      b(`Remove ${k}`, () => V.forSelection("remove"), "Take them off the canvas (Del)", "danger"),
+      h("button", { class: "sbx", title: "Clear the selection (Esc)", "aria-label": "Clear the selection", onclick: () => V.setSel([]) }, V.icoEl("close"))].filter(Boolean));
+    const mb = selbar.querySelector(".sbmore"); if (mb) { mb.append(V.icoEl("more")); mb.setAttribute("aria-label", "More actions"); }
   };
   selbar.className = "selbar" + (findOpen ? " low" : ""); selbar.hidden = false;
-  for (let lv = 0; lv < 3; lv++) { fill(lv); if (selbar.scrollWidth <= selbar.clientWidth + 1) break; }
+  for (let lv = 0; lv < 5; lv++) { fill(lv); if (selbar.scrollWidth <= selbar.clientWidth + 1) break; }
   requestAnimationFrame(clearBar);
 }
 // v3.69: the bar never hides what was selected. When it lies over a selected picture or the heading of a group whose
@@ -3460,6 +4736,134 @@ function clearBar() {
   if (!head && low + dy > cr.bottom) return; // (pictures only: not when it would push the selection off the bottom, e.g. Ctrl+A on a fitted canvas)
   const v = V.G.view; V.animateView({ z: v.z, x: v.x, y: v.y + dy }, 280); viewDirty();
 }
+
+// ---------- v3.74 C4 (N14, power:big:1, PW-01, PW-08): the selection is the subject ----------
+// Every picture action that makes sense on several pictures goes through V.forSelection(act, ns, arg): it picks the pictures
+// it can work on, runs once per picture, makes ONE undo step and says ONE thing ("3 upscales started"). The right-click
+// menu's "Selection (6)" group, the selection bar, Ctrl+K and the keys (Shift+U, Shift+F, X, Delete, Ctrl+Shift+S) all
+// come here. V.selActions(ns) lists the actions with their counts for the menus. The pictures it skips are said too.
+const plu = (k, w, ws) => `${k} ${k === 1 ? w : ws || w + "s"}`;
+const imgOk = (n) => pic(n) && !!n.url;
+// (C4v-03) relight and the tweaks change a render's light or finish: a bare SketchUp or Revit view is left out (Render it first), as Set aside does
+const twOk = (n) => imgOk(n) && !V.isCapture(n);
+const twOf = (arg, row) => (V.tweaks ? V.tweaks().find((t) => (t.id === arg || t.name === arg) && (!row || t.row === row)) : null) || null;
+const twName = (arg, row) => (twOf(arg, row) || {}).name || String(arg || "Tweak");
+const twStep = (k, ns, arg, row) => { const nm = twName(arg, row), of = k === 1 ? V.nodeTitle(ns[0]) : plu(k, "picture"); return (twOf(arg, row) || {}).row === "relight" ? `Relight ${of} at ${nm.toLowerCase()}` : `${nm}: ${of}`; };
+const twRun = async (ns, arg, row) => { const t = twOf(arg, row); if (!t) return 0; const before = new Set(V.G.nodes.map((n) => n.id)); for (const n of ns) await V.tweak(n, t.id); return V.G.nodes.filter((n) => !before.has(n.id)).length; };
+// (whole-11) one picture that can't: say why in its own words ("This picture can't be favourited: it is set aside")
+const DONE_AS = { upscale: "upscaled", favourite: "favourited", download: "downloaded", sheets: "added to sheets", compare: "compared", relight: "relit", tweak: "tweaked", retry: "tried again", aside: "set aside", remove: "removed" };
+const whyNot = (act, n) => {
+  const what = n && n.type && n.type !== "image" ? ({ video: "video", model: "3D model", world: "3D world" }[n.type] || "picture") : "picture";
+  const why = !n ? "" : n.rejected || V.isHidden(n.id) ? "it is set aside (the \"set aside\" chip on the picture it came from brings it back)" : act === "retry" ? "it hasn't failed" : n.status === "error" ? "it failed (Try again first)" : n.status !== "done" ? "it isn't finished yet" : n.type !== "image" && act !== "download" ? `it is a ${what}, not a picture` : "";
+  return `This ${what} can't be ${DONE_AS[act] || "used for that"}${why ? ": " + why : ""}`;
+};
+const SEL_ACTS = {
+  // (v3.74 final, expert-upscale-selection-views) with renders selected too, the bare SketchUp / Revit views are left out
+  upscale: { key: "Shift+U", label: (k) => `Upscale ×2 (${k})`, short: (k) => `Upscale ${k}`, pick: (ns) => { const ok = ns.filter(imgOk), r = ok.filter((n) => !V.isCapture(n)); return r.length ? r : ok; }, step: (k) => `Upscale ${plu(k, "picture")}`,
+    run: async (ns) => { const before = new Set(V.G.nodes.map((n) => n.id)); await Promise.all(ns.map((n) => V.upscale2x(n))); return V.G.nodes.filter((n) => !before.has(n.id)).length; },
+    say: (k, made) => (made ? `${plu(made, "upscale")} started` : ""), quiet: true },
+  favourite: { key: "Shift+F", label: (k, ns) => (ns.every((n) => n.fav) ? `Take the star off ${k}` : `Favourite ${k}`), short: (k) => `Favourite ${k}`, pick: (ns) => ns.filter((n) => n.status === "done" && !V.isHidden(n.id)),
+    step: (k, ns) => (ns.every((n) => n.fav) ? `Take the star off ${plu(k, "picture")}` : `Favourite ${plu(k, "picture")}`),
+    run: (ns) => { const on = !ns.every((n) => n.fav); ns.forEach((n) => { if (!!n.fav !== on) V.favNode(n); }); V.selectionChanged(); return on; },
+    say: (k, on, arg, ns) => { const who = k === 1 ? `"${V.nodeTitle(ns[0])}"` : plu(k, "picture"); return on ? `${who} ${k === 1 ? "is a favourite" : "are favourites"} now (★). Find shows favourites with ★.` : `Star taken off ${who}`; } },
+  download: { key: "Ctrl+Shift+S", label: (k) => `Download ${k}`, short: (k) => `Download ${k}`, pick: (ns) => ns.filter((n) => n.status === "done" && n.url), noUndo: true, run: (ns) => (ns.length === 1 ? V.downloadNode(ns[0]) : downloadMany(ns)),
+    quiet: (k) => k > 1, say: (k, r, arg, ns) => (k > 1 ? `${plu(k, ns.every((n) => n.type === "image") ? "picture" : "file")} downloaded to your Downloads folder` : "") }, // (C4-2: one message, not one a file)
+  sheets: { label: (k) => `Add ${k} to sheets…`, short: (k) => `Sheets ${k}`, pick: (ns) => ns.filter(imgOk), noUndo: true, run: (ns) => V.openSheets(ns) },
+  compare: { key: "C", label: () => "Compare the two", short: () => "Compare", pick: (ns) => ns.filter(imgOk), need: 2, max: 2, noUndo: true, run: (ns) => V.compareTwo(ns) },
+  // (loop-02) relight and the tweaks are panel.js's chips (V.tweak) run on each picture; arg = the chip's id or name. One picture
+  // keeps the chip's own message; several say one thing. "tweak" isn't listed in the menus (Ctrl+K rows and Ctrl+. use it)
+  relight: { label: (k) => `Relight ${k}…`, short: (k) => `Relight ${k}`, pick: (ns) => ns.filter(twOk), none: (ns) => (ns.some(V.isCapture) ? "Relight works on renders: render the SketchUp view first, then relight the render" : ""), when: () => typeof V.tweak === "function", step: (k, ns, arg) => twStep(k, ns, arg, "relight"),
+    run: (ns, arg) => twRun(ns, arg, "relight"), say: (k, made, arg) => (made && k > 1 ? `Relight at ${twName(arg, "relight").toLowerCase()}: ${plu(made, "picture")} on the way` : ""), quiet: (k) => k > 1, ask: true },
+  tweak: { label: (k) => `Tweak ${k}…`, short: (k) => `Tweak ${k}`, pick: (ns) => ns.filter(twOk), none: (ns) => (ns.some(V.isCapture) ? "The tweaks work on renders: render the SketchUp view first, then tweak the render" : ""), when: () => typeof V.tweak === "function", hidden: true, step: (k, ns, arg) => twStep(k, ns, arg),
+    run: (ns, arg) => twRun(ns, arg), say: (k, made, arg) => (made && k > 1 ? `${twName(arg)}: ${plu(made, "picture")} on the way` : ""), quiet: (k) => k > 1, ask: true },
+  retry: { label: (k) => `Try ${k === 1 ? "it" : "all " + k} again`, short: (k) => `Try ${k} again`, pick: (ns) => ns.filter((n) => n.status === "error" && n.retry), step: (k) => `Try ${plu(k, "picture")} again`,
+    run: async (ns) => { const seen = new Set(); let ok = 0; for (const n of ns) { const key = n.jobId || n.sendId || n.id; if (seen.has(key)) continue; seen.add(key); if (await V.retry(n)) ok++; await new Promise((r) => setTimeout(r, 400)); } return ok; },
+    say: (k, ok) => (ok ? `${plu(ok, "picture")} sent again` : ""), quiet: true },
+  aside: { key: "X", label: (k) => `Set aside ${k}`, short: (k) => `Set aside ${k}`, pick: (ns) => ns.filter((n) => n.status === "done" && V.parents(n.id).length && !n.rejected), step: (k) => `Set aside ${plu(k, "picture")}`,
+    run: (ns) => { ns.forEach((n) => (n.rejected = true)); V.setSel(V.sel.filter((id) => !ns.some((n) => n.id === id))); V.render(); V.changed(); },
+    say: (k) => `${plu(k, "picture")} set aside: the "set aside" chip on the picture ${k === 1 ? "it was" : "they were"} made from brings ${k === 1 ? "it" : "them"} back`,
+    none: "Only versions can be set aside (a view or an added picture has nothing to go back to): Remove takes those off" },
+  remove: { key: "Del", label: (k) => `Remove ${k} from the canvas`, short: (k) => `Remove ${k}`, pick: (ns) => ns, noUndo: true, cls: "danger", run: (ns) => (ns.length >= 10 ? V.deleteSelected() : removeIds(ns.map((n) => n.id))) }, // (its own Undo message)
+};
+V.SEL_ACTS = SEL_ACTS;
+const NAMES = { upscale: "Upscale ×2", favourite: "Favourite", download: "Download", sheets: "Add to sheets", compare: "Compare the two", relight: true, tweak: true, retry: "Try again", aside: "Set aside", remove: "Remove from the canvas" };
+let lastSelAct = null; // (Ctrl+. repeats it on whatever is selected then)
+// (loop-02) also noted when a tweak or relight chip is clicked (palette.js wraps V.tweak), so Ctrl+. repeats it on the selection
+V.noteSelAction = (act, arg) => { const t = (act === "tweak" || act === "relight") && twOf(arg, act === "relight" ? "relight" : null);
+  lastSelAct = { act: t ? (t.row === "relight" ? "relight" : "tweak") : act, arg: t ? t.id : arg, label: t ? `${t.row === "relight" ? "Relight" : "Tweak"}: ${t.name}` : NAMES[act] === true ? arg : NAMES[act], t: Date.now() }; };
+V.forSelection = async (act, ns, arg) => {
+  const A = SEL_ACTS[act]; if (!A) return;
+  ns = ns || V.selNodes();
+  if (A.when && !A.when()) return V.toast("That isn't available in this copy yet", true);
+  const all = ns.length, use = A.pick(ns).slice(0, A.max || 999), k = use.length;
+  if (!k || (A.need && k < A.need)) return V.toast(!all ? "Select the pictures first" : (typeof A.none === "function" ? A.none(ns) : A.none) || (A.need ? `Select ${A.need} finished pictures for that` : all === 1 ? whyNot(act, ns[0]) : `None of the ${plu(all, "selected picture")} can do that`), true);
+  if (A.ask && arg == null) return V.toast(act === "tweak" ? "Choose the tweak first: Ctrl+K › Tweak: Lighter, Warmer…" : "Choose the light first: right-click › Selection › Relight", true);
+  if ((act === "tweak" || act === "relight") && !twOf(arg, act === "relight" ? "relight" : null)) return V.toast(`There is no ${act === "tweak" ? "tweak" : "light"} called "${arg}"`, true);
+  V.noteSelAction(act, arg);
+  // one message for them all: the per-picture messages are held back while it runs (failures still show, once each)
+  const t0 = V.toast, errs = new Set();
+  if (typeof A.quiet === "function" ? A.quiet(k) : A.quiet) V.toast = (m, err, ms, o) => { if (err && !errs.has(String(m))) { errs.add(String(m)); return t0(m, err, ms, o); } V.logMsg && V.logMsg(m, err); };
+  let r;
+  // (loop-09) jobs started for several pictures land like a batch: none of them takes the selection (or flies in) when it lands,
+  // so the selection stays for the next Shift+U, X or Ctrl+.
+  const batch = k > 1 && ["upscale", "retry", "relight", "tweak"].includes(act) && V.setBatching;
+  const made0 = V.lastMade;
+  if (batch) V.setBatching(true);
+  try { r = A.noUndo ? await A.run(use, arg) : await V.undoGroup(A.step(k, use, arg), () => A.run(use, arg)); }
+  catch (e) { V.toast = t0; return V.toast("Couldn't do that: " + e.message, true); }
+  finally { V.toast = t0; if (batch) { V.setBatching(false); if (V.lastMade !== made0) V.lastMade = null; } } // (V.retry marks its job even in a batch)
+  const msg = A.say ? A.say(k, r, arg, use) : "";
+  const left = ns.filter((n) => !use.includes(n)), nv = left.filter(V.isCapture).length, no = left.length - nv;
+  const skip = all - k && !A.max ? (nv && (act === "upscale" || act === "aside") ? ` (${[`${plu(nv, "SketchUp view")} left out${act === "aside" ? ": a view has nothing to go back to" : ""}`, no ? `${plu(no, "picture")} not finished` : ""].filter(Boolean).join("; ")})` : ` (${plu(all - k, "picture")} skipped: ${act === "upscale" || act === "sheets" ? "not a finished picture" : act === "retry" ? "not failed" : (act === "relight" || act === "tweak") && ns.some(V.isCapture) ? (ns.filter((n) => !use.includes(n)).every(V.isCapture) ? (all - k === 1 ? "a SketchUp view, not a render" : "SketchUp views, not renders") : "not finished renders") : "can't do that"})`) : "";
+  if (msg) V.toast(msg + skip, false, 5000, A.noUndo ? {} : { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true });
+  else if (skip && !A.noUndo && !errs.size) V.toast(`Nothing to do${skip}`, false, 4000);
+  return r;
+};
+V.lastSelAction = () => lastSelAct;
+// what the selection can do, with counts: [{ act, label, short, key, k, cls }] (only those that apply)
+V.selActions = (ns) => {
+  ns = ns || V.selNodes();
+  return Object.keys(SEL_ACTS).map((act) => {
+    const A = SEL_ACTS[act]; if (A.hidden || (A.when && !A.when())) return null;
+    const use = A.pick(ns).slice(0, A.max || 999), k = use.length;
+    if (!k || (A.need && (k < A.need || A.pick(ns).length > A.max))) return null;
+    return { act, k, label: A.label(k, use), short: A.short(k, use), key: A.key || "", cls: A.cls || "" };
+  }).filter(Boolean);
+};
+// the right-click menu's "Selection (6)" group and the selection bar's buttons run these; relight asks which light first
+const runSel = (act, x, y, kb) => {
+  if (act === "relight") { const opts = V.tweaks ? V.tweaks().filter((t) => t.row === "relight").map((t) => t.name) : []; return flatCtx(x, y, opts.map((o) => [o, () => V.forSelection("relight", null, o)]), kb || ctxKb); }
+  V.forSelection(act);
+};
+V.runSelAction = runSel;
+// smart selections (PW-02): every SketchUp view, the latest render of each view, the favourites, the failed ones
+const viewsOn = () => V.visibleNodes().filter((n) => V.isCapture(n) && pic(n));
+V.SMART_SEL = [
+  ["All SketchUp views", "Shift+A", () => viewsOn()],
+  ["The latest render of each view", "", () => viewsOn().map((v) => V.G.nodes.filter((n) => pic(n) && !V.isHidden(n.id) && V.captureOf(n) === v).sort((a, b) => (b.created || 0) - (a.created || 0))[0]).filter(Boolean)],
+  ["The favourites ★", "", () => V.visibleNodes().filter((n) => n.fav && n.status === "done")],
+  ["The failed pictures", "", () => V.visibleNodes().filter((n) => n.status === "error")],
+  ["Every finished picture", "", () => V.visibleNodes().filter(imgOk)],
+];
+V.smartSelect = (i) => {
+  const [name, , get] = V.SMART_SEL[i], ns = get();
+  if (!ns.length) return V.toast(`Nothing to select: no ${name.replace(/^(All|The|Every) /i, "").replace(" ★", "")} on the canvas`, false, 3500); // (C4-6: SketchUp keeps its capitals)
+  V.setSel(ns.map((n) => n.id)); if (!ns.every((n) => V.onScreen(n))) V.fit(ns, true, Math.max(0.5, V.G.view.z));
+  V.toast(`${plu(ns.length, "picture")} selected: ${name.replace(" ★", "").replace(/^./, (c) => c.toLowerCase())}`, false, 2500);
+};
+const smartMenu = (x, y) => flatCtx(x, y, V.SMART_SEL.map(([name, key, get], i) => { const k = get().length; return [`${name} (${k})`, () => V.smartSelect(i), key, k ? "" : "dis"]; }));
+V.smartMenu = smartMenu;
+// Ctrl+C (PW-03): one finished picture onto the clipboard as a PNG (Draw layers included), to paste into an email, Teams or Word
+V.copyPicture = async (n) => {
+  if (!imgOk(n)) return V.toast("Select one finished picture to copy", true);
+  if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) return V.toast("This browser can't copy pictures: use Download instead", true);
+  try {
+    const src = V.hasPixelLayers && V.hasPixelLayers(n) ? await V.compositeDataUrl(n) : n.url;
+    const blob = new Promise(async (res, rej) => { try { const im = await V.loadImg(src), c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext("2d").drawImage(im, 0, 0); c.toBlob((b) => (b ? res(b) : rej(new Error("no picture"))), "image/png"); } catch (e) { rej(e); } });
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    V.toast(`"${V.nodeTitle(n)}" copied: paste it into an email, Teams or Word`, false, 3500);
+  } catch (e) { V.toast("Couldn't copy the picture: " + (e.message || e), true); }
+};
 
 // ---------- keyboard ----------
 // v3.69 (canvas-keys-leak): the canvas only takes its keys (and a paste) while it is what you are looking at: no page
@@ -3495,27 +4899,19 @@ function stepTree(k) {
   if (k === "arrowleft") to = V.parents(n.id).find(vis);
   else if (k === "arrowright") to = V.children(n.id).filter(vis).sort((a, b) => (b.created || 0) - (a.created || 0))[0];
   else {
-    const p = V.parents(n.id).find(vis), sibs = (p ? V.children(p.id) : V.visibleNodes().filter((x) => !V.parents(x.id).some(vis))).filter(vis).sort((a, b) => a.y - b.y || a.x - b.x);
+    const p = V.parents(n.id).find(vis), sibs = (p ? V.children(p.id) : V.visibleNodes().filter((x) => !V.parents(x.id).some(vis))).filter(vis).sort((a, b) => { const ba = boxOf(a), bb = boxOf(b); return ba.y - bb.y || ba.x - bb.x || (a.created || 0) - (b.created || 0); }); // (N5: versions gathered in one stack are drawn in one place: then by age, so ↑ ↓ flick through the stack)
     const i = sibs.indexOf(n); to = sibs[i + (k === "arrowdown" ? 1 : -1)];
   }
   if (!to) return;
   V.setSel([to.id]); if (!V.onScreen(to)) V.centerOn(to);
 }
-// Shift+F: the selected pictures become favourites (or all lose the star when every one has it already)
-function favKey() {
-  const ns = V.selNodes().filter((n) => n.status === "done" && !V.isHidden(n.id));
-  if (!ns.length) return V.toast("Select a picture first, then press Shift+F to make it a favourite", true);
-  const on = !ns.every((n) => n.fav);
-  V.snapshot();
-  ns.forEach((n) => { if (!!n.fav !== on) V.favNode(n); });
-  V.selectionChanged();
-  V.toast(on ? `${ns.length === 1 ? `"${V.nodeTitle(ns[0])}" is` : `${ns.length} pictures are`} a favourite now (★). Find shows favourites with ★.` : `Star taken off ${ns.length === 1 ? `"${V.nodeTitle(ns[0])}"` : `${ns.length} pictures`}`, false, 3500);
-}
+// (Shift+F: V.forSelection("favourite"), v3.74 C4)
 let selUndo = null; // the selection Esc just cleared (N1)
 const toastUp = (key) => { const t = $("#toast"); return !!t && [...t.children].some((x) => !x._gone && x._key === key); };
 document.addEventListener("keydown", (e) => {
-  const typing = e.target.matches("input,textarea,select,[contenteditable]");
-  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); V.make(); return; }
+  const typing = !!(e.target && e.target.matches && e.target.matches("input,textarea,select,[contenteditable]")); // (a key sent to the document itself has no .matches)
+  // (v3.74 C4, PW-12: never from Ctrl+K or a dialog, where Enter means their own thing: it started a render behind them)
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { if (e.target && e.target.closest && e.target.closest(".cmdk,.modal,.review")) return; e.preventDefault(); V.make(); return; }
   if (typing) return;
   const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
   // (C1, N1) while "Selection of N pictures cleared · Undo" is up, Ctrl+Z brings the selection back first
@@ -3523,14 +4919,22 @@ document.addEventListener("keydown", (e) => {
   if (mod && !e.altKey && k === "z") { e.preventDefault(); e.shiftKey ? V.redo() : V.undo(); return; } // Ctrl+Shift+Z = redo
   if (mod && !e.altKey && k === "y") { e.preventDefault(); V.redo(); return; }
   if (!V.canvasLive()) return;
+  if (!ctx.hidden && (k.startsWith("arrow") || k === "enter" || k === " ")) return; // (whole-01) the open menu has these keys; the selection stays as it is
   const n1 = oneImg(), stop = () => e.preventDefault();
   if (e.altKey && !mod && /^[123]$/.test(e.key)) { stop(); document.querySelector(`#modeTabs button[data-v="${["image", "video", "3d"][+e.key - 1]}"]`).click(); return; }
   if (e.altKey) return;
+  // (whole-04) in Picture view the canvas is hidden behind the picture: its own layout keys (T tidy, F fit, Shift+A every
+  // SketchUp view, V capture) would act unseen, so they wait for the canvas
+  if (!mod && (k === "t" || (k === "f" && !e.shiftKey) || (k === "a" && e.shiftKey) || (k === "v" && !e.shiftKey)) && (V.pictureView ? V.pictureView() : document.body.classList.contains("enlarged"))) return;
   if (k === "escape") { // a pick, a menu, Activity or a message goes first; the selection only when nothing else is open
     if (pick) return endPick(true);
     if (!ctx.hidden) return hideCtx();
     if (!$("#queuePop").hidden) { $("#queuePop").hidden = true; return; }
     if (cv.querySelector(".cappop") || cv.querySelector(".gpal")) { cv.querySelectorAll(".cappop,.gpal").forEach((x) => x.remove()); return; }
+    // (v3.74 C4, PW-13) Esc on a control in the right panel leaves the panel for the canvas; only the next Esc clears the selection
+    const ae = document.activeElement; if (ae && ae !== document.body && ae.closest && ae.closest(".rpanel")) { ae.blur(); cv.focus({ preventScroll: true }); return; }
+    if (V.gatherStacks(V.sel)) return; // (v3.74 B1, N5) a spread stack gathers first
+    if (!V.sel.length && lastSpread && V.gatherStacks([lastSpread])) return; // (v3.74 final, loop-06) nothing selected: the stack last spread by hand
     // (v3.69 F2) with pictures selected one Esc clears them at once and takes the plain messages with it (failures
     // stay until closed); with nothing selected Esc closes the newest message, as before
     if (V.sel.length) [...$("#toast").children].forEach((x) => { if (!x._gone && x._close && !x._err && !x._stay) x._close(); });
@@ -3544,11 +4948,22 @@ document.addEventListener("keydown", (e) => {
   else if (mod && k === "a") { stop(); const all = V.visibleNodes(); V.setSel(all.map((n) => n.id)); if (all.length && !all.every((n) => V.onScreen(n))) V.fit(all, true, Math.max(0.5, V.G.view.z)); } // (v3.69 J-poweruser N7: "6 selected" shows all 6)
   else if (mod && (k === "=" || k === "+")) { stop(); V.zoomBy(1.25); } // (the page itself no longer zooms)
   else if (mod && k === "-") { stop(); V.zoomBy(0.8); }
+  // v3.74 C4 (N14, PW-11): Ctrl+Shift+S downloads the selection, Ctrl+C copies one picture (when no text is selected)
+  else if (mod && e.shiftKey && k === "s") { stop(); V.forSelection("download"); }
+  else if (mod && !e.shiftKey && k === "c" && !String(window.getSelection ? window.getSelection() : "") && one()) { stop(); V.copyPicture(one()); }
+  else if (mod && !e.shiftKey && k === "c" && !String(window.getSelection ? window.getSelection() : "") && V.sel.length > 1) { stop(); V.toast(`Ctrl+C copies one picture at a time: click the one to copy, then press Ctrl+C`, false, 4500); } // (v3.74 final, expert-ctrl-c-many-silent)
   else if (mod) return;
   else if (k === "+" || k === "=") V.zoomBy(1.25);
   else if (k === "-") V.zoomBy(0.8);
   else if (k === "1") V.zoomTo(1);
-  else if (k === "f" && e.shiftKey) { stop(); favKey(); } // v3.69 C1 (J-poweruser-S3 d, S11): Shift+F = favourite
+  else if (k === "f" && e.shiftKey) { stop(); V.forSelection("favourite"); } // v3.69 C1 (J-poweruser-S3 d, S11): Shift+F = favourite (v3.74 C4: through V.forSelection, one undo step)
+  // v3.74 C4 (N14, PW-11): Shift+U upscale the selection ×2, X set it aside, Shift+A select every SketchUp view, F2 rename,
+  // Shift+V Batch render
+  else if (k === "u" && e.shiftKey) { stop(); V.forSelection("upscale"); }
+  else if (k === "x" && !e.shiftKey) { stop(); V.forSelection("aside"); }
+  else if (k === "a" && e.shiftKey) { stop(); V.smartSelect(0); }
+  else if (e.key === "F2") { stop(); const n = one(); if (n && n.status === "done") V.renameAsk(n); else V.toast("Select one picture to rename", true); }
+  else if (k === "v" && e.shiftKey) { stop(); V.openBatch ? V.openBatch() : $("#btnBatch").click(); }
   else if (k === "v" && !e.shiftKey) { stop(); $("#tCapture").click(); } // v3.69 C1 (J-poweruser-S11): V = Capture SketchUp view
   else if (k === "f") V.fit(V.sel.length ? V.sel.map(V.node).filter((n) => n && !V.isHidden(n.id)) : V.visibleNodes());
   else if (k === "t") V.tidy && V.tidy();
@@ -3556,7 +4971,7 @@ document.addEventListener("keydown", (e) => {
   else if (k === "g" && !e.shiftKey) { if (n1) { V.setViewerMode("draw"); if (V.viewerMode === "draw" && V.drawApi) V.drawApi.setTool("bucket"); } else V.toast("Select one finished picture to paint materials on", true); }
   else if (k === "c" && !e.shiftKey) compareKey();
   else if (k === "u" && !e.shiftKey) { const src = n1 && V.parents(n1.id).find((p) => pic(p) && p.url); if (n1 && (n1.touchup || src || (V.cmp.a && V.cmp.a !== n1.id))) V.setViewerMode("touch"); else V.toast(n1 ? "Touch-ups paints the picture it was made from back in: this one has none" : "Select one finished picture for Touch-ups", true); }
-  else if (k === "e" && !e.shiftKey) V.setEnlarged(!document.body.classList.contains("enlarged"));
+  else if (k === "e" && !e.shiftKey) V.setEnlarged(!(V.pictureView && V.pictureView())); // (v3.74 D2: body.enlarged is gone; Picture view)
   else if (k === "s") { stop(); if (e.shiftKey) { if (V.G.scene && V.adjustScene) V.adjustScene(); else V.openEnv(); } else V.openScenes(); }
   else if (k === "l" && !e.shiftKey) V.openLook();
   else if (e.key === "/") { stop(); if (V.tab !== "image") document.querySelector('#modeTabs button[data-v="image"]').click(); const s = $("#presetSearch"); if (s) { s.scrollIntoView({ block: "nearest" }); s.focus(); } }
@@ -3571,7 +4986,8 @@ document.addEventListener("keydown", (e) => {
 // room wanted (a block of pictures added at once, addFiles); the result is the centre of the block's first picture.
 V.freeSpot = (cx, cy, w = V.NODE_W, hh = V.NODE_H) => {
   const x0 = cx - V.NODE_W / 2, y0 = cy - V.NODE_H / 2, vis = V.G.nodes.filter((n) => !V.isHidden(n.id));
-  const hits = (x, y) => vis.filter((n) => n.x < x + w + 10 && n.x + V.NODE_W + 10 > x && n.y < y + hh + 6 && n.y + V.NODE_H + 6 > y);
+  // (B1) the cards as drawn: a gathered version counts where its stack's card is, not at its own saved place
+  const hits = (x, y) => vis.filter((n) => { const b = boxOf(n); return b.x < x + w + 10 && b.x + V.NODE_W + 10 > x && b.y < y + hh + 6 && b.y + b.h + 6 > y; });
   const cost = (p) => Math.abs(p[0] - x0) + 1.2 * Math.abs(p[1] - y0), tried = new Set(), todo = [[x0, y0]];
   for (let i = 0; i < 300 && todo.length; i++) {
     todo.sort((a, b) => cost(a) - cost(b));
@@ -3579,11 +4995,11 @@ V.freeSpot = (cx, cy, w = V.NODE_W, hh = V.NODE_H) => {
     if (tried.has(key)) continue; tried.add(key);
     const hit = hits(x, y);
     if (!hit.length) return [x + V.NODE_W / 2, y + V.NODE_H / 2];
-    const one = hit.length === 1 ? hit[0] : null; // (beside or under a single picture: lined up with it)
-    todo.push([Math.max(...hit.map((n) => n.x)) + V.NODE_W + 40, one && Math.abs(one.y - y) < V.NODE_H / 2 ? one.y : y],
-      [one && Math.abs(one.x - x) < V.NODE_W / 2 ? one.x : x, Math.max(...hit.map((n) => n.y)) + V.NODE_H + 24]);
+    const one = hit.length === 1 ? boxOf(hit[0]) : null; // (beside or under a single picture: lined up with it)
+    todo.push([Math.max(...hit.map((n) => boxOf(n).x)) + V.NODE_W + 40, one && Math.abs(one.y - y) < V.NODE_H / 2 ? one.y : y],
+      [one && Math.abs(one.x - x) < V.NODE_W / 2 ? one.x : x, Math.max(...hit.map((n) => { const b = boxOf(n); return b.y + b.h; })) + 24]);
   }
-  return [x0 + V.NODE_W / 2, Math.max(y0, ...vis.map((n) => n.y + V.NODE_H + 24)) + V.NODE_H / 2]; // (a very full canvas: below everything)
+  return [x0 + V.NODE_W / 2, Math.max(y0, ...vis.map((n) => { const b = boxOf(n); return b.y + b.h + 24; })) + V.NODE_H / 2]; // (a very full canvas: below everything)
 };
 // v3.69 C1 (J-presentation-P1, J-poweruser-S1, J-planning-S3): a new capture or added picture (no place given) goes in a
 // tidy row to the right of the last view or picture added (a picture not made from another), lined up with it; after 4
@@ -3591,7 +5007,7 @@ V.freeSpot = (cx, cy, w = V.NODE_W, hh = V.NODE_H) => {
 // With no picture of that kind yet, the middle of the view as before. The result is the centre of the block's first picture.
 V.nextSourceSpot = (w = V.NODE_W, hh = V.NODE_H) => {
   const SX = V.NODE_W + 40, SY = V.NODE_H + 24;
-  const srcs = V.G.nodes.filter((n) => !V.isHidden(n.id) && n.type === "image" && !V.parents(n.id).length && n.status !== "error");
+  const srcs = V.G.nodes.filter((n) => !V.isHidden(n.id) && n.type === "image" && !V.parents(n.id).length && n.status !== "error" && !n._ph);
   if (!srcs.length) return V.freeSpot(...V.viewCenter(), w, hh);
   const last = srcs.reduce((a, b) => ((b.created || 0) >= (a.created || 0) ? b : a));
   const row = srcs.filter((n) => Math.abs(n.y - last.y) < V.NODE_H / 2);
@@ -3600,33 +5016,65 @@ V.nextSourceSpot = (w = V.NODE_W, hh = V.NODE_H) => {
   // brings the whole row into view (zooming out a little when it must), so the newest view isn't left off to the right
   const rr = fitRoom(), vv = V.G.view, left = Math.min(...row.map((n) => n.x)), across = Math.floor(((rr.w - vv.x) / vv.z - left + 40) / SX);
   const perRow = left * vv.z + vv.x >= 0 && across > 0 ? Math.max(4, Math.min(6, across)) : 4;
-  if (row.length >= perRow) { x = Math.min(...row.map((n) => n.x)); y = last.y + SY; } // (wrap: a new row under the first of this one)
+  if (row.length >= perRow) { x = Math.min(...row.map((n) => n.x)); y = Math.max(...row.map((n) => n.y + boxH(n))) + 24; } // (wrap: a new row under the first of this one)
   return V.freeSpot(x + V.NODE_W / 2, y + V.NODE_H / 2, w, hh);
+};
+// ---------- v3.74 B1 (N6, motion:big:2, motion-03): a placeholder the moment Capture is pressed ----------
+// The card goes where the view will land, in the shape the last view had (16:9 until one is known), labelled "Capturing
+// from SketchUp…" with a ring; V.addImageNode fills it when the view arrives (same card, no jump). Never saved
+// (core.js graphForSave leaves n._ph out); gone by itself after 65 s (the bridge gives up at 60) or with Cancel.
+V.capturePlaceholder = (host = "SketchUp") => {
+  if (V.G.nodes.some((n) => n._ph)) return null;
+  const last = V.G.nodes.filter((n) => V.isCapture(n) && n.ar && !n._ph).pop(), ar = last ? last.ar : 16 / 9;
+  const hh = V.nodeH({ ar }), [cx, cy] = V.nextSourceSpot(V.NODE_W, hh);
+  const n = V.addNode({ x: cx - V.NODE_W / 2, y: cy - V.NODE_H / 2, kind: "source", type: "image", status: "capturing", label: `${host} view`, capture: host, ar, url: null, _ph: true }); // (V.freeSpot's centre is V.NODE_H based: this lines its top up with the row)
+  n._phT = setTimeout(() => V.dropPlaceholder(n.id, true), 65000);
+  V.render();
+  if (V.visibleNodes().length > 3 && !V.onScreen(n)) showBox(n.x - 20, n.y - 70, n.x + V.NODE_W + 20, n.y + hh + 30);
+  else if (V.flyIn) V.flyIn($("#tCapture"), n); // (motion-04: the card comes from the Capture button)
+  return n;
+};
+V.dropPlaceholder = (id, quiet) => {
+  const n = V.node(id); if (!n || !n._ph) return;
+  clearTimeout(n._phT); ghostOut([n.id]);
+  V.G.nodes = V.G.nodes.filter((x) => x !== n); V.sel = V.sel.filter((x) => x !== n.id);
+  V.render(); if (V.selectionChanged) V.selectionChanged();
+  if (!quiet) V.toast("Placeholder removed. The view still lands as a new picture if SketchUp sends it.", false, 3500);
 };
 // bring a part of the canvas (world units) into view: nothing if it is on screen, else pan to it at the same zoom, or
 // zoom out just enough when it is bigger than the canvas
 const showBox = (x1, y1, x2, y2) => {
   const r = fitRoom(), v = V.G.view, z = v.z;
-  if (x1 * z + v.x >= 0 && y1 * z + v.y >= 0 && x2 * z + v.x <= r.w && y2 * z + v.y <= r.h) return;
-  if ((x2 - x1) * z <= r.w - 40 && (y2 - y1 + 90) * z <= r.h - 20) V.animateView({ z, x: r.w / 2 - ((x1 + x2) / 2) * z, y: r.h / 2 - ((y1 + y2) / 2) * z }, 480);
-  else V.fit([{ x: x1, y: y1 }, { x: x2 - V.NODE_W, y: y2 - V.NODE_H }], true, z);
-};
+  if (x1 * z + v.x >= 0 && y1 * z + v.y >= 0 && x2 * z + v.x <= r.w && y2 * z + v.y <= r.h) return { ...v };
+  if ((x2 - x1) * z <= r.w - 40 && (y2 - y1 + 90) * z <= r.h - 20) { const to = { z, x: r.w / 2 - ((x1 + x2) / 2) * z, y: r.h / 2 - ((y1 + y2) / 2) * z }; V.animateView(to, 480); return to; }
+  return V.fit([{ x: x1, y: y1 }, { x: x2 - V.NODE_W, y: y2 - V.NODE_H }], true, z);
+}; // (returns the view it goes to: a gather after a spread puts the earlier one back, IB-3)
 V.addImageNode = async (dataUrl, pos, label = "Source", extra = null) => { // extra: e.g. { capture: "SketchUp" }; keepShape (not kept on the node): a Batch render capture
+  const { keepShape, ...ex } = extra || {};
+  // (v3.74 B1, N2) the picture's shape first, so the card is drawn at its true height from the start and never jumps
+  let ar = null; try { const im = await V.loadImg(dataUrl); if (im.naturalWidth && im.naturalHeight) ar = +(im.naturalWidth / im.naturalHeight).toFixed(4); } catch (e) {}
+  // (motion-03) a capture fills the placeholder put down when Capture was pressed: the same card, where it already is
+  const ph = ex.capture && !pos ? V.G.nodes.find((x) => x._ph && x.capture) : null;
+  if (ph) { clearTimeout(ph._phT); V.G.nodes = V.G.nodes.filter((x) => x !== ph); }
   V.snapshot();
-  const [cx, cy] = pos || V.nextSourceSpot(), { keepShape, ...ex } = extra || {};
-  const n = V.addNode({ x: cx - V.NODE_W / 2, y: cy - V.NODE_H / 2, kind: "source", status: "uploading", url: dataUrl, label, ...ex });
+  // (a centre is V.NODE_H based everywhere: V.freeSpot, V.nextSourceSpot and the callers that pass pos; so a row of views of
+  // different shapes lines up along the top)
+  const hh = V.nodeH({ ar }), [cx, cy] = pos || (ph ? [ph.x + V.NODE_W / 2, ph.y + V.NODE_H / 2] : V.nextSourceSpot(V.NODE_W, hh));
+  let n;
+  if (ph) { delete ph._ph; delete ph._phT; Object.assign(ph, { x: cx - V.NODE_W / 2, y: cy - V.NODE_H / 2, kind: "source", type: "image", status: "uploading", url: dataUrl, label, thumb: null, prompt: "", created: Date.now(), sz: V.NODE_W, ...ex, ar }); V.G.nodes.push(ph); n = ph; }
+  else n = V.addNode({ x: cx - V.NODE_W / 2, y: cy - V.NODE_H / 2, kind: "source", status: "uploading", url: dataUrl, label, ...ex, ...(ar ? { ar } : {}) });
   if (!pos && V.visibleNodes().length > 3 && !V.onScreen(n)) { // (3 or fewer: the canvas fits them when it lands)
     // (v3.69 J-poweruser N7) its row comes into view with it, not just the new picture in the middle
     const row = V.G.nodes.filter((o) => o !== n && !V.isHidden(o.id) && !V.parents(o.id).length && Math.abs(o.y - n.y) < V.NODE_H / 2);
     const xs = row.map((o) => o.x).concat(n.x);
-    showBox(Math.min(...xs) - 20, n.y - 70, Math.max(...xs) + V.NODE_W + 20, n.y + V.NODE_H + 30);
+    showBox(Math.min(...xs) - 20, n.y - 70, Math.max(...xs) + V.NODE_W + 20, n.y + hh + 30);
   }
   if (n.capture && !keepShape && V.captureShape) V.captureShape(); // a new SketchUp / Revit view: Aspect ratio back to "Same as the view" (a batch keeps the shape chosen for it)
   if (n.capture && V.captureScenes) V.captureScenes(); // and the Scenes tab of the presets, when no scene is set
   n.thumb = await V.makeThumb(dataUrl);
   V.sel = [n.id]; V.render(); V.selectionChanged();
   try { n.url = await V.uploadDataUrl(dataUrl); n.status = "done"; }
-  catch (e) { n.status = "done"; V.toast("Upload failed: " + e.message + " (it will retry when you render or edit it)", true, 0); }
+  catch (e) { n.status = "done"; V.toast(V.errLine ? V.errLine(e, "Couldn't upload it yet") + " It is sent again when you render or edit it." : "Upload failed: " + e.message + " (it will retry when you render or edit it)", true, 0); }
   V.render(); V.selectionChanged(); V.changed();
   return n;
 };
@@ -3635,7 +5083,7 @@ V.addImageNode = async (dataUrl, pos, label = "Source", extra = null) => { // ex
 // free place to that when something is in the way. The view then shows the whole block once, rather than following each
 // picture (with 3 pictures or fewer on the canvas, it fits them as they land, V.render).
 async function addFiles(files, cx, cy) {
-  const items = [];
+  const items = [], skipped = [], broken = [], heic = [], big = [];
   for (const f of files) {
     const name = f.name.replace(/\.[^.]+$/, "").slice(0, 30);
     if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) { // drawings: each page becomes an image node
@@ -3647,11 +5095,26 @@ async function addFiles(files, cx, cy) {
       } catch (e) { V.toast(`Couldn't read ${f.name}: ${e.message}`, true, 7000); }
       continue;
     }
-    if (!f.type.startsWith("image/")) continue;
-    items.push([await V.fileToDataUrl(f), name, null]);
+    // (v3.74 A2, robust-07/21) a file that isn't a picture, or doesn't open, never becomes a picture on the canvas: one
+    // message names them; a big photo says once that the AI gets 2560 px
+    if (!f.type.startsWith("image/") || /heic|heif/i.test(f.type) || /\.(heic|heif)$/i.test(f.name)) { (/heic|heif/i.test(f.type + f.name) ? heic : skipped).push(f.name); continue; }
+    const du = await V.fileToDataUrl(f).catch(() => null);
+    const im = du ? await V.loadImg(du).catch(() => null) : null;
+    if (!im || !im.naturalWidth) { broken.push(f.name); continue; }
+    const long = Math.max(im.naturalWidth, im.naturalHeight);
+    if (long > 2560) big.push(`${f.name} added at 2560 px (the AI uses up to 2560; this one is ${long} px)`);
+    items.push([du, name, long > 2560 ? { origSize: { w: im.naturalWidth, h: im.naturalHeight } } : null]);
   }
+  // (A2-13) one message for the lot, so the size note is never pushed out by the next message
+  const bad = [
+    broken.length ? `Couldn't open ${broken.join(", ")}: VizLab reads JPEG, PNG, WebP and PDF. ${broken.length > 1 ? "They may be" : "It may be"} damaged.` : "",
+    heic.length ? `${heic.join(", ")}: an iPhone HEIC photo. Export it as JPEG first (on the iPhone: Settings › Camera › Formats › Most Compatible), then add it again.` : "",
+    skipped.length ? `${skipped.join(", ")} skipped: not a picture or a PDF.` : ""].filter(Boolean);
+  const bigText = big.length ? (big.length === 1 ? big[0] : `${big.length} big pictures added at 2560 px (the AI uses up to 2560)`) + "." : "";
+  if (bad.length) V.toast(bad.concat(bigText ? [bigText] : []).join(" "), true, broken.length || heic.length ? 0 : 9000, { key: "addfiles" });
+  else if (bigText) V.toast(bigText, false, 9000, { key: "addfiles" });
   if (!items.length) return;
-  const k = items.length, rows = Math.ceil(k / 5), cols = Math.ceil(k / rows), SX = V.NODE_W + 40, SY = V.NODE_H + 24;
+  const k = items.length, rows = Math.ceil(k / 5), cols = Math.ceil(k / rows), SX = V.NODE_W + 40, SY = V.NODE_H + 24 + (rows > 1 ? 60 : 0); // (B1: room for a portrait picture in a row above)
   const [wx, wy] = cx != null ? toWorld(cx, cy) : V.viewCenter();
   const [fx, fy] = cx == null && V.G.nodes.some((n) => !V.isHidden(n.id) && !V.parents(n.id).length) ? V.nextSourceSpot(cols * SX - 40, rows * SY - 24) // (C1: beside the last picture added)
     : V.freeSpot(cx != null ? wx : wx - ((cols - 1) * SX) / 2, cx != null ? wy : wy - ((rows - 1) * SY) / 2, cols * SX - 40, rows * SY - 24);
@@ -3679,7 +5142,8 @@ document.addEventListener("pointerdown", (e) => { const p = $("#queuePop"); if (
 // ---------- v3.69 the small canvas (beside the enlarged viewer): Capture, Add, Fit, Activity and ⋯ for the rest ----------
 $("#tMore").onclick = (e) => {
   const r = e.currentTarget.getBoundingClientRect(); // (no Mini-map here: it only shows on the big canvas, where its button is)
-  flatCtx(r.left, r.top - 8, [["Undo", () => V.undo(), "Ctrl+Z"], ["Redo", () => V.redo(), "Ctrl+Y"], ["Tidy up", () => V.tidy(), "T"], ["Find on the canvas", () => V.findOnCanvas(""), "Ctrl+F"]]);
+  const folded = $(".ctools").classList.contains("fold"); // (final: a short canvas folds Redo, Changes, Tidy, Find and Map in here; Undo stays out)
+  flatCtx(r.left, r.top - 8, [folded ? null : ["Undo", () => V.undo(), "Ctrl+Z"], ["Redo", () => V.redo(), "Ctrl+Y"], ...(V.openUndoTimeline ? [["History of changes…", () => V.openUndoTimeline()]] : []), ["Tidy up", () => V.tidy(), "T"], ["Find on the canvas", () => V.findOnCanvas(""), "Ctrl+F"], folded && V.toggleMap ? ["Mini-map", () => V.toggleMap()] : null].filter(Boolean));
   ctx.style.top = Math.max(8, r.top - ctx.offsetHeight - 6) + "px"; // opens upwards from the bottom row
 };
 
@@ -3744,7 +5208,17 @@ $("#ehUpload").onclick = browse;
 const paintEmpty = () => { const b = $("#ehCapture span"); if (b) b.textContent = connected() ? $("#tCapture span").textContent : "Connect SketchUp…"; };
 new MutationObserver(paintEmpty).observe($("#tCapture span"), { childList: true, characterData: true, subtree: true }); // "Capture Revit view"…
 // v3.69 the canvas toolbar fits the canvas: with toolbar labels on and a short canvas, the words go (icons stay 44 px)
-const fitTools = () => { const t = $(".ctools"); t.classList.remove("tight"); if (document.body.classList.contains("tlabels") && !document.body.classList.contains("enlarged") && t.offsetHeight > cv.clientHeight - 24) t.classList.add("tight"); };
+// (v3.74 final, bigger never smaller) too short: the less-used tools fold under ⋯ first and the words stay; only if it still
+// doesn't fit do the words go. Once folded at a window height it stays folded there, so the column doesn't change as you click.
+let foldAt = 0;
+const fitTools = () => {
+  const t = $(".ctools"), b = document.body.classList; t.classList.remove("tight", "fold");
+  if (!b.contains("tlabels") || b.contains("enlarged") || !cv.clientHeight) return;
+  const over = () => t.offsetHeight > cv.clientHeight - 24;
+  if (foldAt !== innerHeight) foldAt = 0;
+  if (foldAt || over()) { t.classList.add("fold"); foldAt = innerHeight; if (over()) t.classList.add("tight"); }
+};
+$("#tMore").title = "More: Redo, Changes, Tidy up, Find and the Mini-map";
 let bodyWas = "";
 new MutationObserver(() => { // connected or not, the viewer enlarged, toolbar labels on or off
   const b = document.body.classList, now = ["bridge", "su", "enlarged", "tlabels"].map((c) => b.contains(c)).join();
@@ -3874,7 +5348,9 @@ V.navTest = { keys, active }; // for testing
 ;
 
 /* ===== web/draw.js ===== */
-/* VizLab viewer: Preview / Compare / Draw (layer editor) / Touch-ups (touchup.js) + Enlarge swap
+/* VizLab viewer: Preview / Compare / Draw (layer editor) / Touch-ups (touchup.js), the gallery stage (V.stage) and Picture
+   view (v3.74 B2, N2 / N3: the viewer lives in the centre column and shows while body.picview, with a film strip of the
+   picture's versions; the old Enlarge swap is gone, V.setEnlarged(on) opens / closes Picture view for code that still calls it)
    Draw layers, bottom to top, stored on the node as n.drawing.layers:
    - pixel layers change the picture:  edit   = an AI result blended through a mask (feather / margin)
                                         adjust = brightness/contrast, hue/saturation or colour balance
@@ -4123,7 +5599,7 @@ V.setViewerMode = (m) => {
   $$("#pvTabs button").forEach((b) => b.classList.toggle("on", b.dataset.v === m));
   $("#dtools").hidden = m !== "draw"; V.showTouchBar(m === "touch"); $("#dstatus").hidden = !EDITING(m);
   if (m !== "draw") { $("#layersPanel").hidden = true; $("#adjPop").hidden = true; hidePops(); hideMat(); dnav.tool = dnav.held = ""; dnav.cursor(); syncNav(); } // Hand or Zoom ends with Draw
-  const big = document.body.classList.contains("enlarged");
+  const big = V.pictureView(); // v3.74 B2: Draw, Touch-ups and Compare open in Picture view; leaving them goes back to the canvas when they opened it
   if (BIG(m) && !big) { autoEnlarged = true; V.setEnlarged(true); }
   else if (leaving && autoEnlarged && big) { autoEnlarged = false; V.setEnlarged(false); }
   else V.renderViewer();
@@ -4143,56 +5619,64 @@ function paintTabs(n) {
   }
 }
 
-let lastKey = "";
+let lastKey = "", reselecting = false;
 const enlPill = $("#btnEnlarge");
+let stHandle = null; // the gallery stage showing in Preview (V.stage below)
+// the newest finished picture (Picture view with nothing selected shows it: journey-firstday FD-5)
+const newestPic = () => V.G.nodes.filter((x) => x.status === "done" && (x.type === "image" || x.type === "video") && x.url && !x.rejected && !(V.isHidden && V.isHidden(x.id))).sort((a, b) => (b.created || 0) - (a.created || 0))[0] || null;
 V.renderViewer = (soft) => {
-  const n = cur();
+  let n = cur();
+  // v3.74 B2: Picture view always has a picture on the stage: with nothing selected it selects the newest, and with no
+  // pictures at all it goes back to the canvas
+  if (V.pictureView() && !n && !reselecting) {
+    const nn = newestPic();
+    if (nn) { reselecting = true; try { V.sel = [nn.id]; V.render(); V.selectionChanged(); } finally { reselecting = false; } return; }
+    V.closePicture(); return;
+  }
   // (Touch-ups rewrites its node's picture after every stroke: that mustn't reopen the viewer)
-  const key = V.viewerMode + "|" + V.sel.join(",") + "|" + (n ? n.status + (V.viewerMode === "touch" ? "" : n.url) : "");
-  if (soft && key === lastKey) { paintTabs(n); return; } lastKey = key;
+  const key = V.viewerMode + "|" + V.sel.join(",") + "|" + (n ? n.status + (V.viewerMode === "touch" ? "" : n.url) : "") + "|" + (V.pictureView() ? "P" : "C");
+  if (soft && key === lastKey) { paintTabs(n); paintStrip(); paintSwitch(); paintTools(); return; } lastKey = key;
   syncCmpBar(false); if (cmpRO) { cmpRO.disconnect(); cmpRO = null; }
   $("#drawTab").hidden = $("#touchTab").hidden = !(n && n.status === "done" && n.type === "image");
-  if (EDITING(V.viewerMode) && $("#drawTab").hidden) return V.setViewerMode("preview"); // as Done (it shrinks the viewer it enlarged)
+  if (EDITING(V.viewerMode) && $("#drawTab").hidden) return V.setViewerMode("preview"); // as Done (it leaves the Picture view it opened)
   paintTabs(n);
   V.disposeViews && V.disposeViews();
-  stage.innerHTML = ""; info.textContent = ""; stage.onwheel = null; stage.classList.toggle("drawing", EDITING(V.viewerMode)); stage.classList.toggle("cmpmode", V.viewerMode === "compare");
+  if (stHandle) { stHandle.destroy(); stHandle = null; }
+  stage.innerHTML = ""; info.textContent = ""; stage.onwheel = null; stage.classList.toggle("drawing", EDITING(V.viewerMode)); stage.classList.toggle("cmpmode", V.viewerMode === "compare"); stage.classList.remove("waiting");
+  stage.classList.toggle("stage", V.viewerMode === "compare"); if (V.viewerMode === "compare") paintBgClass(stage); else BGS.forEach((b) => stage.classList.remove("bg-" + b)); // (Compare keeps the stage look: background and padding, the box fitted inside)
   hideMat(); // shown again by openDraw for the picture now open (another picture's materials never stay up)
   if (V.viewerMode !== "draw") { dc = oc = null; syncOpts(); }
   updChip();
   $("#pvActions") && ($("#pvActions").hidden = !(n && n.status === "done"));
-  if (n && $("#aFav")) $("#aFav").textContent = n.fav ? "★ Favourite" : "☆ Favourite"; // (P2, J-returning-R9)
-  if (!EDITING(V.viewerMode)) stage.append(enlPill); // D3: Enlarge / Back to canvas on the picture (Draw and Touch-ups have Done)
+  paintStrip(); paintSwitch(); paintTools();
   if (!n) return stage.append(h("div", { class: "pv-empty" }, "Select a picture to preview"));
-  if (n.status !== "done") return stage.append(h("div", { class: "pv-empty" }, n.status === "error" ? "Failed: " + (n.error || "") : n.status === "uploading" ? "Uploading…" : "Generating…"));
+  if (n.status !== "done") {
+    // in Picture view a picture being made shows the one it is made from, dimmed, with the word on it (B1's card and the
+    // Activity list carry the progress); failed: the reason
+    const p = n.status !== "error" && V.pictureView() ? V.parents(n.id).find((x) => x.type === "image" && x.url) : null;
+    if (p) { stHandle = V.stage(stage, p, { src: p.url, title: V.nodeTitle(n) }); stage.classList.add("waiting"); }
+    return stage.append(h("div", { class: "pv-empty" + (p ? " over" : "") }, n.status === "error" ? "Failed: " + (V.explainError ? V.errLine(n.error || "") : n.error || "") : n.status === "uploading" ? "Uploading…" : "Rendering…"));
+  }
   if (V.viewerMode === "compare") return showCompare(n);
   if (V.viewerMode === "draw") return openDraw(n);
   if (V.viewerMode === "touch") return V.openTouch(n);
   if (n.type === "video") return stage.append(h("video", { src: n.url, controls: true, autoplay: true, loop: true, playsinline: true, muted: true }));
   if (n.type === "model") return V.modelView(stage, n);
   if (n.type === "world") return V.splatView(stage, n);
-  // zoomable image preview (shows Draw layers applied, and the notes and materials faintly: viewer-6)
-  const img = h("img", { src: n.url, alt: "", draggable: "false" });
-  if (V.hasPixelLayers(n)) V.compositeDataUrl(n).then((u) => { if (img.isConnected) img.src = u; }).catch(() => {});
+  // the picture on the gallery stage (shows Draw layers applied, and the notes and materials faintly: viewer-6)
+  stHandle = V.stage(stage, n, { src: n.url });
+  const img = stHandle.img;
+  if (V.hasPixelLayers(n)) V.compositeDataUrl(n).then((u) => { if (img.isConnected) stHandle.setSrc(u); }).catch(() => {});
   // (C1, J-interior-S7) the Library products and materials that went into this render, named on the preview
   const libN = n.retry && n.retry.settings && n.retry.settings.libraryNames;
   if (libN && libN.length) setTimeout(() => { if (img.isConnected) stage.append(h("div", { class: "vlib", title: "From the Library, in this render: " + libN.join(", ") }, "With " + libN.join(", "))); }, 0);
-  let z = 1, px = 0, py = 0, over = null;
-  const apply = () => { img.style.transform = `translate(${px}px,${py}px) scale(${z})`; if (over) over.place(); upd(); };
-  const upd = () => { if (!img.naturalWidth) return; const r = img.getBoundingClientRect(); info.innerHTML = `${Math.round((r.width / img.naturalWidth) * 100)}%<br>${img.naturalWidth} x ${img.naturalHeight}`; };
-  img.onload = () => { upd(); if (over) over.place(true); };
-  stage.onwheel = (e) => { e.preventDefault(); z = Math.min(8, Math.max(1, z * Math.exp(-e.deltaY * 0.0015))); if (z === 1) { px = py = 0; } apply(); };
-  let drag = null;
-  img.addEventListener("pointerdown", (e) => { if (z === 1) return; drag = { x: e.clientX - px, y: e.clientY - py }; img.setPointerCapture(e.pointerId); });
-  img.addEventListener("pointermove", (e) => { if (!drag) return; px = e.clientX - drag.x; py = e.clientY - drag.y; apply(); });
-  img.addEventListener("pointerup", () => (drag = null));
-  // double-click: back to the whole picture when zoomed in, else Enlarge / Back to canvas (as a double-click on the canvas)
-  img.addEventListener("dblclick", () => { if (z !== 1) { z = 1; px = py = 0; apply(); } else { autoEnlarged = false; V.setEnlarged(!document.body.classList.contains("enlarged")); } });
-  stage.append(img);
-  over = notesOver(n, img);
+  const over = notesOver(n, img);
+  stHandle.onZoom = () => { if (over) over.place(); paintTools(); };
+  stHandle.onLoad = () => { if (over) over.place(true); paintTools(); };
 };
-// the pill on the picture: Enlarge / Back to canvas (D3)
-const paintPill = () => { const big = document.body.classList.contains("enlarged"); enlPill.querySelector("span").textContent = big ? "Back to canvas" : "Enlarge"; enlPill.title = big ? "Back to canvas (E): the canvas big again, the picture back in the panel" : "Enlarge (E): the picture big, the canvas small beside it"; enlPill.dataset.tipKey = "E"; };
-enlPill.onclick = () => { autoEnlarged = false; V.setEnlarged(!document.body.classList.contains("enlarged")); };
+// Back to canvas (Esc or E) in the head row; #btnEnlarge keeps its id: other code "clicks Enlarge" to open Picture view
+const paintPill = () => { const big = V.pictureView(); enlPill.querySelector("span").textContent = big ? "Back to canvas" : "Open big"; enlPill.title = big ? "Back to canvas (Esc or E): the canvas with this picture selected" : "Picture view (E): this picture big, with its versions"; enlPill.dataset.tipKey = big ? "Esc" : "E"; };
+enlPill.onclick = () => { autoEnlarged = false; V.setEnlarged(!V.pictureView()); };
 
 // ---------- Preview: notes and materials shown faintly, with a pill (viewer-6) ----------
 // The next Edit follows the notes and materials on a picture, so the preview shows them (70%) and says so, with Hide
@@ -4270,7 +5754,16 @@ function syncCmpBar(on) {
   $("#cmpOpW").hidden = cmpMode === "slider";
   $("#cmpOp").value = cmpOp[opKey()]; $("#cmpOpV").textContent = cmpOp[opKey()] + "%";
   $("#cmpSheet").hidden = !!(cmpNow && cmpNow.layered); // (one picture with its layers: Sheets shows it edited)
+  requestAnimationFrame(markCmpB);
 }
+// (B fixer 2, toast-compare) the bottom of Compare's top rows (the bar, and "Compare with:" when shown), so Picture view's
+// messages sit just under them (style.css --cmpbarB) instead of over Download both and Side-by-side picture
+function markCmpB() {
+  const b = Math.max(0, ...[cmpBar, cmpWith].filter((e) => !e.hidden && e.offsetHeight).map((e) => e.getBoundingClientRect().bottom));
+  if (b > 0) document.body.style.setProperty("--cmpbarB", Math.round(b) + "px");
+}
+if (window.ResizeObserver) { const ro = new ResizeObserver(() => markCmpB()); ro.observe(cmpBar); ro.observe(cmpWith); }
+window.addEventListener("resize", () => { if (!cmpBar.hidden) markCmpB(); });
 async function showCompare(n) {
   const pair = V.comparePair();
   if (!pair) return stage.append(h("div", { class: "pv-empty" }, WHY.compare));
@@ -4328,18 +5821,25 @@ async function sideBySide(u0, u1, tags) {
   x.fillText(tags[0], gap, gap + Hh + strip / 2); x.fillText(tags[1], gap * 2 + wA, gap + Hh + strip / 2);
   return c.toDataURL("image/jpeg", 0.93);
 }
-// a compare box takes the size of its first picture fitted in the stage (never enlarged), so what lies over it lines up
-// (one observer for the one box shown: the last is let go on every redraw, or it would keep its old box and edge map)
+// a compare box takes the size of its first picture fitted in the room inside the stage's padding, up or down (v3.74 B2:
+// a small picture fills the stage, bigger never smaller), so what lies over it lines up. One observer for the one box
+// shown (the last is let go on every redraw, or it would keep its old box and edge map); the stage's size changes are
+// taken on the next frame, never inside the observer's own delivery (the box growing inside the stage looped it once),
+// and an unchanged size is left alone
 let cmpRO = null;
+const stageRoom = () => { const cs = getComputedStyle(stage); return { w: stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h: stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) }; };
 function fitCmp(w) {
-  const base = w.querySelector("img"), fit = () => {
-    if (!w.isConnected || !base.naturalWidth) return;
-    const r = stage.getBoundingClientRect(), s = Math.min(1, r.width / base.naturalWidth, r.height / base.naturalHeight);
-    w.style.width = base.naturalWidth * s + "px"; w.style.height = base.naturalHeight * s + "px";
+  const base = w.querySelector("img"); let last = "", raf = 0;
+  const fit = () => {
+    raf = 0; if (!w.isConnected || !base.naturalWidth) return;
+    const r = stageRoom(), s = Math.min(r.w / base.naturalWidth, r.h / base.naturalHeight); if (!(s > 0)) return;
+    const W = base.naturalWidth * s + "px", H = base.naturalHeight * s + "px", k = W + "|" + H;
+    if (k === last) return; last = k;
+    w.style.width = W; w.style.height = H;
   };
   base.addEventListener("load", fit); fit();
   if (cmpRO) cmpRO.disconnect();
-  cmpRO = new ResizeObserver(() => fit()); cmpRO.observe(stage);
+  cmpRO = new ResizeObserver(() => { if (!raf) raf = requestAnimationFrame(fit); }); cmpRO.observe(stage);
   return fit;
 }
 const edgeMaps = new Map(); // before picture url -> its edge map { b, w, h }
@@ -4406,59 +5906,225 @@ V.ensureModelViewer = () => {
   document.head.append(h("script", { id: "mvjs", type: "module", src: "https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js" }));
 };
 
-// ---------- Enlarge (swap viewer and canvas) ----------
-// v3.69 B3: the canvas keeps its own zoom and pan through the swap (J-interior-S8): enlarging fits the small canvas to the
-// selection (at most 125%, as the canvas's own auto-fit), and Back to canvas / Done puts the big canvas back exactly as
-// it was, unless the selected picture would then be off screen (it is brought into view, at the same zoom).
-let bigView = null;
-// the pictures the small canvas shows on Enlarge: all of them when there are 3 or fewer, else the selected ones with the
-// pictures they came from and were made into (so "click another picture to open it here" points at whole pictures),
-// dropping the neighbours when they would make the selection too small to read (B3-c5)
-const fitSet = () => {
-  const all = V.visibleNodes ? V.visibleNodes() : V.G.nodes, sel = V.selNodes().filter((x) => all.includes(x));
-  if (all.length <= 3 || !sel.length) return all;
-  const grow = (from, fn) => { const set = new Set(from); from.forEach((x) => fn(x).forEach((y) => all.includes(y) && set.add(y))); return [...set]; };
-  const kin = grow(sel, (x) => V.parents(x.id).concat(V.children(x.id))); // what it came from and was made into
-  const sibs = grow(kin, (x) => (sel.includes(x) ? [] : V.children(x.id))); // and the other versions from the same picture
-  const ok = (ns) => !V.fitZoom || V.fitZoom(ns) >= 0.25; // (titles stay readable at any zoom, D6)
-  return ok(sibs) ? sibs : ok(kin) ? kin : sel;
+// ---------- v3.74 B2: the gallery stage (N2, visual:big:1, visual:V10) ----------
+// One look wherever a picture is shown big: Picture view, History's full screen and Review. V.stage(el, node, o) turns el
+// into a .stage: generous padding, the picture at its true shape with a radius and a soft shadow, a background behind it
+// (dark / grey / white: Shift+B, or the ◐ button that shows on hover; remembered as vl_stageBg and shared by every stage),
+// fit / 100% (Z, or a double-click; the wheel zooms further at the pointer, drag moves around) and the picture's facts on
+// hover (name · size · AI model · when · cost). o: { src (what to show, else node.url), title, info (extra words), bare
+// (decorate only: the caller draws its own pictures, as Review does) }. Returns { img, setSrc, fit, actual, toggleZoom,
+// zoomBy, onZoom, onLoad, destroy }.
+const BGS = ["dark", "mid", "white"], BG_NAME = { dark: "dark", mid: "grey", white: "white" };
+let stageBg = BGS.includes(V.store.get("stageBg")) ? V.store.get("stageBg") : "dark";
+const stages = new Set();
+const paintBgClass = (el) => { BGS.forEach((b) => el.classList.remove("bg-" + b)); el.classList.add("bg-" + stageBg); };
+V.stageBg = () => stageBg;
+V.stageSetBg = (b) => { stageBg = BGS.includes(b) ? b : "dark"; V.store.set("stageBg", stageBg); stages.forEach((s) => paintBgClass(s.el)); if (stage.classList.contains("stage")) paintBgClass(stage); paintTools(); };
+V.stageCycleBg = () => { V.stageSetBg(BGS[(BGS.indexOf(stageBg) + 1) % BGS.length]); return stageBg; };
+const BG_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>';
+const whenText = (t) => { if (!t) return ""; const d = new Date(t), same = d.toDateString() === new Date().toDateString(); return (same ? "Today" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })) + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
+const costOf = (n) => { if (n.cost != null) return +n.cost || 0; try { const s = n.retry && n.retry.settings; if (n.engine && s && s.provider === "google" && V.D && V.D.googleCost) return V.D.googleCost(n.engine, s, (n.retry.images || []).length) || 0; } catch (e) { /* no estimate */ } return null; };
+V.stage = (el, node, o = {}) => {
+  const n = node || {}, S = { el, img: null, z: 1, px: 0, py: 0, onZoom: null, onLoad: null };
+  el.classList.add("stage"); el.classList.toggle("cutout", !!n.cutout); paintBgClass(el);
+  if (!el.querySelector(":scope>.stbg")) el.append(h("button", { class: "stbg", type: "button", title: "Background behind the picture: dark, grey or white (Shift+B)", "aria-label": "Background behind the picture", html: BG_ICON, onclick: (e) => { e.stopPropagation(); V.stageCycleBg(); } }));
+  stages.add(S);
+  if (o.bare) { S.destroy = () => { stages.delete(S); }; return S; }
+  const img = h("img", { class: "stimg", src: o.src || n.url, alt: "", draggable: "false" });
+  const infoEl = h("div", { class: "stinfo", hidden: true }), zoomL = h("div", { class: "stzoom" });
+  S.img = img; el.append(img, infoEl, zoomL);
+  const actual = () => (img.naturalWidth && img.offsetWidth ? (img.offsetWidth * S.z) / img.naturalWidth : 0); // screen px per picture px
+  const hundredZ = () => (img.offsetWidth ? img.naturalWidth / img.offsetWidth : 1);
+  let zt = 0;
+  const readout = () => { const a = actual(); if (!a) return; zoomL.textContent = (S.z === 1 ? "Fit · " : "") + Math.round(a * 100) + "%"; };
+  const flash = () => { zoomL.classList.add("show"); clearTimeout(zt); zt = setTimeout(() => zoomL.classList.remove("show"), 1200); };
+  const apply = (quiet) => {
+    el.classList.toggle("zoomed", S.z !== 1);
+    img.style.transform = S.z === 1 ? "" : `translate(${S.px}px,${S.py}px) scale(${S.z})`;
+    readout(); if (!quiet) flash(); if (S.onZoom) S.onZoom();
+  };
+  S.actualZoom = actual;
+  S.fit = () => { S.z = 1; S.px = S.py = 0; apply(); };
+  S.actual = () => { S.z = hundredZ(); S.px = S.py = 0; apply(); };
+  S.toggleZoom = () => (S.z !== 1 || Math.abs(actual() - 1) < 0.01 ? S.fit() : S.actual());
+  // zoom about a point on screen (the wheel at the pointer), so what is under the pointer stays put
+  S.zoomBy = (f, cx, cy) => {
+    const z0 = S.z, hz = hundredZ(), z1 = Math.min(hz * 8, Math.max(Math.min(1, hz), z0 * f));
+    if (cx != null && img.offsetWidth) {
+      const er = el.getBoundingClientRect(), Cx = er.left + img.offsetLeft + img.offsetWidth / 2, Cy = er.top + img.offsetTop + img.offsetHeight / 2, ox = cx - Cx, oy = cy - Cy;
+      S.px = ox - ((ox - S.px) * z1) / z0; S.py = oy - ((oy - S.py) * z1) / z0;
+    }
+    S.z = z1; if (Math.abs(S.z - 1) < 0.001) { S.z = 1; S.px = S.py = 0; } apply();
+  };
+  el.onwheel = (e) => { e.preventDefault(); S.zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); };
+  let drag = null;
+  img.addEventListener("pointerdown", (e) => { if (S.z === 1 || e.button !== 0) return; drag = { x: e.clientX - S.px, y: e.clientY - S.py }; img.setPointerCapture(e.pointerId); el.classList.add("panning"); });
+  img.addEventListener("pointermove", (e) => { if (!drag) return; S.px = e.clientX - drag.x; S.py = e.clientY - drag.y; apply(true); });
+  const up = () => { drag = null; el.classList.remove("panning"); };
+  img.addEventListener("pointerup", up); img.addEventListener("pointercancel", up);
+  img.addEventListener("dblclick", (e) => { e.preventDefault(); S.toggleZoom(); });
+  const paintInfo = () => {
+    const parts = [], title = o.title || (n.id && V.nodeTitle ? V.nodeTitle(n) : n.label || "");
+    if (title) parts.push(h("b", {}, title));
+    if (img.naturalWidth) parts.push(`${img.naturalWidth} × ${img.naturalHeight}`);
+    if (n.engine && V.engineName) parts.push(V.engineName(n.engine) + (n.askedEngine && n.askedEngine !== n.engine ? ` (asked for ${V.engineName(n.askedEngine)})` : "")); // (final, deliver-history-asked-hidden)
+    if (n.created) parts.push(whenText(n.created));
+    const c = costOf(n); if (c != null && c > 0 && V.store.get("showCosts", true) !== false) parts.push("~" + V.money(c));
+    (o.info || []).forEach((t) => t && parts.push(String(t)));
+    infoEl.replaceChildren(...parts.flatMap((p, i) => (i ? [h("i", {}, "·"), p] : [p])));
+    infoEl.hidden = !parts.length;
+  };
+  // Fit = the picture scaled to the room inside the padding, up as well as down (a 1K render fills a 1440 px stage; the
+  // picture keeps its own shape, so the radius and shadow hug it), sized here rather than by max-width / max-height so it
+  // can grow. The stage's size changes are taken on the next frame, never inside the observer's own delivery (no resize
+  // loop), and an unchanged fitted size is left alone.
+  let fitW = 0, fitH = 0, fitRaf = 0;
+  const room = () => { const cs = getComputedStyle(el); return { w: el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h: el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) }; };
+  const sizeFit = () => {
+    fitRaf = 0; if (!img.isConnected || !img.naturalWidth) return;
+    const r = room(); if (!(r.w > 0 && r.h > 0)) return;
+    const s = Math.min(r.w / img.naturalWidth, r.h / img.naturalHeight), w = Math.round(img.naturalWidth * s), hh = Math.round(img.naturalHeight * s);
+    if (w === fitW && hh === fitH) return; fitW = w; fitH = hh;
+    img.style.width = w + "px"; img.style.height = hh + "px";
+    readout(); if (S.onZoom) S.onZoom(); // (what lies over the picture follows its new size)
+  };
+  const ro = window.ResizeObserver ? new ResizeObserver(() => { if (!fitRaf) fitRaf = requestAnimationFrame(sizeFit); }) : null;
+  if (ro) ro.observe(el);
+  img.onload = () => { sizeFit(); apply(true); paintInfo(); if (S.onLoad) S.onLoad(); };
+  if (img.complete && img.naturalWidth) img.onload();
+  S.setSrc = (u) => { img.src = u; };
+  S.destroy = () => { stages.delete(S); clearTimeout(zt); if (ro) ro.disconnect(); if (fitRaf) cancelAnimationFrame(fitRaf); el.onwheel = null; el.classList.remove("stage", "zoomed", "panning", "cutout"); BGS.forEach((b) => el.classList.remove("bg-" + b)); const bb = el.querySelector(":scope>.stbg"); if (bb) bb.remove(); };
+  return S;
 };
-// the small canvas is still settling into its slot on the first frame (the swap is animated), so it is fitted again
-// whenever its size changes in the next second, unless the view was moved meanwhile
-let fitRO = null;
-const fitSmall = () => {
-  const ns = fitSet(); if (!ns.length) return;
-  V.fit(ns, false, 1.25);
-  if (fitRO) fitRO.disconnect();
-  const cv = $("#canvas"), until = Date.now() + 1000; let set = JSON.stringify(V.G.view);
-  fitRO = new ResizeObserver(() => {
-    if (Date.now() > until || !document.body.classList.contains("enlarged") || JSON.stringify(V.G.view) !== set) { fitRO.disconnect(); fitRO = null; return; }
-    V.fit(fitSet(), false, 1.25); set = JSON.stringify(V.G.view);
+
+// ---------- v3.74 B2: Picture view (N3, ia:big:1, ia-03) ----------
+// The viewer sits in the centre column; body.picview shows it over the canvas (which keeps its size underneath, unseen, so
+// its zoom, Fit and "is it on screen" keep working). The Canvas | Picture switch in the title bar, E, Enter, a double-click
+// on a canvas card, Open big and #btnEnlarge open it; Esc, E or the switch go back to the canvas with the same picture
+// selected. Draw, Touch-ups and Compare open it by themselves (setViewerMode) and close it again when they opened it.
+V.pictureView = () => document.body.classList.contains("picview");
+const viewSeg = $("#viewSeg");
+const anyPic = () => V.G.nodes.some((x) => x.status === "done" && (x.type === "image" || x.type === "video") && x.url);
+function paintSwitch() {
+  const pv = V.pictureView();
+  if (viewSeg) { $$("#viewSeg button").forEach((b) => b.classList.toggle("on", (b.dataset.v === "picture") === pv)); const pb = viewSeg.querySelector('[data-v="picture"]'); pb.disabled = !pv && !anyPic(); pb.title = pb.disabled ? "Picture view: capture a SketchUp view or add a picture first" : "Picture: the selected picture big in the centre with its versions along the bottom (E, Enter or a double-click on a picture)"; }
+  paintPill();
+}
+const pbarRO = new ResizeObserver(() => { const p = $("#pbar"); if (p) document.body.style.setProperty("--pbh", p.offsetHeight + "px"); });
+if ($("#pbar")) pbarRO.observe($("#pbar"));
+V.openPicture = (o = {}) => {
+  if (V.pictureView()) { if (o.mode && V.viewerMode !== o.mode) V.setViewerMode(o.mode); return true; }
+  const n = cur() || newestPic();
+  if (!n) { V.toast("Nothing to show big yet: capture a SketchUp view or add a picture first", false, 4500); return false; }
+  if (!cur()) { V.sel = [n.id]; V.render(); } // (a selection of several stays: Compare shows two of them)
+  V.transition(() => { document.body.classList.add("picview"); lastKey = ""; V.renderViewer(); V.selectionChanged && V.selectionChanged(true); });
+  if (o.mode && V.viewerMode !== o.mode) V.setViewerMode(o.mode);
+  return true;
+};
+V.closePicture = () => {
+  if (!V.pictureView()) return;
+  autoEnlarged = false;
+  if (V.viewerMode !== "preview") V.setViewerMode("preview"); // (Draw, Touch-ups or Compare: Done first)
+  V.transition(() => { document.body.classList.remove("picview"); lastKey = ""; V.renderViewer(); V.selectionChanged && V.selectionChanged(true); });
+  requestAnimationFrame(() => { V.applyView && V.applyView(); const n = cur(); if (n && V.onScreen && !V.onScreen(n) && V.centerOn) V.centerOn(n); });
+};
+// the old name, kept for every caller (canvas.js double-click and E, palette.js, phone.js)
+V.setEnlarged = (on) => (on ? V.openPicture() : V.closePicture());
+if (viewSeg) viewSeg.addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b || b.disabled) return; autoEnlarged = false; if (b.dataset.v === "picture") V.openPicture(); else V.closePicture(); });
+// the stage tools at the right of the tabs (Preview and Compare only; Draw and Touch-ups have their own)
+function paintTools() {
+  const tools = $("#vtools"); if (!tools) return;
+  tools.hidden = EDITING(V.viewerMode);
+  const zb = $("#stZoom"), bb = $("#stBg"), pb = $("#btnPresent");
+  if (zb) { const a = stHandle && stHandle.img && stHandle.actualZoom ? stHandle.actualZoom() : 0; zb.disabled = !a || V.viewerMode !== "preview"; zb.textContent = !a ? "Fit" : stHandle.z === 1 ? "Fit" : Math.round(a * 100) + "%"; zb.title = `${stHandle && stHandle.z !== 1 ? "Fit on screen" : "100%: one picture pixel per screen pixel"} (Z, or double-click the picture). The wheel zooms in at the pointer, drag moves around`; }
+  if (bb) bb.title = `Background behind the picture: ${BG_NAME[stageBg]} now; dark, grey or white (Shift+B)`;
+  if (pb) pb.disabled = !anyPic();
+}
+if ($("#stZoom")) $("#stZoom").onclick = () => stHandle && stHandle.toggleZoom();
+if ($("#stBg")) $("#stBg").onclick = () => V.stageCycleBg();
+if ($("#btnPresent")) $("#btnPresent").onclick = () => V.present && V.present();
+// the versions of a picture: the SketchUp / Revit view (or the photo) it came from and everything made from that, oldest
+// first (the set Review uses, with the source in front); set-aside versions are left out
+V.versionSet = (n) => {
+  if (!n) return [];
+  const pic = (x) => x && (x.type === "image" || x.type === "video") && !x.rejected;
+  let root = V.captureOf ? V.captureOf(n) : null;
+  if (!root) { root = n; const seen = new Set([n.id]); for (let x = n; seen.size < 14;) { const p = V.parents(x.id).find((q) => q.type === "image" && !seen.has(q.id)); if (!p) break; seen.add(p.id); root = p; x = p; } }
+  const out = [], seen = new Set();
+  const walk = (x) => { if (!x || seen.has(x.id)) return; seen.add(x.id); if (pic(x)) out.push(x); V.children(x.id).forEach(walk); };
+  walk(root);
+  if (!seen.has(n.id)) out.push(n);
+  return out.sort((a, b) => (a.created || 0) - (b.created || 0));
+};
+// the film strip along the bottom of Picture view (ia:big:1): 144 x 81 thumbnails at their true shape, the name under
+// each, a star on favourites, an amber ring on the one on the stage; click selects, Shift+click compares it with the one
+// on the stage, ← → walk along it (in Preview; Compare folds it away, its Compare-with row is the same set)
+const strip = $("#pvStrip");
+let stripKey = "";
+function paintStrip() {
+  if (!strip) return;
+  // (not in Compare: its Compare-with row lists the same versions, and the strip would halve the room for the slider)
+  const n = cur(), on = V.pictureView() && !!n && !EDITING(V.viewerMode) && V.viewerMode !== "compare";
+  const list = on ? V.versionSet(n) : [];
+  if (!on || list.length < 2) { if (!strip.hidden) { strip.hidden = true; strip.innerHTML = ""; } stripKey = ""; document.body.classList.remove("haspvstrip"); return; }
+  const key = list.map((x) => [x.id, x.status, x.thumb ? 1 : 0, x.fav ? 1 : 0, x === n ? 1 : 0, V.nodeTitle(x), (x.pick ? "p" : "") + (x.hero ? "h" : "")].join(":")).join("|"); // (v3.74 C1: picks and the hero too)
+  if (key === stripKey && !strip.hidden) return; stripKey = key;
+  strip.innerHTML = ""; strip.hidden = false; document.body.classList.add("haspvstrip"); // (body.haspvstrip, not .pvstrip: that is the strip's own class; it lifts the messages clear of the strip, style.css)
+  list.forEach((x) => {
+    const done = x.status === "done" && x.url, kind = V.pictureKind ? V.pictureKind(x) : "";
+    const b = h("button", { class: "svthumb" + (x === n ? " on" : "") + (done ? "" : " busy"), type: "button", role: "option", "aria-selected": x === n ? "true" : "false", title: `${V.nodeTitle(x)}${V.nodeSub && V.nodeSub(x) ? " · " + V.nodeSub(x) : ""} (click: show it; Shift+click: compare it with ${V.nodeTitle(n)})` },
+      h("span", { class: "svpic" }, done ? h("img", { src: x.thumb || x.url, alt: "", draggable: "false" }) : h("span", { class: "svwait" }, x.status === "error" ? "Failed" : x.status === "uploading" ? "Uploading…" : "Rendering…"),
+        x.fav ? h("i", { class: "ic ic-star-fill svfav", "aria-hidden": "true" }) : null, kind === "view" ? h("span", { class: "svkind" }, "View") : null),
+      V.titleEl ? V.titleEl(x, "small") : h("small", {}, V.nodeTitle(x))); // (v3.74 C1 loop-03: cut from the middle, the version's letter stays)
+    b.onclick = (e) => { if (e.shiftKey && done && x !== n) return V.compareWith(n, x); if (x !== n) V.setSel([x.id]); };
+    if (V.stripMark) V.stripMark(b, x, list); // (v3.74 C1 hook, review.js: pick / hero marks and a round's versions grouped)
+    strip.append(b);
   });
-  fitRO.observe(cv); setTimeout(() => { if (fitRO) { fitRO.disconnect(); fitRO = null; } }, 1100);
-};
-V.setEnlarged = (on) => {
-  const big = document.body.classList.contains("enlarged");
-  if (on === big) return;
-  if (on) bigView = { ...V.G.view };
-  V.transition(() => {
-    document.body.classList.toggle("enlarged", on);
-    const viewer = $("#viewer"), canvas = $("#canvas");
-    if (on) { $("#cvSlot").append(viewer); $("#pvSlot").append(canvas); }
-    else { $("#cvSlot").append(canvas); $("#pvSlot").append(viewer); }
-    paintPill();
-    lastKey = ""; V.renderViewer();
-    requestAnimationFrame(() => {
-      V.applyView(); if (!V.G.nodes.length) return;
-      if (on) return fitSmall();
-      const few = V.visibleNodes && V.visibleNodes().length <= 3; // (3 or fewer: fitted, as the canvas does when a result lands)
-      if (few) { bigView = null; return V.fit(V.visibleNodes(), false, 1.25); }
-      if (bigView) { V.G.view = bigView; bigView = null; V.applyView(); }
-      const n = cur(); if (n && V.onScreen && !V.onScreen(n) && V.centerOn) V.centerOn(n);
-    });
-  });
-};
-paintPill();
+  const onEl = strip.querySelector(".svthumb.on"); if (onEl) requestAnimationFrame(() => onEl.scrollIntoView({ block: "nearest", inline: "center", behavior: V.motionOn && V.motionOn() ? "smooth" : "auto" }));
+}
+const stripStep = (d) => { const n = cur(); if (!n) return; const list = V.versionSet(n), i = list.indexOf(n), to = list[i + d]; if (to) V.setSel([to.id]); };
+// keys in Picture view (Preview and Compare; Draw and Touch-ups keep their own): ← → along the strip, Z fit / 100%,
+// Shift+B background, Esc (a message on top closes first) or E back to the canvas. On the canvas, Enter with one picture
+// selected opens Picture view.
+// Never while typing, under a pop-up, on another page, or when a menu, Activity or a pick is open (canvas.js handles those).
+window.addEventListener("keydown", (e) => {
+  if (!(e.target instanceof Element) || e.target.matches("input,textarea,select,[contenteditable],[contenteditable] *")) return;
+  if (V.canvasShown && !V.canvasShown()) return;
+  if (EDITING(V.viewerMode)) return;
+  if (V.presentOpen && V.presentOpen()) return; // (Present has the keys: its arrows, Esc and Shift+B are its own, present.js)
+  const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey || e.altKey, stop = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (mod) return;
+  if (!V.pictureView()) {
+    if (k === "enter" && !e.shiftKey && (e.target === document.body || e.target.id === "canvas") && V.sel.length === 1 && cur() && cur().status === "done") { stop(); V.openPicture(); }
+    return;
+  }
+  const menuUp = !$("#ctx").hidden || !$("#queuePop").hidden || $$(".eng-menu, .tool-menu:not([hidden])").length || $("#canvas").querySelector(".cappop,.gpal,.picking");
+  if (k === "escape") { if (menuUp) return; stop(); if (V.closeTopToast && V.closeTopToast()) return; if (V.pvEscape && V.pvEscape()) return; V.closePicture(); } // (v3.74 C1 hook, guide.js: Esc on Keep / Discard = Keep) // (a message on top goes first, as on the canvas; the next Esc leaves)
+  else if (k === "e" && !e.shiftKey) { stop(); V.closePicture(); }
+  else if ((k === "arrowleft" || k === "arrowright") && !e.shiftKey) { stop(); stripStep(k === "arrowleft" ? -1 : 1); }
+  else if (k === "z" && !e.shiftKey && V.viewerMode === "preview" && stHandle) { stop(); stHandle.toggleZoom(); }
+  else if (k === "b" && e.shiftKey) { stop(); V.stageCycleBg(); }
+}, true);
+// a double-click on a canvas card opens Picture view (canvas.js's dblclick handler). The card is rebuilt on the first
+// press (every render rebuilds the nodes), so the browser often pairs no dblclick: two quick presses on the same card's
+// picture count as one here (a small hook on the canvas, capture phase; the badge and buttons are left to canvas.js)
+let lastPress = null;
+if ($("#canvas")) $("#canvas").addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !(e.target instanceof Element) || e.target.closest("button,.hero,[role=button]")) { lastPress = null; return; }
+  const card = e.target.closest(".node"), pic = e.target.closest(".nimg");
+  if (!card || !pic || !card.dataset.id) { lastPress = null; return; }
+  const now = Date.now(), id = card.dataset.id;
+  if (lastPress && lastPress.id === id && now - lastPress.t < 450 && Math.hypot(e.clientX - lastPress.x, e.clientY - lastPress.y) < 10) {
+    lastPress = null;
+    const n = V.node(id); if (!n || V.pictureView()) return;
+    setTimeout(() => { if (V.node(id) && !V.pictureView() && V.canvasShown && V.canvasShown()) { if (!(V.sel.length === 1 && V.sel[0] === id)) V.setSel([id]); V.openPicture(); } }, 0); // (after canvas.js's own press handling)
+    return;
+  }
+  lastPress = { id, t: now, x: e.clientX, y: e.clientY };
+}, true);
+const hero0 = V.heroReveal;
+if (hero0) V.heroReveal = (n) => (V.pictureView() ? undefined : hero0(n)); // (the canvas is unseen in Picture view: no card to fly into)
+paintSwitch();
 
 // ---------- Draw editor ----------
 let dc = null, dctx = null, oc = null, octx = null, wrapEl = null, dnode = null, drawTok = 0;
@@ -4498,7 +6164,7 @@ function sizeCanvas() {
 function applyDV() {
   if (!wrapEl || !dc) return;
   wrapEl.style.transform = `translate(${dv.x}px,${dv.y}px) scale(${dv.z})`;
-  info.innerHTML = `${Math.round((parseFloat(dc.style.width) / dc.width) * dv.z * 100)}%<br>${dc.width} x ${dc.height}`;
+  info.innerHTML = `${Math.round((parseFloat(dc.style.width) / dc.width) * dv.z * 100)}%<br>${dc.width} × ${dc.height}`;
 }
 window.addEventListener("resize", () => V.viewerMode === "draw" && sizeCanvas());
 // v3.69 C1: the stage also changes size without the window doing so (the status line and Keep the rest bar come in
@@ -4791,7 +6457,7 @@ V.layerEdit = async (text, e, settings, fluxFn, o = {}) => {
     // D16: the words are on the layer (and in the prompt's undo list); the box empties for the next part
     if (!o.keepPrompt && $("#prompt").value.trim()) V.setPrompt("");
     if (!o.keepPrompt) sentEdit = true;
-  } catch (er) { l.status = "error"; l.error = er.message; V.toast(er.message, true, 0); }
+  } catch (er) { l.status = "error"; l.error = er.message; V.failToast ? V.failToast(er, { what: "Couldn't send the edit" }) : V.toast(er.message, true, 0); }
   drawLayersPanel(); touched(); kick();
 };
 async function retryLayer(l) {
@@ -4803,7 +6469,7 @@ async function retryLayer(l) {
 V.applyLayerJob = (j) => {
   const mj = maskJobs.get(j.id);
   if (mj) {
-    if (j.status === "error") { maskJobs.delete(j.id); V.toast("AI select failed: " + (j.error || ""), true, 0); kick(); }
+    if (j.status === "error") { maskJobs.delete(j.id); V.failToast ? V.failToast(j.error || "", { what: "AI select failed" }) : V.toast("AI select failed: " + (j.error || ""), true, 0); kick(); }
     else if (j.status === "done") {
       maskJobs.delete(j.id);
       const o = (j.outputs || []).find((x) => x.type === "image");
@@ -4815,7 +6481,7 @@ V.applyLayerJob = (j) => {
   for (const n of V.G.nodes) for (const l of n.drawing?.layers || []) {
     if (l.jobId !== j.id) continue;
     found = true;
-    if (j.status === "error") { if (l.status !== "error") { changed = true; l.status = "error"; l.error = j.error; V.toast(`Layer "${l.name}" failed: ${j.error}`, true, 0); } }
+    if (j.status === "error") { if (l.status !== "error") { changed = true; l.status = "error"; l.error = j.error; V.failToast ? V.failToast(j.error, { what: `Layer "${l.name}" failed` }) : V.toast(`Layer "${l.name}" failed: ${j.error}`, true, 0); } }
     else if (j.status === "done") {
       if (l.status !== "done") {
         changed = true;
@@ -5222,7 +6888,8 @@ V.fixArea = (n) => {
 // ---------- layers panel ----------
 function menu(e, items) {
   const ctx = $("#ctx"); ctx.innerHTML = "";
-  items.filter(Boolean).forEach((it) => ctx.append(it === "-" ? h("hr") : h("button", { class: it.cls || "", onclick: () => { ctx.hidden = true; it.fn(); } }, it.label)));
+  const back = e && e.target && e.target.closest ? e.target.closest("button") : null; // (v3.74 D2: the ⋯ that opened it; a dialog opened from a row gives the keyboard back to it)
+  items.filter(Boolean).forEach((it) => { const b = it === "-" ? h("hr") : h("button", { class: it.cls || "", onclick: () => { ctx.hidden = true; it.fn(); } }, it.label); if (back && it !== "-") b._vmBack = back; ctx.append(b); });
   ctx.hidden = false;
   const r = ctx.getBoundingClientRect();
   ctx.style.left = Math.min(e.clientX, innerWidth - r.width - 8) + "px"; ctx.style.top = Math.min(e.clientY, innerHeight - r.height - 8) + "px";
@@ -5274,7 +6941,7 @@ function layerRow(l) {
   else if (ICON[l.type]) lt.innerHTML = ICON[l.type]; // (adjust, material map, ink, arrow, area: line icons)
   row.append(lt);
   if (l.type === "edit" || l.type === "adjust") { const lm = h("span", { class: "lm" + (D.showMask === l.id ? " shown" : "") + (l.mask ? "" : " all"), title: l.mask ? "Mask: click for options" : "Mask: the whole picture. Click for options" }, l.mask ? null : "all"); lm.onclick = (e) => { e.stopPropagation(); menu(e, maskItems(l)); }; if (l.mask) maskThumb(l, lm); row.append(lm); }
-  const sub = l.type === "edit" ? (busy(l) ? "generating…" : l.status === "error" ? "failed: " + (l.error || "") : "") : l.type === "arrow" && l.text ? l.text : l.type === "adjust" && l.clip ? "clipped" : l.type === "matmap" ? `${l.zones.length} material${l.zones.length === 1 ? "" : "s"}` : "";
+  const sub = l.type === "edit" ? (busy(l) ? "generating…" : l.status === "error" ? "failed: " + (V.explainError ? V.explainError(l.error || "").title : l.error || "") : "") : l.type === "arrow" && l.text ? l.text : l.type === "adjust" && l.clip ? "clipped" : l.type === "matmap" ? `${l.zones.length} material${l.zones.length === 1 ? "" : "s"}` : "";
   row.append(h("span", { class: "ln", title: l.prompt || l.name }, h("b", {}, l.name), sub ? h("small", {}, sub) : null));
   row.append(h("button", { class: "lmenu", title: "Layer options", onclick: (e) => { e.stopPropagation(); layerMenu(l, e); } }, "⋯"));
   row.addEventListener("dragstart", (e) => { dragId = l.id; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", l.id); requestAnimationFrame(() => row.classList.add("dragging")); });
@@ -5363,7 +7030,15 @@ V.applyJob = (j) => {
   const r = applyJob0(j);
   if (stay && dnode) {
     const names = (V.matUsable ? V.matUsable(dnode) : []).map((z) => z.name).join(", ");
-    V.toast(`Option made${names ? ": " + names : ""}. Swap a material and press Render for the next option`, false, 9000, { action: { label: "See it", run: () => { V.sel = [stay[0].id]; V.render(); V.selectionChanged(); V.setViewerMode("preview"); } } });
+    V.toast(V.matMadeText ? V.matMadeText(dnode, names) : `Option made${names ? ": " + names : ""}. Swap a material and press Render for the next option`, false, 9000, /* (v3.74 C3 hook: the words point at + Add an option) */ { action: { label: "See it", run: () => { V.sel = [stay[0].id]; V.render(); V.selectionChanged(); V.setViewerMode("preview"); } } });
+  }
+  // v3.74 B2: a result you started that lands while Picture view is showing the picture it was made from takes the stage
+  // (core.js selected it); the viewer repaints right after this, then B1's wipe reveal (if (V.wipeReveal)) shows it coming
+  // in over the picture it came from
+  if (j && j.status === "done" && !stay && V.pictureView() && V.viewerMode === "preview" && V.sel.length === 1 && V.wipeReveal) {
+    const nn = V.G.nodes.find((x) => x.jobId === j.id && x.id === V.sel[0] && x.status === "done" && x.type === "image" && x.url);
+    const p = nn && V.parents(nn.id).find((x) => x.type === "image" && x.url);
+    if (nn && p) setTimeout(() => { if (cur() === nn && stHandle && stHandle.img && stHandle.img.isConnected) { try { V.wipeReveal(stHandle.img, p.url, nn.url, { host: stage, fill: false, ms: 700 }); } catch (er) { console.warn(er); } } }, 30);
   }
   return r;
 };
@@ -5437,6 +7112,145 @@ window.addEventListener("keydown", (e) => {
     f[i < 0 ? (e.shiftKey ? f.length - 1 : 0) : (i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
   }
 }, true);
+// ---------- v3.74 C1 (N10, loop:big:4, loop-16): Brush on the big picture ----------
+// In Picture view (Preview), the Brush pill (B; Shift+B stays the stage background) or Alt+drag paints a soft amber mask on
+// the picture (the wheel sets the size while the brush is on). On release a bubble asks "What should be here?" with quick
+// chips and a field; Edit runs the area edit the phone's Change an area uses: image 1 the picture as shown, image 2 the same
+// with the painted area in translucent red (V.areaPrompt), and cutout.js puts the result back only through the painted area
+// (settings.protect + keepMask), so it lands as a new version with the rest kept, compared with its parent (guide.js).
+// Esc (or Ctrl+Z, a stroke at a time) clears it. The full Draw editor stays one click away for more.
+const BR = { on: false, r: 30, strokes: [], cur: null, ov: null, pop: null, ring: null, node: null };
+const brushPill = h("button", { class: "mini vtool brushpill", id: "stBrush", type: "button", "aria-pressed": "false", title: "Brush (B): paint over a part of the picture, then say what should be there. Alt+drag paints too; the wheel sets the size",
+  html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l5 5-8.2 8.2a2 2 0 0 1-1.4.6H6.5v-3.4a2 2 0 0 1 .6-1.4z"/><path d="M12 7l5 5"/><path d="M3 21h7"/></svg><span>Brush</span>', onclick: () => setBrush(!BR.on) });
+if ($("#stZoom")) $("#stZoom").before(brushPill);
+const brushable = () => { const n = cur(); return V.pictureView() && V.viewerMode === "preview" && !!n && n.status === "done" && n.type === "image" && !!n.url && !!stHandle && !!stHandle.img; };
+function setBrush(on) {
+  BR.on = !!on && brushable();
+  brushPill.classList.toggle("on", BR.on); brushPill.setAttribute("aria-pressed", String(BR.on));
+  stage.classList.toggle("brushing", BR.on);
+  if (!BR.on && BR.ring) BR.ring.hidden = true;
+  if (BR.on) V.toast("Brush: paint over the part to change (the wheel sets the size), then say what should be there", false, 3500, { key: "brushhint" });
+  else if (V.closeToastKey) V.closeToastKey("brushhint"); // (loop-13: the hint goes with the brush)
+}
+const accCol = () => getComputedStyle(document.documentElement).getPropertyValue("--acc").trim() || "orange";
+function brushReset() { BR.strokes = []; BR.cur = null; if (BR.pop) { BR.pop.remove(); BR.pop = null; } if (BR.ov) BR.ov.remove(); BR.ov = null; BR.node = null; }
+// the overlay lies exactly over the picture as drawn (fit or zoomed): its rectangle is the image's on screen
+function overlay() {
+  const img = stHandle && stHandle.img; if (!img) return null;
+  if (!BR.ov || !BR.ov.isConnected) { BR.ov = h("canvas", { class: "brushov", "aria-hidden": "true" }); stage.append(BR.ov); }
+  const r = img.getBoundingClientRect(), sr = stage.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  Object.assign(BR.ov.style, { left: r.left - sr.left + "px", top: r.top - sr.top + "px", width: r.width + "px", height: r.height + "px" });
+  const W = Math.round(r.width * dpr), H = Math.round(r.height * dpr); if (BR.ov.width !== W || BR.ov.height !== H) { BR.ov.width = W; BR.ov.height = H; }
+  return { c: BR.ov, r, W, H };
+}
+function strokesTo(ctx, W, H, list, col, grow = 0) {
+  ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = ctx.fillStyle = col;
+  for (const s of list) { const rr = Math.max(0.5, s.r * W + grow); ctx.lineWidth = 2 * rr; ctx.beginPath(); s.pts.forEach(([u, v], i) => (i ? ctx.lineTo(u * W, v * H) : ctx.moveTo(u * W, v * H))); if (s.pts.length === 1) { ctx.arc(s.pts[0][0] * W, s.pts[0][1] * H, rr, 0, 7); ctx.fill(); } else ctx.stroke(); }
+}
+function paintMask() {
+  const o = overlay(); if (!o) return;
+  const x = o.c.getContext("2d"); x.clearRect(0, 0, o.W, o.H);
+  const t = document.createElement("canvas"); t.width = o.W; t.height = o.H; strokesTo(t.getContext("2d"), o.W, o.H, BR.strokes.concat(BR.cur ? [BR.cur] : []), accCol());
+  x.globalAlpha = 0.5; x.drawImage(t, 0, 0); x.globalAlpha = 1;
+}
+const uvOf = (e) => { const r = stHandle.img.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r]; };
+stage.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || !(BR.on || e.altKey) || !brushable() || !(e.target instanceof Element) || e.target.closest(".brushpop,.stbg,button")) return;
+  const [u, v, r] = uvOf(e); if (u < 0 || v < 0 || u > 1 || v > 1) return;
+  e.preventDefault(); e.stopPropagation();
+  if (BR.node !== cur()) brushReset(); BR.node = cur();
+  if (BR.pop) { BR.pop.remove(); BR.pop = null; }
+  BR.cur = { pts: [[u, v]], r: BR.r / r.width };
+  stage.setPointerCapture(e.pointerId); paintMask();
+}, true);
+stage.addEventListener("pointermove", (e) => {
+  if (BR.ring) { const show = (BR.on || e.altKey) && brushable(); BR.ring.hidden = !show; if (show) { const sr = stage.getBoundingClientRect(); Object.assign(BR.ring.style, { left: e.clientX - sr.left - BR.r + "px", top: e.clientY - sr.top - BR.r + "px", width: 2 * BR.r + "px", height: 2 * BR.r + "px" }); } }
+  else if (BR.on) { BR.ring = h("div", { class: "brushring", "aria-hidden": "true" }); stage.append(BR.ring); }
+  if (BR.ring && !BR.ring.isConnected) BR.ring = null;
+  if (!BR.cur) return;
+  e.preventDefault(); e.stopPropagation();
+  const [u, v] = uvOf(e); BR.cur.pts.push([Math.max(-0.05, Math.min(1.05, u)), Math.max(-0.05, Math.min(1.05, v))]); paintMask();
+}, true);
+const brushUp = (e) => {
+  if (!BR.cur) return; e.stopPropagation();
+  BR.strokes.push(BR.cur); BR.cur = null; paintMask(); askWhat(e.clientX, e.clientY);
+};
+stage.addEventListener("pointerup", brushUp, true); stage.addEventListener("pointercancel", brushUp, true);
+stage.addEventListener("pointerleave", () => { if (BR.ring) BR.ring.hidden = true; });
+stage.addEventListener("wheel", (e) => {
+  if (!BR.on || !brushable()) return;
+  e.preventDefault(); e.stopPropagation();
+  BR.r = Math.max(6, Math.min(240, Math.round(BR.r * Math.exp(-e.deltaY * 0.0015))));
+  if (BR.ring) { const sr = stage.getBoundingClientRect(); Object.assign(BR.ring.style, { left: e.clientX - sr.left - BR.r + "px", top: e.clientY - sr.top - BR.r + "px", width: 2 * BR.r + "px", height: 2 * BR.r + "px" }); }
+}, { capture: true, passive: false });
+const QUICK = [["Remove it", "Remove it and fill the area with a natural continuation of what is around and behind it."], ["Add planting", "Add planting here: shrubs, grasses and small trees that suit the setting."],
+  ["Make it glass", "Make this part clear glass with slim dark frames, with true reflections of the sky and surroundings."], ["Different material", ""], ["People here", "Add one or two people here, at the right scale and in the scene's light."], ["Clean it up", "Clean this area up: take out stains, clutter, smudges and odd marks, keeping the materials as they are."]];
+V.brushQuick = () => QUICK.map(([label, text]) => ({ label, text })); // (v3.74 D3 hook: the phone's "What should be here?" sheet offers the same chips)
+function askWhat(cx, cy) {
+  if (BR.pop) BR.pop.remove();
+  if (V.closeToastKey) V.closeToastKey("brushhint"); // (loop-13: painted, so the hint has done its job; the bubble asks the rest)
+  const inp = h("input", { type: "text", class: "brushin", placeholder: "e.g. a red front door", "aria-label": "What should be here?" });
+  let chip = ""; const go = () => runBrush(inp.value.trim(), chip);
+  const pop = h("div", { class: "brushpop", role: "dialog", "aria-label": "What should be here?" },
+    h("b", {}, "What should be here?"),
+    h("div", { class: "brushchips" }, ...QUICK.map(([l, t]) => h("button", { class: "nchip", type: "button", onclick: () => { if (!t) { inp.value = "Change the material to "; inp.focus(); return; } inp.value = t; chip = l; go(); } }, l))),
+    h("div", { class: "brushrow" }, inp, h("button", { class: "mini brushgo", type: "button", onclick: go }, "Edit"), h("button", { class: "mini", type: "button", title: "Clear the painting (Esc)", onclick: () => { brushReset(); } }, "Clear")),
+    h("small", { class: "hint" }, "Paint more to add to it · Ctrl+Z takes the last stroke off · Esc clears"));
+  inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") go(); if (e.key === "Escape") brushReset(); });
+  stage.append(pop); BR.pop = pop;
+  const sr = stage.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  Object.assign(pop.style, { left: Math.max(8, Math.min(sr.width - pw - 8, cx - sr.left + 16)) + "px", top: Math.max(8, Math.min(sr.height - ph - 8, cy - sr.top + 16)) + "px" });
+  inp.focus({ preventScroll: true });
+}
+async function runBrush(words, label) {
+  const n = BR.node; if (!n || !BR.strokes.length) return;
+  if (!words) { V.toast("Say what should be there, or pick one of the chips", true, 3000); return; }
+  if (V.cfg.mode !== "cloud" && V.aiReady && !V.aiReady()) return V.toast("Add the office Google key to start rendering", true, 0);
+  const strokes = BR.strokes.slice(); brushReset(); setBrush(false);
+  try {
+    const src = V.hasPixelLayers(n) ? await V.compositeDataUrl(n) : n.url, img = await V.loadImg(src), W = img.naturalWidth, H = img.naturalHeight;
+    const mk2 = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c; };
+    const hard = mk2(); strokesTo(hard.getContext("2d"), W, H, strokes, "#fff");
+    const hl = mk2(), hx = hl.getContext("2d"); hx.drawImage(img, 0, 0);
+    const t = mk2(), tx = t.getContext("2d"); tx.fillStyle = "rgba(255,30,30,0.55)"; tx.fillRect(0, 0, W, H); tx.globalCompositeOperation = "destination-in"; tx.drawImage(hard, 0, 0); hx.drawImage(t, 0, 0);
+    const fe = Math.max(8, Math.round((16 * Math.max(W, H)) / 2048)); // grown a little and feathered, as the phone's area change
+    const soft = mk2(), sx = soft.getContext("2d"); sx.fillStyle = "#000"; sx.fillRect(0, 0, W, H); sx.filter = `blur(${fe / 2}px)`; strokesTo(sx, W, H, strokes, "#fff", fe / 2);
+    const [hlUrl, maskUrl, firstUrl] = await Promise.all([V.uploadDataUrl(hl.toDataURL("image/jpeg", 0.9)), V.api("upload", { dataUrl: soft.toDataURL("image/png") }).then((r) => r.url), src !== n.url ? V.uploadDataUrl(src) : Promise.resolve(null)]);
+    const e = V.D.imageEngines.find((x) => x.id === V.engines.image) || V.D.imageEngines[0];
+    let prompt = V.areaPrompt(V.expandRAL(words)); if (e.flux) prompt = prompt.replace(/\bimage (\d)\b/gi, "@Image$1");
+    const short = label && words === (QUICK.find((q) => q[0] === label) || [])[1] ? label : words.replace(/[.:,;].*$/, "").split(/\s+/).slice(0, 4).join(" ");
+    const settings = { resolution: $("#resImage") ? $("#resImage").value : "2K", aspect_ratio: "auto", num_images: 1, ...(V.viaGoogle(e.id) ? { provider: "google", fallback: V.cfg.gFallback !== false } : {}), protect: true, keepMask: maskUrl, words, brush: short };
+    const ok = await V.submitJob({ kind: "edit", engine: e.id, prompt, shownPrompt: "[Area] " + words, inputs: [n], firstUrl, extraUrls: [hlUrl], settings, count: 1 });
+    if (ok) V.toast(`Changing the painted area of ${V.nodeTitle(n)}: the rest is kept. It opens compared with it.`, false, 3500);
+  } catch (er) { V.failToast ? V.failToast(er, { what: "Couldn't send the change" }) : V.toast(er.message, true, 0); }
+}
+// keys: B toggles the brush in Picture view (Shift+B is the background), Ctrl+Z takes off the last stroke, Esc clears
+window.addEventListener("keydown", (e) => {
+  if (!(e.target instanceof Element) || e.target.matches("input,textarea,select,[contenteditable],[contenteditable] *")) return;
+  if (!V.pictureView() || V.viewerMode !== "preview" || (V.presentOpen && V.presentOpen()) || (V.reviewOpen && V.reviewOpen())) return;
+  const k = e.key.toLowerCase();
+  if (k === "b" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && brushable()) { e.preventDefault(); e.stopImmediatePropagation(); setBrush(!BR.on); }
+  else if (k === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey && BR.strokes.length) { e.preventDefault(); e.stopImmediatePropagation(); BR.strokes.pop(); if (!BR.strokes.length) brushReset(); else paintMask(); }
+}, true);
+// Esc in Picture view clears a painting (or the brush) before it leaves (draw.js's Esc calls V.closePicture)
+const closePic0 = V.closePicture;
+V.closePicture = (...a) => {
+  const ev = window.event;
+  if (ev && ev.type === "keydown" && (BR.strokes.length || BR.pop || BR.on)) { brushReset(); setBrush(false); return; }
+  brushReset(); setBrush(false); return closePic0(...a);
+};
+// the pill shows only where it works; a new picture on the stage starts with no painting
+const renderViewer0 = V.renderViewer;
+V.renderViewer = (...a) => {
+  const r = renderViewer0(...a);
+  brushPill.hidden = !brushable(); if (brushPill.hidden && BR.on) setBrush(false);
+  if (BR.node && BR.node !== cur()) brushReset();
+  if (BR.ov && !BR.ov.isConnected) { BR.ov = null; BR.strokes = []; BR.pop = null; }
+  if (BR.ring && !BR.ring.isConnected) BR.ring = null;
+  return r;
+};
+if (window.ResizeObserver) new ResizeObserver(() => { if (BR.strokes.length && BR.ov) paintMask(); }).observe(stage);
+brushPill.hidden = true;
 })();
 
 ;
@@ -6588,8 +8402,9 @@ V.bridgeCapture = async (id) => {
   const x = id ? V.bridge.host(id) : on[0];
   if (!x) return V.toast("Open SketchUp or Revit with the Clarman VizLab plugin installed", true, 0);
   V.toast(`Capturing the ${x.name} view…`, false, 1500);
+  const ph = V.capturePlaceholder ? V.capturePlaceholder(x.name) : null; // (v3.74 B1: a card of the right shape at once, filled when the view lands)
   try { const d = await call(x, "/capture", { size: 2560 }, 60000); V.setView("canvas"); const p = V.addImageNode(d.dataUrl, null, `${x.name} view`, { capture: x.name }); V.toast("View captured · " + d.info); return await p; } // (v3.69: the new view, for the Photomontage dialog)
-  catch (e) { V.toast("Couldn't capture: " + e.message, true, 0); }
+  catch (e) { if (ph && V.dropPlaceholder) V.dropPlaceholder(ph.id, true); V.toast("Couldn't capture: " + e.message, true, 0); }
 };
 
 // ---------- GLB -> DAE ----------
@@ -7540,6 +9355,8 @@ V.openRectify = async (node) => {
   };
 };
 V.rectifyTest = { squareToQuad, apply, focal, aspect, warp, gradient, fitSide, snap }; // for testing
+// v3.74 C3: the homography helpers for the Material bucket's "Lift this material into SketchUp" (matbucket.js liftMaterial)
+V.rectifyApi = { squareToQuad, apply, focal, aspect, warp, gradient, snap };
 })();
 
 ;
@@ -8491,6 +10308,7 @@ function paintScene() {
     $("#sceneNow").replaceChildren(...["Scene: ", h("b", {}, sc ? sc.name : "none"), !sc ? h("small", {}, " (optional)") : null, made && (!sc || made !== sc.name) ? h("small", { class: "ermade", title: `This picture was made with the scene ${made}` }, `Made with: ${made}`) : null].filter(Boolean));
     $("#sceneNow").title = skip ? "Left out of the next render only: click to use it after all" : sc ? tip + "\nClick to change it" : "No scene yet: choose one, or build your own";
     $("#btnEnv").textContent = sc ? "Change…" : "Choose a scene…"; $("#btnSceneX").hidden = !sc || skip;
+    paintErChips(); // (v3.74 B3: the folded Scene chip follows, "made with" included)
   }
   if (!chip) return;
   chip.hidden = !sc || V.tab !== "image" || V.tool === "upscale"; if (!sc) return;
@@ -8512,15 +10330,70 @@ function paintEvery() {
   }
   const pk = $("#pickRow"); if (!pk) return;
   const u = inUseLib(), f = u.filter((i) => i.kind === "furniture").length, m = u.length - f, skipP = !!(V.librarySkipped && V.librarySkipped());
-  // C1 (V3, J-planning N7, J-poweruser N8): while no scene, look or furniture is set, the three rows fold into one line
-  // (a click unfolds them, remembered), so the presets sit higher in the panel
-  const none = !V.G.scene && !has && !u.length && !$("#sceneNow .ermade"), er = $("#everyRender"); // (a selected render made with a scene keeps the rows open, RN4)
-
-  if (er) { const folded = none && !V.store.get("erOpen", false); er.classList.toggle("folded", folded); $("#erSum").hidden = !folded; $("#erFold").hidden = !none || folded; }
+  // v3.74 B3 (N4, ia-07; replaces C1's fold-while-none): the three rows fold to ONE line of three chips (Scene · Look ·
+  // Furniture), each opening its chooser directly, until "Show all" opens them (remembered in vl_withFold.rows); the x on a
+  // set chip means what the rows' x means: leave it out of the next render (D4). Opened, the rows look as before.
+  const er = $("#everyRender"), open = V.withOpen("rows");
+  if (er) {
+    er.classList.toggle("folded", !open); $("#erSum").hidden = open;
+    // the one Show all / Hide control: a text link in the eyebrow while open, a square chevron at the end of the chip row while folded
+    const fb = $("#erFold"), home = open ? er.querySelector(".erhead") : $("#erSum");
+    if (fb && home && fb.parentElement !== home) home.append(fb);
+    V.icoLabel(fb, open ? "Hide" : "", open ? "chev-up" : "chev");
+    fb.title = open ? "Fold the three rows into one line" : "With every render: show the three rows in full (Scene, Project look, Furniture & materials)";
+    fb.setAttribute("aria-label", open ? "Hide the rows" : "With every render: show all"); fb.setAttribute("aria-expanded", open ? "true" : "false");
+  }
   pk.classList.toggle("set", !!u.length); pk.classList.toggle("skip", skipP);
+  // (ia-17: the button that opens the Library says so, so the Library page is no surprise; the row's name stays short enough
+  // for the 400px panel)
   $("#pickNow").replaceChildren(...["Furniture & materials: ", h("b", {}, u.length ? `${u.length} item${u.length > 1 ? "s" : ""}` : "none"), !u.length ? h("small", {}, " (optional)") : null].filter(Boolean));
-  $("#pickNow").title = skipP ? "Left out of the next render only: click to use them after all" : u.length ? "Used in every render: " + u.map((i) => i.name).join(", ") : "Pick the exact furniture and materials for your renders from the Library";
-  $("#btnPick").textContent = u.length ? "Change…" : "Choose…"; $("#btnPickX").hidden = !u.length || skipP;
+  $("#pickNow").title = skipP ? "Left out of the next render only: click to use them after all" : u.length ? "Library furniture & materials, used in every render: " + u.map((i) => i.name).join(", ") : "Pick the exact furniture and materials for your renders from the Library";
+  $("#btnPick").textContent = u.length ? "Change…" : "Library…"; $("#btnPickX").hidden = !u.length || skipP;
+  paintErChips();
+}
+// the folded line: three chips built once (so a pulse on the Scene chip survives repaints), their words painted here
+const lookHas = (L) => !!(L && (L.name || L.ref || L.refUrl || L.materials || L.time || L.weather || L.season || L.notes));
+const ER_ICON = {
+  scene: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-4 4 3 3-2 6 4"/><circle cx="16" cy="9" r="1.6"/></svg>',
+  look: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
+  pick: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-2a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v2"/><path d="M3 13h18v4H3zM5 17v2M19 17v2"/></svg>',
+};
+const erChip = (id, icon, xTitle) => {
+  const b = h("button", { type: "button", class: "ercb", id, html: icon }); const t = h("span", { class: "erct" }); b.append(t);
+  const x = h("button", { type: "button", class: "ercx", id: id + "X", hidden: true, title: xTitle, "aria-label": xTitle }, "×");
+  return { wrap: h("span", { class: "erchip" }, b, x), b, x, t };
+};
+const ERC = $("#erSum") ? {
+  scene: erChip("erScene", ER_ICON.scene, "Leave the scene out of the next render (nothing is changed)"),
+  look: erChip("erLook", ER_ICON.look, "Leave the project look out of the next render (nothing is changed)"),
+  pick: erChip("erPick", ER_ICON.pick, "Leave the Library furniture and materials out of the next render (nothing is unticked)"),
+} : null;
+if (ERC) {
+  $("#erSum").append(ERC.scene.wrap, ERC.look.wrap, ERC.pick.wrap);
+  ERC.scene.b.onclick = () => { if (V.sceneSkipped()) { V.sceneOff(false); return V.toast("Scene back in the next render", false, 2500); } V.openScenes && V.openScenes(); };
+  ERC.scene.x.onclick = (e) => { e.stopPropagation(); V.sceneOff(true); skipSay("Scene"); };
+  ERC.look.b.onclick = () => { if (V.lookSkipped && V.lookSkipped()) { V.lookOff(false); paintEvery(); return V.toast("Project look back in the next render", false, 2500); } $("#btnLook").click(); };
+  ERC.look.x.onclick = (e) => { e.stopPropagation(); V.lookOff && V.lookOff(true); skipSay("Project look"); paintEvery(); };
+  ERC.pick.b.onclick = () => { if (V.librarySkipped && V.librarySkipped()) { V.libraryOff(false); paintEvery(); return V.toast("Furniture & materials back in the next render", false, 2500); } V.openPicker && V.openPicker(); };
+  ERC.pick.x.onclick = (e) => { e.stopPropagation(); V.libraryOff && V.libraryOff(true); skipSay("Furniture & materials"); paintEvery(); };
+}
+function paintErChips() {
+  if (!ERC) return;
+  // (unset, a chip is its word, "Scene", so three fit on one line at 400px; set (fixer-2 P2), the value alone, "Nordic living
+  // room, morning": the icon says which, the aria-label says both, and the chips share the line by content (style.css B3-5),
+  // so the short values stay whole and only a long one takes the ellipsis)
+  const put = (c, label, state, isSet, skip, title, extra) => {
+    c.wrap.classList.toggle("set", isSet); c.wrap.classList.toggle("skip", skip);
+    c.t.replaceChildren(...[isSet ? null : state !== "none" ? label + ": " : label, isSet || state !== "none" ? h("b", {}, state) : null, extra ? h("small", {}, " " + extra) : null].filter(Boolean));
+    c.b.title = title; c.x.hidden = !isSet || skip;
+    if (isSet) c.b.setAttribute("aria-label", `${label}: ${state}${skip ? " (left out of the next render)" : ""}`); else c.b.removeAttribute("aria-label");
+  };
+  const sc = V.G.scene, skipS = V.sceneSkipped(), madeEl = $("#sceneNow .ermade"), made = madeEl ? madeEl.textContent.replace(/^Made with:\s*/, "") : "";
+  put(ERC.scene, "Scene", sc ? sc.name : "none", !!sc, skipS, (skipS ? "Left out of the next render only: click to use it after all" : sc ? `Scene: ${sc.name}\nClick to change it` : "No scene yet: choose one, or build your own") + (made ? `\nThis picture was made with the scene ${made}` : ""), !sc && made ? `(made with ${made})` : "");
+  const L = V.G.look, on = !!(L && L.on), has = lookHas(L), skipL = !!(V.lookSkipped && V.lookSkipped());
+  put(ERC.look, "Look", on ? V.lookName(L) : has ? "off" : "none", on, skipL, skipL ? "Left out of the next render only: click to use it after all" : on ? "Project look, one look for every render in this project: click to change it" : "Project look: one approved look for every render in this project, a reference picture plus materials, light and weather");
+  const u = inUseLib(), skipP = !!(V.librarySkipped && V.librarySkipped());
+  put(ERC.pick, "Furniture", u.length ? `${u.length} item${u.length > 1 ? "s" : ""}` : "none", !!u.length, skipP, skipP ? "Left out of the next render only: click to use them after all" : u.length ? "Library furniture & materials, used in every render: " + u.map((i) => i.name).join(", ") : "Library: pick the exact furniture and materials for your renders");
 }
 // v3.67: Make in Draw with no notes makes a layer, which sends your words only (no scene, Project look or Library)
 V.forLayer = () => V.tab === "image" && V.tool === "editor" && !!(V.drawTarget && V.drawTarget(V.selImages()[0]));
@@ -8536,8 +10409,8 @@ const paintChipsRow = () => { const c = $("#pchips"); if (c) c.classList.toggle(
 const skipSay = (what) => V.toast(`${what} left out of the next render only (nothing changed). Click it to use it after all.`, false, 4000);
 $("#sceneChip").onclick = (e) => { if (e.target.closest(".chipx")) { V.sceneOff(true); return skipSay("Scene"); } if (V.sceneSkipped()) { V.sceneOff(false); return V.toast("Scene back in the next render", false, 2500); } V.openScenes && V.openScenes(); };
 $("#btnSceneX").onclick = (e) => { e.stopPropagation(); V.sceneOff(true); skipSay("Scene"); };
-$("#erSum") && ($("#erSum").onclick = () => { V.store.set("erOpen", true); paintEvery(); const b = $("#btnEnv"); if (b) b.focus({ preventScroll: true }); });
-$("#erFold") && ($("#erFold").onclick = () => { V.store.set("erOpen", false); paintEvery(); });
+// (v3.74 B3) Show all / Hide: the three rows open or fold, remembered; the keyboard follows into the first row when opened
+$("#erFold") && ($("#erFold").onclick = () => { const open = !V.withOpen("rows"); V.withSet("rows", open); paintEvery(); if (open) { const b = $("#btnEnv"); if (b) b.focus({ preventScroll: true }); } });
 
 $("#sceneRow").onclick = (e) => { if (e.target.closest("button")) return; if (V.sceneSkipped()) { V.sceneOff(false); return V.toast("Scene back in the next render", false, 2500); } V.openScenes && V.openScenes(); }; // the whole row opens the Scene panel
 $("#btnLookX") && ($("#btnLookX").onclick = (e) => { e.stopPropagation(); V.lookOff && V.lookOff(true); skipSay("Project look"); paintEvery(); });
@@ -8734,7 +10607,7 @@ function paintVidSum() {
   row.classList.toggle("open", open); row.classList.toggle("warn", !!need); $("#vidFold").hidden = !open;
   const parts = need ? [`${e.name} ${need}`] : [e ? e.name : "", $("#vDur").value + " s", e && e.res ? $("#vRes").value : "", e && e.aspect ? ($("#vAr").value === "9:16" ? "9:16 portrait" : "16:9") : "same shape as the picture", e && e.noAudio ? "" : $("#vAudio").checked || e.id === "omni-flash" ? "with sound" : "no sound"].filter(Boolean);
   $("#vidSumText").replaceChildren(...parts.map((t, i) => h("span", {}, t + (i < parts.length - 1 ? " ·" : ""))));
-  $("#btnVidSet").textContent = open ? "Settings ▴" : "Settings ▾"; $("#btnVidSet").hidden = !!need;
+  V.icoLabel($("#btnVidSet"), "Settings", open ? "chev-up" : "chev"); $("#btnVidSet").hidden = !!need;
 }
 function paintD3Sum() {
   const row = $("#d3Sum"); if (!row) return;
@@ -8743,7 +10616,7 @@ function paintD3Sum() {
     : [$("#d3Type").value === "lowpoly" ? "Simple (low-poly)" : "Detailed", e && e.meshy && !$("#d3TexOn").checked ? "untextured" : "textured", e && e.meshy && $("#d3Remesh").checked ? `about ${(+$("#d3Poly").value).toLocaleString("en-GB")} triangles` : $("#d3Topo").value === "quad" ? "squares" : ""].filter(Boolean);
   row.hidden = !parts.length; row.classList.toggle("open", open); row.classList.toggle("warn", !!need); $("#d3Fold").hidden = !open || !!(e && e.modly);
   $("#d3SumText").replaceChildren(...parts.map((t, i) => h("span", {}, t + (i < parts.length - 1 ? " ·" : ""))));
-  $("#btnD3Set").textContent = open ? "Settings ▴" : "Settings ▾"; $("#btnD3Set").hidden = !!need;
+  V.icoLabel($("#btnD3Set"), "Settings", open ? "chev-up" : "chev"); $("#btnD3Set").hidden = !!need;
 }
 $("#vidSum").onclick = () => { if (!$("#btnVidSet").hidden) { V.store.set("vidFold", !V.store.get("vidFold", false)); paintVidSum(); } };
 $("#d3Sum").onclick = () => { if (!$("#btnD3Set").hidden) { V.store.set("d3Fold", !V.store.get("d3Fold", false)); paintD3Sum(); } };
@@ -8775,7 +10648,12 @@ function paintUpHint() { const w = $("#upNoKey"); if (w) w.hidden = V.tool !== "
 // "Nano Banana 2.1 · 2K · same shape as the view · 1 version [Change]": Change (or the line) folds the AI model,
 // Resolution, Aspect ratio and Images open, remembered (vl_imgFold). A model that still needs a key says so in amber and
 // opens them by itself; the Upscaler shows its own settings open as before.
-const foldOpen = () => V.store.get("imgFold", false);
+// v3.74 B3 (N4): the "With every render" rows and this settings line each fold to ONE line until opened; both open states live
+// in vl_withFold { rows, settings } (the older vl_erOpen / vl_imgFold are read once as the starting point)
+const withFold = () => { const o = V.store.get("withFold", null); return o && typeof o === "object" ? o : { rows: !!V.store.get("erOpen", false), settings: !!V.store.get("imgFold", false) }; };
+V.withOpen = (k) => !!withFold()[k];
+V.withSet = (k, on) => V.store.set("withFold", { ...withFold(), [k]: !!on });
+const foldOpen = () => V.withOpen("settings");
 function paintSum() {
   const e = D.imageEngines.find((x) => x.id === V.engines.image), up = V.tool === "upscale", need = !up && e ? V.engineNeed(e) : "";
   const s = $("#arImage"), ar = s.value === "auto" ? (V.tool === "creator" ? "16:9 (automatic)" : "view's shape") : (s.selectedOptions[0] || {}).textContent || s.value;
@@ -8790,17 +10668,33 @@ function paintSum() {
     $("#imgSumText").replaceChildren(
       part(e ? e.name : "AI model", "AI model: click to choose another", (a) => partMenu(a, models.map((x) => [x.name, x.id, x.id === V.engines.image, V.engineNeed(x)]), (v) => { V.engines.image = v; V.store.set("engines", { ...V.store.get("engines", {}), image: v }); engImg.redraw(); updateCost(); })), " · ",
       part($("#resImage").value, "Resolution", (a) => partMenu(a, ["1K", "2K", "4K"].map((x) => [x, x, x === $("#resImage").value]), (v) => setSel("resImage", v))), " · ",
-      part(ar, "Picture shape", (a) => partMenu(a, [...s.options].map((o) => [o.value === "auto" ? (V.tool === "creator" ? "Automatic (16:9)" : "Same shape as the view") : o.textContent, o.value, o.value === s.value]), (v) => setSel("arImage", v))), " · ",
-      part(`${n} version${n > 1 ? "s" : ""}`, e && e.single ? "This AI model makes one version at a time" : "How many versions each time", (a) => { if (e && e.single) return; partMenu(a, [1, 2, 3, 4].map((x) => [`${x} version${x > 1 ? "s" : ""}`, String(x), x === n]), (v) => setSel("numImage", v)); }));
+      part(ar, "Picture shape", (a) => partMenu(a, [...s.options].map((o) => [o.value === "auto" ? (V.tool === "creator" ? "Automatic (16:9)" : "Same shape as the view") : o.textContent, o.value, o.value === s.value]), (v) => setSel("arImage", v))),
+      // v3.74 C1 (N7): the number of versions is the Versions switch by Render now; only an odd 3 (set in the fold) is named here
+      ...(n === 3 ? [" · ", part("3 versions", "How many versions each time", (a) => partMenu(a, [1, 2, 3, 4].map((x) => [`${x} version${x > 1 ? "s" : ""}`, String(x), x === n]), (v) => setSel("numImage", v)))] : []));
   }
-  $("#btnImgSet").textContent = open ? "Settings ▴" : "Settings ▾"; $("#btnImgSet").hidden = !!need; // v3.69 P19: a chevron folds open here ("…" opens a window)
+  // v3.69 P19: a chevron folds open here ("…" opens a window); v3.74 B3: the chevron alone, so the line stays one line
+  V.icoLabel($("#btnImgSet"), "", open ? "chev-up" : "chev"); $("#btnImgSet").hidden = !!need;
+  $("#btnImgSet").title = open ? "Hide the settings" : "Settings: AI model, resolution, picture shape, versions"; $("#btnImgSet").setAttribute("aria-label", open ? "Hide the settings" : "Settings"); $("#btnImgSet").setAttribute("aria-expanded", open ? "true" : "false");
 }
 // (C1, V4: opened at the bottom of the panel, the settings scroll into view, so the click visibly does something)
-$("#imgSum").onclick = () => { if (!$("#btnImgSet").hidden) { V.store.set("imgFold", !foldOpen()); paintSum(); if (foldOpen()) requestAnimationFrame(() => $("#imgFold").scrollIntoView({ block: "nearest", behavior: V.motionOn && V.motionOn() ? "smooth" : "auto" })); } };
+$("#imgSum").onclick = () => { if (!$("#btnImgSet").hidden) { V.withSet("settings", !foldOpen()); paintSum(); if (foldOpen()) requestAnimationFrame(() => $("#imgFold").scrollIntoView({ block: "nearest", behavior: V.motionOn && V.motionOn() ? "smooth" : "auto" })); } };
 
+// v3.74 C1 (loop-15): Esc while working in the open settings closes them first (only the next Esc reaches the canvas, which
+// clears the selection), so the picture to render isn't lost mid-change
+let foldTouched = 0;
+$("#imgFold").addEventListener("pointerdown", () => { foldTouched = Date.now(); }, true);
+$("#imgSum").addEventListener("pointerdown", () => { foldTouched = Date.now(); }, true);
+addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.ctrlKey || e.metaKey || e.altKey || $("#imgFold").hidden || !foldOpen() || V.tool === "upscale") return;
+  const t = e.target instanceof Element ? e.target : null, inFold = !!(t && t.closest("#imgFold, #imgSum"));
+  if (!inFold && (Date.now() - foldTouched > 20000 || (t && t !== document.body && !t.closest(".rpanel")))) return;
+  if (document.querySelector(".modal:not([hidden]), .summenu, .tool-menu:not([hidden]), .eng-menu, .review:not([hidden])")) return;
+  e.preventDefault(); e.stopImmediatePropagation(); foldTouched = 0;
+  V.withSet("settings", false); paintSum(); if ($("#imgSum")) $("#imgSum").focus({ preventScroll: true });
+}, true);
 // D15: the same switch as Draw's shield (vl_protectEdits): an edit of a photo or render keeps the rest of the picture
 $("#keepRest").onchange = (e) => { V.store.set("protectEdits", e.target.checked); const b = $("#dProtect"); if (b) b.classList.toggle("on", e.target.checked); updateMake(); };
-V.openImgSettings = () => { V.setView("canvas"); if (V.tab !== "image") setTab("image"); if (V.tool === "upscale") V.setTool("editor"); V.store.set("imgFold", true); paintSum(); $("#imgSum").scrollIntoView({ block: "nearest", behavior: "smooth" }); }; // Ctrl+K
+V.openImgSettings = () => { V.setView("canvas"); if (V.tab !== "image") setTab("image"); if (V.tool === "upscale") V.setTool("editor"); V.withSet("settings", true); paintSum(); $("#imgSum").scrollIntoView({ block: "nearest", behavior: "smooth" }); }; // Ctrl+K
 // the less-used Image tools sit in one More tools menu; their ids stay, so Ctrl+K, What next and the tour still click them
 // the menu sits high in the scrolling panel: fixed, so the panel doesn't clip it, and upwards (over the viewer) when
 // the window is short; scrolling the panel or resizing the window closes it
@@ -8808,9 +10702,13 @@ V.openImgSettings = () => { V.setView("canvas"); if (V.tab !== "image") setTab("
 const showMore = () => {
   const m = $("#moreMenu"), r = $("#btnMore").getBoundingClientRect(), img = V.selImages()[0];
   [["#btnElev", "A flat elevation from the selected view, render or photos"], ["#btnCutout", "A transparent PNG of one thing in the picture"], ["#btnRectify", "Straighten one wall to scale, exact, no AI"]].forEach(([id, line]) => { const b = $(id); if (!b) return; b.classList.toggle("off", !img); b.querySelector("span").textContent = img ? line : "Select a picture first"; });
-  m.hidden = false;
+  m.style.maxHeight = ""; m.classList.remove("mscroll"); m.hidden = false;
   const down = r.bottom + 4 + m.offsetHeight <= innerHeight - 8;
-  Object.assign(m.style, { position: "fixed", left: "auto", right: innerWidth - r.right + "px", top: (down ? r.bottom + 4 : Math.max(8, r.top - 4 - m.offsetHeight)) + "px" });
+  // (v3.74 C4, whole-08) never over the title bar (status, ?, cost): when it fits neither way it opens below and scrolls inside
+  const tb = ($(".titlebar") ? $(".titlebar").getBoundingClientRect().bottom : 0) + 4, up = r.top - 4 - m.offsetHeight >= tb;
+  const roomDown = innerHeight - r.bottom - 12, roomUp = r.top - 4 - tb, below = down || (!up && roomDown >= roomUp);
+  if (!down && !up) { m.style.maxHeight = Math.max(120, below ? roomDown : roomUp) + "px"; m.classList.add("mscroll"); }
+  Object.assign(m.style, { position: "fixed", left: "auto", right: innerWidth - r.right + "px", top: (below ? r.bottom + 4 : up ? r.top - 4 - m.offsetHeight : tb) + "px" });
 };
 $("#btnMore").onclick = (e) => { e.stopPropagation(); const was = $("#moreMenu").hidden; $$(".tool-menu").forEach((x) => (x.hidden = true)); if (was) showMore(); };
 $("#moreMenu").addEventListener("click", (e) => { if (e.target.closest("button")) $("#moreMenu").hidden = true; });
@@ -9061,7 +10959,7 @@ function updateCost() {
   const e = D.imageEngines.find((x) => x.id === V.engines.image);
   $("#numImage").disabled = !!e?.single;
   $("#clarityOpts").hidden = V.engines.up !== "clarity";
-  updateMake(); paintUp2(); paintSum();
+  updateMake(); paintUp2(); paintSum(); if (V.paintVersions) V.paintVersions();
 }
 V.updateCost = updateCost;
 // (C1, B2 note) one image job at the Image panel's settings: what Batch render charges per view
@@ -9082,21 +10980,57 @@ const fromState = () => {
 };
 V.startFrom = () => { const f = fromState(); return f ? f.v : null; };
 V.setStartFrom = (v) => { const n = V.selImages()[0]; if (!n) return; fromPick = { id: n.id, v: v === "view" ? "view" : "pic" }; updateMake(); updateCost(); };
-$$("#fromSeg button").forEach((b) => (b.onclick = () => V.setStartFrom(b.dataset.v)));
+$$("#fromSeg button").forEach((b) => (b.onclick = () => { fromClicked.add((V.selImages()[0] || {}).id); V.setStartFrom(b.dataset.v); }));
+// ---------- v3.74 C1 (N7, loop:big:1, loop-01): Versions 1 | 2 | 4 next to Render ----------
+// A big segmented switch under the Make button writes #numImage (the setting's one home, still in the folded settings), so
+// the settings line, the cost and every job agree with it. Default 1; nothing forces 4. An AI model that makes one at a
+// time greys it out with the reason. Several versions from one press are a round (submitJob tags n.round).
+const verSeg = h("div", { class: "shseg verseg", id: "verSeg", role: "group", "aria-label": "Versions each time" },
+  h("span", { class: "verlab", "aria-hidden": "true" }, "Versions"),
+  ...["1", "2", "4"].map((v) => h("button", { type: "button", "data-v": v, "aria-label": `${v} version${v === "1" ? "" : "s"} each time`, onclick: () => { if (!verSeg.classList.contains("off")) setSel("numImage", v); } }, v)));
+if ($("#makeCost")) $("#makeCost").before(verSeg);
+function paintVer() {
+  const e = D.imageEngines.find((x) => x.id === V.engines.image), single = !!(e && e.single), v = single ? "1" : String($("#numImage").value);
+  verSeg.hidden = V.tab !== "image" || V.tool === "upscale";
+  verSeg.classList.toggle("off", single); segOn("#verSeg", v);
+  verSeg.title = single ? `${e.name} makes one version at a time` : v === "3" ? "3 versions each time (set in the settings)" : "How many versions each press of Render makes: they come back together as a round";
+  verSeg.querySelectorAll("button").forEach((b) => { b.disabled = single && b.dataset.v !== "1"; });
+}
+V.paintVersions = paintVer;
 // C1 (B2): the first time someone types on a render while "From the view" is on, say once what Render will do, with the
 // other choice one click away (a click on the switch is the answer too)
-let fromHintFor = null;
-pr.addEventListener("input", () => {
-  const f = fromState(); if (!f || f.v !== "view" || (fromPick && fromPick.id === f.n.id) || fromHintFor === f.n.id || !pr.value.trim() || V.store.get("fromHint", 0) >= 2) return;
-  fromHintFor = f.n.id; V.store.set("fromHint", V.store.get("fromHint", 0) + 1);
-  V.toast(`Render makes a new picture from ${onWhat(f.cap)} with your words. To change the picture shown instead, choose From this picture.`, false, 9000,
- { action: { label: "Change this picture instead", run: () => V.setStartFrom("pic") } });
-});
+// v3.74 C1 (loop-04, RET-1): with a render selected, typing a short change of your own (no preset in the box), or picking a
+// relight preset (Light & time, Weather: "...Keep everything else identical"), means "this picture": the switch moves to From
+// this picture by itself, flashes once and says so, with the way back one click away. Presets, scenes and an empty box keep
+// D1's default; a click on the switch is the user's own choice and is never overridden for that picture.
+const fromClicked = new Set();
+const LIGHT_IDS = groupIds(["Light", "Weather", "Evening", "Seasons"]);
+const relightNow = () => mixedNow().some((p) => LIGHT_IDS.has(p.id) && /Keep everything else identical/.test(p.p || ""));
+const tweakTyped = () => { const w = ownWords(); return !!w && !mixedNow().length && w.split(/\s+/).length <= 15; };
+function autoFrom(preset) {
+  const f = fromState(); if (!f || fromClicked.has(f.n.id)) return;
+  const want = relightNow() || (!preset && tweakTyped());
+  if (want && f.v === "view") {
+    fromPick = { id: f.n.id, v: "pic", auto: true }; updateMake(); updateCost();
+    const seg = $("#fromSeg"); if (seg && V.motionOn && V.motionOn()) { seg.classList.remove("flash"); void seg.offsetWidth; seg.classList.add("flash"); }
+    if (relightNow()) V.toast(`The new light goes on ${onWhat(f.n)}, the rest kept. Choose From the view for a fresh render instead.`, false, 6000, { action: { label: "From the view", run: () => { fromClicked.add(f.n.id); V.setStartFrom("view"); } } });
+  } else if (!want && fromPick && fromPick.auto && fromPick.id === f.n.id && !pr.value.trim()) { fromPick = null; updateMake(); updateCost(); }
+}
+pr.addEventListener("input", () => autoFrom(false));
+const pickPrompt0 = V.pickPrompt;
+V.pickPrompt = (...a) => { const r = pickPrompt0(...a); autoFrom(true); return r; };
 // the picture Make works on: the view when "From the view" is on
 const mainTarget = () => { const f = fromState(); return f && f.v === "view" ? f.cap : V.selImages()[0]; };
 // D13: two or more selected SketchUp / Revit views are rendered one each (the multi-reference render stays for a mixed
 // selection, and as V.makeWithRefs for Ctrl+K)
 const allViews = (imgs) => imgs.length > 1 && imgs.every(V.isCapture);
+// (final deliver-picks-make-edit-refs) Make a presentation's picks (one finished render per view) are the selection: Make renders
+// those views again, one render each, never one edit of the first with the other views as references. Returns the views, or null.
+const picksViews = (imgs) => {
+  if (!(V.presentFlowOpen && V.presentFlowOpen()) || imgs.length < 2 || !V.captureOf) return null;
+  const caps = imgs.map((m) => (!V.isCapture(m) && m.status === "done" ? V.captureOf(m) : null));
+  return caps.every((c) => c && V.isCapture(c)) && new Set(caps.map((c) => c.id)).size === caps.length ? caps : null;
+};
 let refsOnce = false;
 // D2: Render on a bare view (no words, preset, scene, Draw notes or material map) adds View to render (Interior render for
 // an interior) to the prompt, where it can be seen, and renders
@@ -9112,7 +11046,7 @@ function readiness() {
   if (V.tab === "video" && V.vtool === "upscale") return V.selVideos().length > 0;
   if (!imgs.length) return false;
   if (V.tab === "image" && V.tool === "editor" && matEmpty(imgs[0])) return false; // v3.68 painted, but no material yet: Make would refuse
-  if (V.tab === "image" && V.tool === "editor" && (allViews(imgs) || isBare(mainTarget()))) return true; // v3.69 D2 / D13
+  if (V.tab === "image" && V.tool === "editor" && (allViews(imgs) || picksViews(imgs) || isBare(mainTarget()))) return true; // v3.69 D2 / D13
   if (V.tab === "image" && V.tool === "editor") return !!pr.value.trim() || !!V.activePreset || V.hasMarks(imgs[0]) || (sceneOn() && !(V.drawTarget && V.drawTarget(imgs[0]))) || (!!V.hasMatMap && V.hasMatMap(imgs[0])); // a scene alone is a prompt (not for a Draw layer); so is a material key (v3.68)
   return true;
 }
@@ -9178,7 +11112,7 @@ V.paintKeep = () => paintKeep();
 // v3.69 S12 / RP-03: a fresh SketchUp / Revit capture with no scene set pulses the Scene row once (canvas.js addImageNode);
 // the presets stay on the tab the user chose (it used to switch to a Scenes tab)
 V.captureScenes = () => {
-  const row = $("#everyRender.folded") ? $("#erSum") : $("#sceneRow"); if (V.G.scene || !row || V.tab !== "image") return; // (C1: the folded line pulses instead)
+  const row = $("#everyRender.folded") ? $("#erScene") : $("#sceneRow"); if (V.G.scene || !row || V.tab !== "image") return; // (C1: the folded line pulses instead; v3.74 B3: its Scene chip)
   row.classList.remove("nudge"); void row.offsetWidth; row.classList.add("nudge"); clearTimeout(row._nt); row._nt = setTimeout(() => row.classList.remove("nudge"), 2600);
 };
 function updateMake() {
@@ -9212,6 +11146,7 @@ function makeLabel() {
   if (V.tool === "creator") return ["Create", imgs.some(V.isCapture) ? "ignores your building's geometry" : n ? `a new picture, mood of ${k > 1 ? k + " pictures" : "1 picture"}` : "a new picture from your words", imgs.some(V.isCapture), "Create new picture"];
   if (!n) return ["Render", "no picture selected"];
   if (k > 1 && allViews(imgs)) return [`Render ${k} views`, "one render each, same scene and look"]; // D13
+  if (picksViews(imgs)) return [`Render ${k} views`, "again, one render each", false, `Render the ${k} views of your picks again, one render each`];
   const t = mainTarget(), fromView = t !== n;
   if (V.hasMatMap && V.hasMatMap(t)) { const m = V.matUsable(t).length; return [V.isCapture(t) ? "Render" : "Edit", `with your material key (${m} material${m > 1 ? "s" : ""})`, !!V.matCheck(t, D.imageEngines.find((x) => x.id === V.engines.image))]; } // v3.68 (amber: too many for this AI model)
   if (matEmpty(t)) return [V.isCapture(t) ? "Render" : "Edit", "choose a material for the painted areas", true]; // (Make says so and sends nothing)
@@ -9248,7 +11183,7 @@ function updateInputs() {
   const one = imgs.length < 2; // (C1, B6: one picture with Draw layers or notes is the picture in the preview: no unexplained "✎ Main" row)
 
   if (V.tool === "creator") row("#inputsRow", imgs.length > 1 ? imgs.slice(0, 6) : [], () => "ref");
-  else row("#inputsRow", one || allViews(imgs) ? [] : imgs.slice(0, 8), (i, n) => (V.hasDrawing(n) ? "✎ " : "") + (i === 0 ? "Main" : "Ref " + i));
+  else row("#inputsRow", one || allViews(imgs) || picksViews(imgs) ? [] : imgs.slice(0, 8), (i, n) => (V.hasDrawing(n) ? "✎ " : "") + (i === 0 ? "Main" : "Ref " + i));
   if (V.vtool === "upscale") row("#vInputsRow", V.selVideos().length > 1 ? V.selVideos() : [], () => "▶");
   else row("#vInputsRow", imgs.length > 1 ? imgs.slice(0, 2) : [], (i) => (i === 0 ? "First" : "Last"));
   const multi = V.dtool === "model" && D.d3Engines.find((x) => x.id === V.engines["3d"])?.multi;
@@ -9274,14 +11209,39 @@ function paintActions() {
   $("#aReview").hidden = versionsOf(n).length < 2;
   $("#aUp2").hidden = view || n.type !== "image";
   $("#aCopyPrompt").hidden = !n.prompt || view || ["model", "world", "elevation", "cutout", "photo", "drawing"].includes(k) || n.kind === "upscale";
-  $("#aFav").textContent = n.fav ? "★ Favourite" : "☆ Favourite"; $("#aFav").classList.toggle("on", !!n.fav);
+  // v3.74 B3 (N4, ia-21): one row of 32px buttons under the context header. The star stands alone (its tooltip and aria-label
+  // say Favourite); Download keeps its icon and word; Open big and Compare say what they do; the rest is behind More
+  $("#aFav").replaceChildren(V.icoEl(n.fav ? "star-fill" : "star", "md")); $("#aFav").classList.toggle("on", !!n.fav);
   $("#aFav").title = n.fav ? "A favourite (Shift+F): click to take the star off" : "Mark as a favourite (Shift+F; F in Review). History and Sheets can show favourites only";
+  $("#aFav").setAttribute("aria-label", n.fav ? "Favourite (on)" : "Favourite"); $("#aFav").setAttribute("aria-pressed", n.fav ? "true" : "false");
   const logo = !!(V.cfg.logo && V.cfg.logo.on) && n.type === "image";
-  $("#aDownload").textContent = logo ? "Download + logo" : "Download"; $("#aDownload").title = logo ? "Download with the Clarman logo (Settings › Downloads & logo). ▾ for other choices" : "Download this picture. ▾ for the Clarman logo";
+  $("#aDownload").replaceChildren(V.icoEl("download"), h("span", {}, logo ? "Download + logo" : "Download")); $("#aDownload").title = logo ? "Download with the Clarman logo (Settings › Downloads & logo). The arrow next to it has the other choices" : "Download this picture. The arrow next to it adds the Clarman logo";
   $("#aDownMore").hidden = n.type !== "image";
   $("#aDownload").classList.toggle("primary", ["render", "new", "upscale", "touchup"].includes(k)); // (C1, N2: a finished render's next step stands out)
   if ($("#aSave")) $("#aSave").title = `Saves into ${V.cfg.folder || "the save folder"} (Settings)`;
+  const big = inBig(), ab = $("#aBig"), ac = $("#aCompare"), am = $("#aPicMore"); // (#aPicMore, not #aMore: the phone build makes its own #aMore "Tools" button on Change an area, mobile/phone.js)
+  if (ab) { ab.querySelector("span").textContent = big ? "Back to canvas" : "Open big"; ab.title = big ? "Back to the canvas (Esc or E): the canvas big again" : "Open big (E): the picture big in the centre, with its versions"; }
+  if (ac) { const can = n.type === "image" && !!(V.comparePair && V.comparePair()); ac.hidden = n.type !== "image"; ac.classList.toggle("off", !can); ac.setAttribute("aria-disabled", can ? "false" : "true"); ac.title = can ? "Compare (C): this picture against the one it was made from" : "Nothing to compare yet: select a render, or two pictures (right-click › Compare › Compare with another picture…)"; }
+  if (am) am.hidden = !moreItems(n).length;
 }
+// the less-used actions (their buttons keep their ids and handlers: Ctrl+K, the tour and What next still click them)
+const moreItems = (n) => {
+  const su = document.body.classList.contains("su"), rows = [["#aUp2", "Upscale ×2"], ["#aCopyPrompt", "Use this prompt"], ["#aReview", "Compare versions (R)"], ["#aSave", "Save to folder"]];
+  const out = rows.filter(([q]) => { const b = $(q); return b && !b.hidden && (q !== "#aSave" || su); }).map(([q, label]) => [label, q, false, ""]);
+  if (n && V.renameAsk && n.status === "done") out.push(["Rename…", "rename", false, ""]);
+  return out;
+};
+$("#aPicMore") && ($("#aPicMore").onclick = (e) => { e.stopPropagation(); const n = V.selNodes()[0]; if (!n) return; partMenu(e.currentTarget, moreItems(n), (v) => { if (v === "rename") V.renameAsk(n); else { const b = $(v); if (b) b.click(); } }); });
+// Open big: Picture view (B2's V.openPicture / V.closePicture, body.picview, when they are there), else the Enlarge swap
+const inBig = () => document.body.classList.contains("picview") || document.body.classList.contains("enlarged") || !!(V.pictureView && V.pictureView());
+$("#aBig") && ($("#aBig").onclick = () => {
+  const n = V.selNodes()[0]; if (!n) return;
+  if (inBig()) { if (V.closePicture) return V.closePicture(); return V.setEnlarged && V.setEnlarged(false); }
+  if (V.openPicture) return V.openPicture();
+  if (V.viewerMode !== "preview" && V.setViewerMode) V.setViewerMode("preview");
+  V.setEnlarged && V.setEnlarged(true);
+});
+$("#aCompare") && ($("#aCompare").onclick = (e) => { const b = e.currentTarget; if (b.classList.contains("off")) return V.toast(b.title, false, 4500); V.setViewerMode("compare"); });
 // RP-18: nothing selected: a start card in the empty preview
 function paintStart() {
   const e = $("#vstage .pv-empty"); if (!e || V.selNodes().length) return;
@@ -9295,14 +11255,107 @@ function paintStart() {
       su ? h("button", { class: "mini primary", type: "button", onclick: () => { const b = $("#tCapture"); if (b) b.click(); } }, "Capture SketchUp view") : null,
       h("button", { class: "mini", type: "button", onclick: () => $("#fileIn").click() }, "Add pictures…")));
 }
+// ---------- v3.74 B3 (N4, visual:big:3, visual:V04, ia-02, ia-13): the compact context header at the top of the panel ----------
+// One selected picture: its thumbnail at its true shape (max 96px high), V.nodeTitle, V.nodeSub (or when it was captured /
+// added), what it is (V.pictureKind) and its state; the action row (#pvActions) sits under it. Nothing selected: the three
+// start steps while the project is empty, else "Select a picture to work on it" with the latest four to click (not the
+// beginner's steps). Several selected: their thumbnails fanned and "N pictures". The picture itself is on the canvas or in
+// Picture view, so the panel no longer repeats it (the presets come into view instead).
+const KIND_WORD = { view: "View", photo: "Photo", drawing: "Drawing", render: "Render", new: "New picture", upscale: "Upscale", touchup: "Touched up", cutout: "Cut-out", elevation: "Elevation", video: "Video", model: "3D model", world: "3D world" };
+const hmOf = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const thumbOf = (n) => n.thumb || (n.type === "image" ? n.url : "") || "";
+const ctxThumb = (n, cls) => {
+  const src = thumbOf(n);
+  if (src) return h("img", { class: cls, src, alt: "", draggable: "false" });
+  if (n.type === "video" && n.url) return h("video", { class: cls, src: n.url, muted: true, playsinline: true, preload: "metadata" });
+  const i = h("span", { class: cls + " noimg", "aria-hidden": "true" }); i.append(V.icoEl(n.status === "error" ? "warn" : "info", "lg")); return i;
+};
+const ctxPick = (m) => { if (V.setSel) V.setSel([m.id]); else { V.sel = [m.id]; V.render(); V.selectionChanged(); } if (V.centerOn && V.onScreen && !V.onScreen(m)) V.centerOn(m); };
+const capBtn = (label) => h("button", { class: "mini", type: "button", onclick: () => { const b = $("#tCapture"); if (b) b.click(); } }, label);
+const addBtn = () => h("button", { class: "mini", type: "button", onclick: () => $("#fileIn").click() }, "Add pictures…");
+const plural = (w, c) => (c > 1 ? (w === "Touched up" ? "touched up" : w.toLowerCase() + "s") : w.toLowerCase());
+let ctxKey = "";
+function paintCtx() {
+  const box = $("#pctx"); if (!box) return;
+  const sel = V.selNodes(), pics = V.G.nodes.filter((m) => m.type === "image" || m.type === "video" || m.type === "model" || m.type === "world");
+  const su = !!(V.bridge && V.bridge.ok), big = inBig(), pill = $("#tCapture"), pillUp = !!(pill && pill.offsetParent); // (the amber Capture pill on the canvas)
+  const pa = $("#pvActions"); if (pa && sel.length > 1) pa.hidden = true; // (the row acts on one picture: with several, the canvas selection bar has the shared actions)
+  const one = (m) => [m.id, m.status, m.fav ? 1 : 0, thumbOf(m).length, V.nodeTitle(m), V.nodeSub(m)].join(":");
+  const key = [sel.map(one).join("|"), pics.length, su, pillUp, big, pics.slice(-4).map((m) => m.id + ":" + m.status + ":" + thumbOf(m).length).join()].join("#");
+  if (key === ctxKey) return; ctxKey = key;
+  if (pa && box.contains(pa)) box.after(pa); // (the action row never goes with the old header's children)
+  box.hidden = false; box.className = "pctx";
+  if (!sel.length) {
+    if (!pics.length) { // (a) an empty project: the three steps, short
+      box.classList.add("empty");
+      box.replaceChildren(h("ol", { class: "startlist" },
+        h("li", {}, h("b", {}, "1"), su ? "Capture your SketchUp view, or add a picture" : "Add a picture, or capture a SketchUp view"),
+        h("li", {}, h("b", {}, "2"), "Choose a scene (optional)"),
+        h("li", {}, h("b", {}, "3"), "Press Render")),
+        h("div", { class: "row startbtns" }, su ? capBtn("Capture SketchUp view") : null, addBtn()));
+      return;
+    }
+    // (b) pictures, none selected (V04, ia-13): not the beginner's steps; the latest four are a click away. (fixer-2 P6) ONE
+    // row under the title: the thumbnails, then Add pictures at the right; with SketchUp connected the amber Capture pill is
+    // already on the canvas, so the header does not repeat it. The header stays no taller than a selected picture's.
+    box.classList.add("none");
+    const latest = pics.filter((m) => m.status === "done" && thumbOf(m)).slice(-4).reverse();
+    box.replaceChildren(...[
+      h("div", { class: "pctx-t" }, h("b", { class: "pctx-title", title: "Click a picture here or on the canvas to work on it; Ctrl+A selects them all" }, "Select a picture to work on it"), latest.length ? null : h("span", { class: "pctx-sub" }, "Click one on the canvas")),
+      h("div", { class: "pctx-pick" }, latest.length ? h("div", { class: "pctx-latest" }, ...latest.map((m) => h("button", { type: "button", class: "pctx-lt", title: V.nodeTitle(m), "aria-label": "Select " + V.nodeTitle(m), onclick: () => ctxPick(m) }, ctxThumb(m, "pctx-img")))) : null, su && pillUp ? null : su ? capBtn("Capture another view") : addBtn())].filter(Boolean));
+    return;
+  }
+  if (sel.length > 1) { // (c) several: fanned, counted, named by kind
+    box.classList.add("multi");
+    const kinds = {}; sel.forEach((m) => { const w = KIND_WORD[V.pictureKind(m)] || "Picture"; kinds[w] = (kinds[w] || 0) + 1; });
+    const words = Object.entries(kinds).map(([w, c]) => `${c} ${plural(w, c)}`).join(" · ");
+    box.replaceChildren(h("div", { class: "pctx-fan", "aria-hidden": "true" }, ...sel.slice(0, 3).map((m) => ctxThumb(m, "pctx-img"))),
+      h("div", { class: "pctx-t" }, h("b", { class: "pctx-title" }, `${sel.length} pictures`), h("span", { class: "pctx-sub" }, words), h("span", { class: "pctx-meta" }, "Render and the tools work on them together; click one picture to work on it alone")));
+    return;
+  }
+  const n = sel[0], k = V.pictureKind(n), title = V.nodeTitle(n) || KIND_WORD[k] || "Picture";
+  const sub = V.nodeSub(n) || (k === "view" && n.created ? "Captured " + hmOf(n.created) : (k === "photo" || k === "drawing") && n.created ? "Added " + hmOf(n.created) : "");
+  const state = n.status === "done" ? "" : n.status === "error" ? "Failed" : n.status === "uploading" ? "Uploading…" : n.status === "queued" ? "Waiting…" : "Rendering…";
+  const size = n.type === "image" && n.w > 0 && n.h > 0 ? `${n.w} × ${n.h}` : "";
+  const word = state || KIND_WORD[k] || "Picture";
+  // (B3 fixer, P2) the favourite star sits in the thumbnail's corner at every width; the size joins the thumbnail's tooltip
+  const th = h("button", { type: "button", class: "pctx-th", title: (size ? size + " px · " : "") + "Bring it into view on the canvas; double-click opens it big (E)", "aria-label": "Show " + title + " on the canvas" + (n.fav ? " (a favourite)" : ""), onclick: () => { if (V.centerOn && V.onScreen && !V.onScreen(n)) V.centerOn(n); }, ondblclick: () => { const b = $("#aBig"); if (b && !b.hidden) b.click(); } },
+    ctxThumb(n, "pctx-img"), n.fav ? h("span", { class: "pctx-fav", title: "A favourite", "aria-hidden": "true" }, V.icoEl("star-fill", "sm")) : null);
+  // (B3 fixer, P2) at the narrowest panel (the action row inside the header, .withacts) the kind line gives way, so the kind
+  // or state leads the sub-line as a word, "RENDER · View to render" (.pctx-kw, shown by style.css only there: no extra height)
+  const col = h("div", { class: "pctx-t" },
+    h("b", { class: "pctx-title", title }, title),
+    h("span", { class: "pctx-sub" + (sub ? "" : " nosub"), title: sub ? word + " · " + sub : word }, h("span", { class: "pctx-kw" + (state ? " busy" : "") }, word, sub ? " · " : ""), sub),
+    h("span", { class: "pctx-meta" }, h("span", { class: "pctx-kind" + (state ? " busy" : "") }, word), size ? h("span", { class: "pctx-size" }, size) : null));
+  box.replaceChildren(th, col);
+  placeActs();
+}
+// At the panel's narrowest (400px: windows under 1380px) the action row sits inside the header beside a smaller thumbnail,
+// icon-only (tooltips and aria-labels carry the words), so the first preset row stays above y=520 at 1366x768 (N4). Wider,
+// it is its own labelled row under the header.
+const NARROW = matchMedia("(max-width:1379px)");
+function placeActs() {
+  const pa = $("#pvActions"), box = $("#pctx"); if (!pa || !box) return;
+  const col = box.querySelector(".pctx-t"), inHead = NARROW.matches && box.classList.contains("pctx") && !box.classList.contains("none") && !box.classList.contains("empty") && !box.classList.contains("multi") && col;
+  if (inHead) { if (pa.parentElement !== col) col.append(pa); }
+  else if (pa.parentElement !== box.parentElement) box.after(pa);
+  box.classList.toggle("withacts", !!inHead);
+}
+if (NARROW.addListener) NARROW.addListener(() => { ctxKey = ""; paintCtx(); }); // (a resize across 1380px moves the row)
+V.paintCtx = paintCtx;
+let ctxT = 0;
+const ctxSoon = () => { cancelAnimationFrame(ctxT); ctxT = requestAnimationFrame(() => { try { paintCtx(); } catch (e) { console.warn(e); } }); };
+// (a rename, a favourite, a new result: the canvas is redrawn, so the header follows the redraw)
+const rnd0 = V.render;
+V.render = (...a) => { const r = rnd0(...a); ctxSoon(); return r; };
 // (SketchUp connects after the page loads: the card then offers Capture. The card remembers which state it shows,
 // so a repaint by anyone else can't leave it out of step)
-const startCheck = () => { const e = $("#vstage .pv-empty"); if (!e) return; const su = (V.bridge && V.bridge.ok) ? "1" : "0"; if (e.dataset.su !== su) paintStart(); };
+const startCheck = () => { const e = $("#vstage .pv-empty"); if (e) { const su = (V.bridge && V.bridge.ok) ? "1" : "0"; if (e.dataset.su !== su) paintStart(); } ctxSoon(); };
 setInterval(startCheck, 700);
 // draw.js draws the viewer; the panel adds its own parts after it, whoever asked for the redraw
 let selKey = "";
 const rv0 = V.renderViewer;
-V.renderViewer = (...a) => { const r = rv0(...a); try { paintActions(); paintStart(); } catch (e) { console.warn(e); } return r; };
+V.renderViewer = (...a) => { try { return rv0(...a); } finally { try { paintActions(); paintStart(); paintCtx(); } catch (e) { console.warn(e); } } }; // (the panel's own parts are painted even when the viewer fails)
 V.selectionChanged = (soft) => {
   document.body.classList.toggle("pvempty", !V.selNodes().length); // v3.67: a shorter empty viewer on short screens (style.css)
   if (fromPick && (V.sel.length !== 1 || V.sel[0] !== fromPick.id) && !(fromPick.v === "pic" && V.sel.length === 1 && V.parents(V.sel[0]).some((p) => p.id === fromPick.id))) fromPick = null; // D1: a click on the switch lasts while that picture is selected (C1, F1: and passes "From this picture" on to the edit made from it)
@@ -9386,7 +11439,8 @@ function panInto(n) {
   const cv = $("#canvas"); if (!cv || !n || batching || (document.body.dataset.view && document.body.dataset.view !== "canvas")) return;
   if ((V.visibleNodes ? V.visibleNodes() : V.G.nodes).length <= 3) return; // (A2's auto-fit looks after three pictures or fewer)
   const r = cv.getBoundingClientRect(), v = V.G.view, m = 24, right = r.width - 72; // (the tool column on the right)
-  const x0 = n.x * v.z + v.x, y0 = n.y * v.z + v.y, x1 = x0 + V.NODE_W * v.z, y1 = y0 + V.NODE_H * v.z;
+  const b = V.nodeBox ? V.nodeBox(n) : n; // (v3.74 B1 hook: the card as drawn; a version in a gathered stack is on its stack's card)
+  const x0 = b.x * v.z + v.x, y0 = b.y * v.z + v.y, x1 = x0 + V.NODE_W * v.z, y1 = y0 + (b.h || V.NODE_H) * v.z;
   let dx = 0, dy = 0;
   if (x1 > right - m) dx = right - m - x1; if (x0 + dx < m) dx = m - x0;
   if (y1 > r.height - m) dy = r.height - m - y1; if (y0 + dy < m) dy = m - y0;
@@ -9398,14 +11452,26 @@ async function submitJob({ kind, engine, prompt, shownPrompt, inputs, extraUrls 
   V.snapshot();
   if (V.clearToasts) V.clearToasts(true); // J-firstday-S4: an old red message must not look like this job failing (it stays in Activity)
   let pos, sent = false;
-  if (parent) pos = V.placeChildren(parent, count);
+  // (v3.74 A2, robust-16) the same render again after a failure goes in the failed card's place ("2nd try"), not a new card
+  const sig = JSON.stringify([kind, engine, shownPrompt || prompt, settings || {}, inputs.map((x) => x.id)]);
+  const was = V.G.nodes.filter((n) => n.status === "error" && n.sig === sig).sort((a, b) => (a.outIndex || 0) - (b.outIndex || 0));
+  const tries = was.length ? Math.max(...was.map((n) => n.tries || 1)) + 1 : 0;
+  if (was.length) { const at = was.map((n) => ({ x: n.x, y: n.y })); V.removeNodes(was.map((n) => n.id)); pos = at.slice(0, count); if (pos.length < count && parent) pos = pos.concat(V.placeChildren(parent, count - pos.length)); }
+  if (pos && pos.length >= count) {} else if (parent) pos = V.placeChildren(parent, count);
   else { const [cx, cy] = V.viewCenter(); pos = Array.from({ length: count }, (_, i) => ({ x: cx - V.NODE_W / 2 + (i - (count - 1) / 2) * (V.NODE_W + 30), y: cy - V.NODE_H / 2 })); }
   const label = name || V.engineName(engine) + (settings && settings.provider === "google" ? " · Google" : "");
   const type = kind === "video" || kind === "vupscale" ? "video" : kind === "3d" ? "model" : kind === "world" ? "world" : "image";
   const sc = sceneLite(scene); // v3.67: the node keeps its scene, so Use prompt brings back both
-  const ph = pos.map((p, i) => V.addNode({ x: p.x, y: p.y, kind, engine, label, prompt: shownPrompt, status: "queued", outIndex: i, type, meta: metaOf(kind, settings), ...(sc ? { scene: sc } : {}) }));
+  const sendId = V.uid();
+  const ph = pos.map((p, i) => V.addNode({ x: p.x, y: p.y, kind, engine, label, prompt: shownPrompt, status: "queued", outIndex: i, type, meta: metaOf(kind, settings), sig, sendId, ...(tries ? { tries } : {}), ...(sc ? { scene: sc } : {}) }));
+  // (robust-03) every card has Try again, even when the job never reached the AI service (the pictures as they are)
+  const payload0 = { kind, engine, prompt, images: [firstUrl || (inputs[0] && inputs[0].url), ...inputs.slice(1).map((x) => x.url), ...extraUrls].filter(Boolean), settings, project: V.project.name };
+  ph.forEach((n) => { n.retry = payload0; });
+  // v3.74 C1 (N7): the versions of one press are a round: the film strip groups them, Review and names letter them (A, B...)
+  if (type === "image" && ph.length > 1) ph.forEach((n, i) => { n.round = { id: sendId, i, n: ph.length }; });
   ph.forEach((n) => inputs.forEach((p) => V.addEdge(p.id, n.id)));
   V.render(); V.changed();
+  if (V.flyIn && !batching) V.flyIn($("#btnMake"), ph[0]); // (v3.74 B1 hook, motion-04: a ghost flies from the button to the new card)
   setTimeout(() => panInto(ph[ph.length - 1]), 60); // (after A2's auto-fit for a few pictures has had its go)
   try {
     const urls = [];
@@ -9421,21 +11487,34 @@ async function submitJob({ kind, engine, prompt, shownPrompt, inputs, extraUrls 
     V.spend += Number(job.cost_estimate) || 0; $("#spend").textContent = V.money(V.spend);
     V.startPolling(); sent = true;
   } catch (e) {
-    ph.forEach((n) => { n.status = "error"; n.error = e.message; });
-    V.toast(e.message, true, 0);
+    // (v3.74 A2, robust-03) offline: the job waits and starts by itself when the connection is back
+    if (V.isNetErr && V.isNetErr(e) && V.waitForNet) { V.waitForNet(ph); sent = true; }
+    else { ph.forEach((n) => { n.status = "error"; n.error = e.message; n.failedAt = Date.now(); }); V.failToast ? V.failToast(e, { what: "Couldn't send it" }) : V.toast(e.message, true, 0); }
   }
   V.render(); V.changed(); V.updateQueue();
   return sent;
 }
 V.submitJob = submitJob; // 3D view to model runs its AI steps through the normal job flow
+// (v3.74 A2) the cards sent together: the same job, or (never sent) the same send
+const sameSend = (n) => V.G.nodes.filter((x) => x === n || (n.jobId && x.jobId === n.jobId) || (n.sendId && x.sendId === n.sendId && x.status === n.status));
 V.retry = async (n) => {
   const p = n.retry; if (!p) return;
+  const ns = sameSend(n);
   try {
     if (V.clearToasts) V.clearToasts(true); // (A2: the old "Render failed" message goes once it is tried again)
+    // (v3.74) a job that never got sent may still hold pictures in the page: in cloud mode they are uploaded first
+    if (V.cfg.mode === "cloud" && (p.images || []).some((u) => /^data:image/.test(u))) p.images = await Promise.all(p.images.map((u) => (/^data:image/.test(u) ? V.uploadDataUrl(u) : u)));
     const job = await V.api("submit", p);
-    V.G.nodes.filter((x) => x.jobId === n.jobId || x.id === n.id).forEach((x) => { x.jobId = job.id; x.status = "queued"; x.error = null; x.sent = Date.now(); }); // (v3.69: its clock counts from now)
-    V.render(); V.startPolling(); V.changed();
-  } catch (e) { V.toast(e.message, true, 0); }
+    ns.forEach((x) => { if (!x.waitNet) x.tries = (x.tries || 1) + 1; x.jobId = job.id; x.status = "queued"; x.error = null; x.waitNet = false; x.netWait = false; x.netTries = 0; x.note = ""; x.sent = Date.now(); x.retry = p; }); // (v3.69: its clock counts from now; v3.74: a send that waited for the internet is not another try)
+    V.lastMade = job.id; V.render(); V.startPolling(); V.changed(); V.updateQueue();
+    return true;
+  } catch (e) {
+    if (V.isNetErr && V.isNetErr(e) && V.waitForNet) { V.waitForNet(ns); V.render(); V.changed(); return false; }
+    ns.forEach((x) => { x.status = "error"; x.error = e.message; x.failedAt = Date.now(); });
+    V.render(); V.changed();
+    V.failToast ? V.failToast(e, { what: "Try again didn't work" }) : V.toast(e.message, true, 0);
+    return false;
+  }
 };
 // ---------- v3.67: one-click Upscale ×2 (viewer button #aUp2, What next, Ctrl+K, the Upscaler without a fal.ai key) ----------
 // With a fal.ai key: the upscaler chosen in the Upscaler tool, as that tool does. Without one (every upscaler runs on
@@ -9476,6 +11555,77 @@ function paintUp2() {
   b.title = noFal() && !hasG() ? "Upscale ×2 needs your Google key (Settings), or a fal.ai key for the upscalers" : noFal() ? `Make a sharper Google 4K version of this picture, as a new one (Nano Banana, ~${V.money(g4kCost())} · Google). Upscalers need a fal.ai key (Settings).` : `Upscale this picture ×2 as a new one with ${u.name} (~${V.money(u.price(2))}). Change the upscaler in Image › Upscale.`;
 }
 $("#aUp2").onclick = () => V.upscale2x(V.selNodes()[0]);
+// ---------- v3.74 C1 (N8, loop:big:2, journey-returning:big:1): tweak and relight chips ----------
+// One click = an edit of THIS picture (never a new render from the view): image 1 is the picture as shown (Draw layers
+// applied), the words are a fixed short brief that keeps the building, camera and everything else, settings.protect keeps the
+// rest of the picture (cutout.js, D15). The result joins the picture's stack and is named "View 1 · Golden hour · Dusk"
+// (V.nodeTitle). Where a preset says it already, its wording is used (pre), so no preset is lost or duplicated. guide.js draws
+// the chips (under What next and under the stage in Picture view); Shift+click puts the words in the prompt instead.
+const TWEAKS = [
+  ["lighter", "Lighter", "tweak", "", "Make the picture a little brighter overall: lift the exposure and open up the shadows gently, as a photographer would, without washing out the sky or the highlights."],
+  ["darker", "Darker", "tweak", "", "Make the picture a little darker and moodier overall: lower the exposure slightly and deepen the shadows, keeping detail in them."],
+  ["warmer", "Warmer", "tweak", "", "Make the light and colour a little warmer: a gentle golden warmth in the light and highlights, like a slightly warmer white balance."],
+  ["cooler", "Cooler", "tweak", "", "Make the light and colour a little cooler: a crisper, slightly bluer white balance and fresher shadows."],
+  ["sunnier", "Sunnier sky", "tweak", "x-sun", ""],
+  ["overcast", "Softer sky", "tweak", "", "Soften the sky only: a gentler sky with a little light cloud and softer contrast. Keep the time of day, the sun's direction and the light on the building as they are."],
+  ["dusk", "Dusk", "tweak", "dusk", ""],
+  ["people", "More people", "tweak", "people", ""],
+  ["nopeople", "Fewer people", "tweak", "", "Take out most of the people, leaving one or two at most, and fill where they stood with a natural continuation of what is behind them."],
+  ["planting", "More planting", "tweak", "", "Add more planting where it would naturally grow: trees, shrubs, hedges and ornamental grasses suited to a Northern Irish setting, never covering the building."],
+  ["wet", "Wet street", "tweak", "", "Make the ground wet after rain: damp, reflective paving and road with a few puddles reflecting the building and the sky. The sky and the light stay as they are."],
+  ["sharper", "Sharper", "tweak", "", "Make the picture sharper and more detailed: crisper edges, finer material texture and grain, cleaner small features. Change nothing else."],
+  ["more", "More like this", "tweak", "", "Make a close variation of this picture: the same building, camera, materials and light; vary only the people, planting, cars, sky detail and small props."],
+  ["sunrise", "Sunrise", "relight", "x-sunrise", ""],
+  ["midday", "Midday", "relight", "x-midday", ""],
+  ["rovercast", "Overcast", "relight", "x-overcast", ""],
+  ["golden", "Golden hour", "relight", "gold", ""],
+  ["blue", "Blue hour", "relight", "dusk", ""],
+  ["night", "Night", "relight", "night", ""],
+].map(([id, name, row, pre, text]) => ({ id, name, row, pre, text }));
+V.tweaks = () => TWEAKS;
+const tweakText = (t) => { const p = t.pre && D.imagePresets.find((x) => x.id === t.pre); return (p && p.p) || t.text; };
+const TWEAK_KEEP = { tweak: "Edit image 1. Keep the building, its materials, the camera, the framing and everything else exactly as they are, and change only this:", relight: "Relight image 1. Keep the building, its materials, the camera, the framing and every object exactly as they are; change only the light, the sky and the time of day:" };
+V.tweakBrief = (id) => { const t = TWEAKS.find((x) => x.id === id); return t ? `${TWEAK_KEEP[t.row]} ${tweakText(t)}` : ""; };
+const tweakBusy = new Set();
+// the cards still being made by a tweak of n (guide.js shows a ring on the chip while one runs)
+V.tweakRunning = (n, id) => (n ? V.children(n.id).filter((c) => (c.status === "queued" || c.status === "running" || c.status === "uploading") && c.retry && c.retry.settings && c.retry.settings.tweak && (!id || c.retry.settings.tweak.id === id)) : []);
+V.tweak = async (n, id, o = {}) => {
+  const t = TWEAKS.find((x) => x.id === id);
+  if (!t || !n || n.type !== "image" || n.status !== "done" || !n.url) return V.toast("Select a finished picture first", true);
+  if (o.words) { // Shift+click: the words go into the prompt (to combine several), and Make edits this picture
+    if (V.tab !== "image") setTab("image"); if (V.tool !== "editor") V.setTool("editor");
+    V.setPrompt([pr.value.trim(), tweakText(t)].filter(Boolean).join(" ")); fromClicked.add(n.id); V.setStartFrom("pic");
+    return V.toast(`"${t.name}" added to the prompt: add more, then press Edit`, false, 3500);
+  }
+  if (!aiOk()) return V.toast("Add the office Google key to start rendering", true, 0, { action: { label: "Add key", run: () => V.openSettings && V.openSettings("#setGkey") } });
+  const key = n.id + "|" + id; if (tweakBusy.has(key)) return; tweakBusy.add(key);
+  try {
+    const e = D.imageEngines.find((x) => x.id === V.engines.image) || D.imageEngines[0];
+    const firstUrl = V.hasPixelLayers(n) ? await V.uploadDataUrl(await V.compositeDataUrl(n)) : null; // as shown, Draw layers included
+    let prompt = V.expandRAL(V.tweakBrief(id)); if (e.flux) prompt = fluxify(prompt);
+    const settings = { resolution: $("#resImage").value, aspect_ratio: "auto", num_images: 1, ...(V.viaGoogle(e.id) ? { provider: "google", fallback: V.cfg.gFallback !== false } : {}), protect: true, tweak: { id, name: t.name, row: t.row }, words: t.name, ...(n.paper ? { paper: n.paper.paper, orient: n.paper.orient } : {}) };
+    const ok = await submitJob({ kind: "edit", engine: e.id, prompt, shownPrompt: `${t.row === "relight" ? "Relight" : "Tweak"}: ${t.name}`, inputs: [n], firstUrl, settings, count: 1 });
+    if (ok) V.toast(`${t.row === "relight" ? "Relighting" : t.name === "More like this" ? "Making a close variation of" : `${t.name}:`} ${V.nodeTitle(n) || onWhat(n)}${t.row === "relight" ? " at " + t.name.toLowerCase() : ""}. It joins its versions and opens compared with it.`, false, 3500);
+    if (V.paintTweaks) V.paintTweaks();
+    return ok;
+  } catch (er) { V.toast(er.message, true, 0); return false; }
+  finally { setTimeout(() => tweakBusy.delete(key), 900); }
+};
+// Ctrl+K can list these ("Tweak: Warmer", "Relight: Blue hour") through this hook (palette.js)
+V.tweakCommands = () => { const n = V.selImages()[0]; if (!n || n.status !== "done" || V.sel.length !== 1) return []; return TWEAKS.map((t) => ({ id: "tw:" + t.id, label: `${t.row === "relight" ? "Relight" : "Tweak"}: ${t.name}`, kind: "Picture", hint: `An edit of ${onWhat(n)}, the rest kept`, run: () => V.tweak(n, t.id) })); };
+// (v3.74 D2, loop-20) "Combine the two": two renders selected, the good part of one taken into the other through the
+// existing edit with a reference (image 1 = the one to keep, image 2 = the one to take from; Make reads "Edit … + 1 ref").
+// It only fills the prompt and the selection; the architect changes "the sky" to what they want and presses Edit.
+let combineNow = null; // { keep, from }: the pair the next Edit combines (editJob names its result from it)
+V.combineTwo = (keep, from) => {
+  if (!keep || !from) return;
+  combineNow = { keep: keep.id, from: from.id };
+  if (V.tab !== "image") setTab("image"); if (V.tool !== "editor") V.setTool("editor");
+  V.setSel([keep.id, from.id]); fromClicked.add(keep.id); V.setStartFrom("pic");
+  V.setPrompt("Keep image 1 exactly as it is: the building, its materials, the camera, the framing, the light and everything else. Take only the sky from image 2 and blend it into image 1 naturally, matching its perspective, scale and light.");
+  V.toast(`Combining: ${V.nodeTitle(keep)} keeps everything except what is taken from ${V.nodeTitle(from)}. Change "the sky" in the prompt to the part you want (the planting, the people, the light…), then press Edit`, false, 9000, { action: { label: "Swap them", run: () => V.combineTwo(from, keep) } });
+  const p = $("#prompt"); if (p) { p.focus({ preventScroll: false }); const i = p.value.indexOf("the sky"); if (i >= 0) p.setSelectionRange(i, i + 7); }
+};
 // ---------- v3.67: again from the SketchUp / Revit view ----------
 // V.captureOf(n) = the capture a picture was made from, directly or through several steps (render, edit, upscale,
 // touch-ups...), up its main input (first edge = image 1, the Touch-ups base, or the job's first picture). A capture
@@ -9569,35 +11719,105 @@ V.pictureKind = (n) => {
 // plus its number among its siblings ("Render 2", "SketchUp view 3"); never the AI model's name (that is in the hover card)
 const KIND_TITLE = { view: "", photo: "Picture", drawing: "Drawing", render: "Render", new: "New picture", upscale: "Upscale", touchup: "Touched up", cutout: "Cut-out", elevation: "Elevation", video: "Video", model: "3D model", world: "3D world" };
 const modelLabel = (n) => !n.label || (n.engine && [V.engineName(n.engine), String(n.engine)].some((m) => n.label === m || n.label === m + " · Google" || n.label === m + " · fal.ai")); // (v3.69 A2: a fallback job is relabelled "… · fal.ai", core.js applyJob; an older picture may carry the raw id, "gemini-nano-banana-2.1 · Google")
-V.nodeTitle = (n) => {
-  if (!n) return "";
+// v3.74 C1 (N11, journey-returning:big:4, RET-3, loop-10): a result is named by what made it: "<view> · <preset or scene> ·
+// <tweak>" ("View 1 · Golden hour · Dusk"), so the canvas, Review, the film strip, History, Sheets and downloads (nameFor) all
+// say the look and the light. The versions of one round are lettered ("· A", "· B"); two results that would still read the
+// same are numbered ("· 2"). "Render N" is only the fallback when nothing names it; a name the user gave (n.named) wins. The
+// names are worked out once per moment for the whole canvas (a memo emptied on the next microtask), so captions stay cheap.
+let titleMemo = null;
+const memoNow = () => { const st = V.G.nodes.length + "|" + V.G.edges.length; if (!titleMemo || titleMemo.st !== st) { titleMemo = new Map(); titleMemo.st = st; Promise.resolve().then(() => { titleMemo = null; }); } return titleMemo; };
+V.titlesChanged = () => { titleMemo = null; }; // (a rename, a pick or a new round: names are worked out again at once)
+const BASE_LOOK = { v2r: "Daylight", interior: "Interior" };
+const capWord = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+// the look a job asked for: its scene and its non-Render presets (by name), else a few words of your own, else Daylight
+const lookOf = (n) => {
+  const st = (n.retry && n.retry.settings) || {}; if (st.redesign || st.drawing) return "";
+  const tag = /\[Scene: ([^\]]*)\]/.exec(String(n.prompt || "")), sc = (n.scene && n.scene.name) || st.scene || (tag && tag[1]) || "";
+  let words = st.words != null ? String(st.words) : String(n.prompt || "").replace(/\[(?:Area|Draw|Materials|Update|Scene: [^\]]*)\]\s*/g, "");
+  const names = [], base = [];
+  for (const p of namedTexts()) if (words.includes(p.p)) { (BASE_LOOK[p.id] ? base : names).push(BASE_LOOK[p.id] || p.name); words = words.split(p.p).join(" "); }
+  const own = tidy(words).replace(/[.,;:]+$/, ""), short = own && own.split(/\s+/).length <= 4 && own.length <= 28 ? capWord(own) : "";
+  const parts = [sc, ...names].filter(Boolean);
+  if (!parts.length && short) parts.push(short);
+  if (!parts.length && base.length) parts.push(base[0]);
+  return parts.slice(0, 2).join(" + ");
+};
+// (present-9) an option's name as the board has it now (renamed on the Options board: the new name), else the one it was made with
+const optName = (n) => { const B = (V.G.ui || {}).optionBoards || {}, b = B[n.option.id], c = b && b.cols && b.cols[n.option.i]; return String((c && c.name) || n.option.name).trim(); };
+const viewShort = (cap) => { const t = titleOf(cap).replace(/^SketchUp view/, "View"); return t === "View" ? "View 1" : t; };
+// the name before rounds and numbering
+function baseTitle(n) {
   if (n.named && n.label) return n.label;
   const k = V.pictureKind(n);
   if (k === "view" || k === "photo" || k === "drawing") {
     const base = n.label || KIND_TITLE[k];
-    const same = V.G.nodes.filter((m) => (m.label || "") === (n.label || "") && V.pictureKind(m) === k);
+    // (final loop-03) numbered by capture order, a renamed view still counted under the name it had, so naming view 1 never renumbers view 2
+    const was = (m) => (m.named && m.label0 !== undefined ? m.label0 : m.label) || "";
+    const same = V.G.nodes.filter((m) => was(m) === (n.label || "") && V.pictureKind(m) === k);
     return same.length > 1 && k === "view" ? `${base} ${same.indexOf(n) + 1}` : base;
   }
   if (!modelLabel(n)) return n.label;
-  const p = V.parents(n.id)[0], pk = p && V.pictureKind(p);
-  // v3.69 J-photoedit-S8: an edit of a photo or drawing is "<its name> – edited"
-  const word = k === "render" && (pk === "photo" || pk === "drawing") ? `${V.nodeTitle(p)} – edited` : k === "render" && n.kind === "edit" ? "Edit" : KIND_TITLE[k] || "Picture";
-  if (k === "model" || k === "world") return word;
+  const p = V.parents(n.id)[0], pk = p && V.pictureKind(p), st = (n.retry && n.retry.settings) || {};
+  if (k === "model" || k === "world") return KIND_TITLE[k];
+  // (v3.74 D2, loop-20) Combine the two: the picture kept, then the part and where it came from, the shared start left out
+  // ("View 1 · Daylight · A · sky from B")
+  if (st.combine && p) {
+    const f = V.node && V.node(st.combine.from), a = titleOf(p), as = a.split(" · "), bs = f ? titleOf(f).split(" · ") : [];
+    let i = 0; while (i < as.length - 1 && i < bs.length - 1 && as[i] === bs[i]) i++;
+    return `${a} · ${st.combine.part || "part"} from ${bs.slice(i).join(" · ") || "the other"}`;
+  }
+  // a tweak, a relight or a brush change: the picture it changed, then what was done ("View 1 · Golden hour · Dusk")
+  const what = st.tweak ? st.tweak.name : st.brush ? capWord(String(st.brush).slice(0, 24).trim()) : "";
+  // (loop-03) a tweak of a tweak names only its base render and the last change ("View 1 · Daylight · 2B · Golden hour"),
+  // so a chain of tweaks never grows a name the film strip and inspector cut to the same "View 1 · Daylight · 2B…"
+  if (what && p) { let r = p, guard = 0; while (r && guard++ < 12) { const rs = (r.retry && r.retry.settings) || {}; if (r.named && r.label) break; if (!(rs.tweak || rs.brush)) break; const up = V.parents(r.id)[0]; if (!up) break; r = up; } return `${titleOf(r || p)} · ${what}`; }
+  // (present-9) an Options board result carries its option's name ("View 1 · Option B – Larch cladding")
+  if (n.option && n.option.name && k !== "upscale") { const oc = V.captureOf ? V.captureOf(n) : null, oname = optName(n); return `${oc && oc !== n ? viewShort(oc) : p ? titleOf(p) : "View 1"} · ${oname}`; }
+  if (k === "upscale" && p && p.type === "image") return `${titleOf(p)} · Upscaled`;
+  const look = k === "render" || k === "new" ? lookOf(n) : "";
+  if (look && p && (pk === "photo" || pk === "drawing")) return `${titleOf(p)} · ${look}`;
+  if (look && p && n.kind === "edit" && pk !== "view") return `${titleOf(p)} · ${look}`;
+  const cap = (k === "render" || k === "new" || k === "upscale") && V.captureOf ? V.captureOf(n) : null;
+  if (look && cap && cap !== n) return `${viewShort(cap)} · ${look}`;
+  // the fallback, as v3.69: "Render 2", "View 2 · Render 1", "house – edited"
+  const word = k === "render" && (pk === "photo" || pk === "drawing") ? `${titleOf(p)} – edited` : k === "render" && n.kind === "edit" ? "Edit" : KIND_TITLE[k] || "Picture";
   const sibs = (p ? V.children(p.id) : V.G.nodes).filter((m) => V.pictureKind(m) === k && modelLabel(m) && !m.named && (m.kind === "edit") === (n.kind === "edit"));
   const own = sibs.length > 1 && sibs.includes(n) ? `${word} ${sibs.indexOf(n) + 1}` : word; // (a picture not on the canvas, e.g. from History: no number)
-  // C1 (F4, J-presentation N4, J-poweruser N6): with two or more views in the project, a render says which view it is
-  // from ("View 2 · Render 1"), on the canvas, in Review, History, Sheets and Find
-  const cap = (k === "render" || k === "new" || k === "upscale") && V.captureOf ? V.captureOf(n) : null;
-  // (v3.69 C1: numbered there even when it is the view's only one, so "View 2 · Render 1" sits beside "View 1 · Render 1")
-  if (cap && cap !== n && V.G.nodes.filter((m) => V.isCapture(m) && m.type === "image").length > 1) return `${V.nodeTitle(cap).replace(/^SketchUp view/, "View")} · ${sibs.includes(n) ? `${word} ${sibs.indexOf(n) + 1}` : word}`;
+  if (cap && cap !== n && V.G.nodes.filter((m) => V.isCapture(m) && m.type === "image").length > 1) return `${viewShort(cap)} · ${sibs.includes(n) ? `${word} ${sibs.indexOf(n) + 1}` : word}`;
   return own;
-
-};
+}
+const LETTERS = "ABCDEFGH";
+function titleOf(n) {
+  if (!n) return "";
+  const memo = memoNow(), sig = [n.label, n.named ? 1 : 0, n.status, n.round ? n.round.i : "", n.prompt ? n.prompt.length : 0, n.option ? optName(n) : "", V.parents(n.id).map((q) => (q.named ? 1 : 0) + (q.label || "")).join(",")].join("|");
+  if (memo.has(n.id) && memo.get("s:" + n.id) === sig) return memo.get(n.id);
+  memo.set(n.id, n.label || ""); memo.set("s:" + n.id, sig); // (a loop in the graph names the picture by its label)
+  let t = baseTitle(n);
+  const named = n.named && n.label, k = V.pictureKind(n);
+  if (!named && n.round && n.round.n > 1 && n.round.i < LETTERS.length) {
+    // (a later round of the same picture and look: its round number before the letter, "View 1 · Daylight · 2A", so names and files never collide)
+    const before = new Set(V.G.nodes.filter((m) => m !== n && m.round && m.round.n > 1 && m.round.id !== n.round.id && !(m.named && m.label) && V.pictureKind(m) === k && (m.created || 0) <= (n.created || 0) && baseOf(m) === t).map((m) => m.round.id));
+    t += " · " + (before.size ? before.size + 1 : "") + LETTERS[n.round.i];
+  } else if (!named && t && k !== "view" && k !== "photo" && k !== "drawing" && modelLabel(n) && V.G.nodes.includes(n)) {
+    // two different results that read the same: the later ones are numbered, oldest first (rounds have their letters)
+    const twins = V.G.nodes.filter((m) => m !== n && !(m.named && m.label) && !(m.round && m.round.n > 1) && modelLabel(m) && V.pictureKind(m) === k && (m.created || 0) <= (n.created || 0) && baseOf(m) === t);
+    if (twins.length) t += " · " + (twins.length + 1);
+  }
+  memo.set(n.id, t); return t;
+}
+function baseOf(m) { const memo = memoNow(); const key = "b:" + m.id; if (memo.has(key)) return memo.get(key); memo.set(key, ""); const t = baseTitle(m); memo.set(key, t); return t; }
+V.nodeTitle = (n) => titleOf(n);
+// (loop-03) a long name cut from the middle: the start ("View 1 · Daylight · ") gives way first, the end that tells versions
+// apart ("2B · Golden hour", "A") stays in view. V.titleEl(n, tag, cls) = <tag class="ttl"><span head/><span tail/></tag>
+V.titleSplit = (t) => { const s = String(t || "").split(" · "); return s.length < 3 ? ["", s.join(" · ")] : [s.slice(0, 2).join(" · ") + " · ", s.slice(2).join(" · ")]; };
+V.titleEl = (n, tag = "span", cls = "") => { const t = typeof n === "string" ? n : titleOf(n), [a, b] = V.titleSplit(t); return h(tag, { class: ("ttl " + cls).trim() }, a ? h("span", { class: "ttlh" }, a) : null, h("span", { class: "ttlt" }, b)); };
 let namedT = null;
 const namedTexts = () => namedT || (namedT = [...D.imagePresets, ...D.videoPresets].filter((p) => p.p && p.p.length > 30 && !V.hasHoles(p.p)).sort((a, b) => b.p.length - a.p.length));
 // the second line: the scene and the words it was made with ("Golden hour hero shot · warmer windows")
 V.nodeSub = (n) => {
   if (!n) return "";
+  const bst = (n.retry && n.retry.settings) || {};
+  if (bst.brush && !bst.tweak) return "Brush: " + capWord(String(bst.brush).trim()).slice(0, 60); // (loop-13: short, as "Tweak: Lighter")
   const raw = String(n.prompt || ""), tag = /\[Scene: ([^\]]*)\]/.exec(raw);
   let words = raw.replace(/\[(?:Area|Draw|Materials|Update|Scene: [^\]]*)\]\s*/g, "").trim();
   for (const p of namedTexts()) if (words.includes(p.p)) words = tidy(words.split(p.p).join(" " + p.name + ", ")).replace(/,\s*$/, "").replace(/,\s*,/g, ","); // (A2: a preset's whole wording reads as its name, "View to render")
@@ -9666,6 +11886,9 @@ async function editJob(imgs, text, aiText, e, settings, n, layered = null, sc = 
   // v3.69 D15: an edit of a photo or render, with "keep the rest" on (the Draw shield), keeps everything outside what changed
   // (cutout.js V.postJob: the existing change mask; a change over half the picture is kept whole)
   if (!V.isCapture(imgs[0]) && V.protectOn && V.protectOn()) settings = { ...settings, protect: true };
+  // (v3.74 D2, loop-20) Combine the two: the result is named after what made it ("… · A · sky from B", V.nodeTitle)
+  const cm = combineNow && imgs[0] && imgs[1] && imgs[0].id === combineNow.keep && imgs[1].id === combineNow.from ? /Take only (.+?) from image 2/i.exec(String(text || aiText || "")) : null;
+  if (cm) settings = { ...settings, combine: { from: combineNow.from, part: cm[1].replace(/^the\s+/i, "").trim().slice(0, 30) } };
   const kind = imgs.some((x) => x.kind === "source") ? "render" : "edit";
   return await submitJob({ kind, engine: e.id, prompt, shownPrompt: text, inputs: imgs.slice(0, 8), extraUrls: lk.extraUrls, firstUrl: layered, settings: { ...settings, look: lk.on, ...libOf(lk) }, count: n, scene: sc });
 }
@@ -9801,6 +12024,7 @@ V.make = async () => {
     const fs = fromState(); if (fs && fs.v === "view") { imgs = [fs.cap]; V.cmpPartner = { cap: fs.cap.id, id: fs.n.id, t: Date.now() - 1000 }; } // D1: a fresh render of the view this picture came from (C1, RN1: What next compares the new one with the render that was selected)
 
     if (!viaRefs && allViews(imgs)) return renderViews(imgs); // D13
+    const pv = !viaRefs && picksViews(imgs); if (pv) return renderViews(pv); // (final) the picks' views, one render each
   }
   // D2 / C1 (B1): a view with no Render preset gets View to render added here, in front of your words (not into the box)
   const based = V.tab === "image" && V.tool === "editor" && imgs.length ? withBase(imgs[0]) : null; baseOnce = false;
@@ -10593,7 +12817,7 @@ function dropMenu(btn, rows) {
   if (dmenu && dmenu._for === btn) return closeDrop(); closeDrop();
   const r = btn.getBoundingClientRect();
   dmenu = h("div", { class: "libmenu", role: "menu" }, ...rows.map(([label, run, hint]) => h("button", { role: "menuitem", title: hint || "", onclick: () => { closeDrop(); run(); } }, label)));
-  dmenu._for = btn; document.body.append(dmenu);
+  dmenu._for = dmenu._vmBack = btn; document.body.append(dmenu); // (_vmBack, v3.74 D2: a dialog opened from a row gives the keyboard back to the button)
   const w = dmenu.offsetWidth; dmenu.style.top = Math.round(r.bottom + 4) + "px"; dmenu.style.left = Math.round(Math.max(8, Math.min(r.right - w, innerWidth - w - 8))) + "px";
   dmenu.querySelector("button")?.focus({ preventScroll: true });
 }
@@ -10669,8 +12893,8 @@ function paint() {
   // v3.69 (S14): an empty tab offers the quickest way to fill it
   const emptyBtns = query ? [] : scope === "project" ? [
     ...(view !== "style" ? [h("button", { class: "mini", title: "Use pieces and materials the practice already has", onclick: () => { scope = "office"; view = view === "material" ? "material" : "furniture"; selId = null; paint(); } }, "Pick from the office catalogue")] : []),
-    h("button", { class: "mini primary", onclick: () => root.querySelector(".libtop input[accept='image/*']")?.click() }, "+ Add pictures…")]
-    : [h("button", { class: "mini primary", onclick: () => V.openStarter && V.openStarter() }, "Starter libraries…"), h("small", { class: "hint" }, "75 ready-made pieces and materials, drawn by your image AI model")];
+    h("button", { class: "mini", onclick: () => root.querySelector(".libtop input[accept='image/*']")?.click() }, "+ Add pictures…")] // (v3.74 D2, amber budget: the top bar's + Add pictures… is the one filled amber button)
+    : [h("button", { class: "mini", onclick: () => V.openStarter && V.openStarter() }, "Starter libraries…"), h("small", { class: "hint" }, "75 ready-made pieces and materials, drawn by your image AI model")];
   if (!list.length) g.append(h("div", { class: "libempty" }, h("b", {}, query ? `Nothing matches "${query}"` : forLook && view === "style" ? "No style boards yet" : `No ${KINDS[view].name.toLowerCase()} yet`),
     h("p", {}, query ? "Try another word, or clear the search." : view === "sets" ? "A collection is a set of catalogue items (and an optional prompt) for a kind of scene, e.g. \"Nordic living room\". Tick items in Furniture & products and Materials, then press New collection. Or start with the Starter libraries." :
       view === "furniture" ? `Add product pictures (from a supplier's website, a catalogue page, or a cut-out): drag them here, paste them, or use + Add pictures. Then fill in the maker, code and finish.` :
@@ -11263,10 +13487,10 @@ async function makeSeamless(src, o = {}) {
   return c.toDataURL("image/png");
 }
 // evens out the light of RGBA pixels d (W × H) in place: the large-scale brightness (the picture averaged into a grid of
-// 64 cells along its long side, blurred by an eighth of it with mirrored edges, read back smoothly) is divided out,
+// 64 cells along its long side, fewer on a small picture so no cell is empty (C3-2: empty cells made bands), blurred by an eighth of it with mirrored edges, read back smoothly) is divided out,
 // f = mean / local, kept within 0.75-1.33. Plain arithmetic, so it needs no canvas filters.
 function evenLight(d, W, H) {
-  const k = 64 / Math.max(W, H), gw = Math.max(2, Math.round(W * k)), gh = Math.max(2, Math.round(H * k)), g = new Float32Array(gw * gh), n = new Float32Array(gw * gh);
+  const k = Math.min(64, Math.max(1, Math.floor(Math.max(W, H) / 4))) / Math.max(W, H), gw = Math.max(2, Math.round(W * k)), gh = Math.max(2, Math.round(H * k)), g = new Float32Array(gw * gh), n = new Float32Array(gw * gh);
   for (let j = 0; j < H; j++) { const r = Math.min(gh - 1, Math.floor((j * gh) / H)) * gw; for (let i = 0; i < W; i++) { const q = r + Math.min(gw - 1, Math.floor((i * gw) / W)), p = (j * W + i) * 4; g[q] += 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]; n[q]++; } }
   for (let q = 0; q < g.length; q++) g[q] /= n[q] || 1;
   const sg = Math.max(gw, gh) / 8, rad = Math.ceil(3 * sg), ker = [];
@@ -11318,13 +13542,19 @@ async function look(src, mid) {
 async function kindOf(it) {
   const O = owner(it);
   if (O.suKind) return O.suKind;
+  if (O.tileFrom === "render") return "texture"; // v3.74 C3: lifted from a render (the material the client approved)
   if (ralOf(it) && PAINT.test([it.name, it.product, it.where, it.notes].filter(Boolean).join(" "))) return "colour";
+  // v3.74 C3 (MAT-2): a swatch the bucket drew from the words has the pattern at its real size: a texture, unless it is a
+  // plain render or paint in a RAL colour
+  if (O.patterned) return O.fields && /render|plain/.test(O.fields.kind) && ralOf(it) ? "colour" : "texture";
   // v3.69 N2: a RAL colour with no real photo stays a colour too: the swatch the Material bucket made for a RAL pick
   // (fromBucket), or any RAL item whose picture is plain
   if (ralOf(it)) {
     if (it.fromBucket || O.fromBucket) return "colour";
     try { const f = flatOf(O); if (f && (await look(f)).plain) return "colour"; } catch {}
   }
+  // (MAT-2) an older words-only material (a plain swatch in the words' colour): a flat colour, never a plain grey texture
+  if ((it.fromBucket || O.fromBucket) && !O.tile) { try { const f = flatOf(O); if (f && (await look(f)).plain) return "colour"; } catch {} }
   return "texture";
 }
 const PLAIN_HINT = "This sample looks almost plain: Flat colour may suit it.";
@@ -11398,7 +13628,7 @@ function stateOf(it, kind, colour, e) {
   const O = owner(it), r = ralOf(it);
   if (kind === "colour") return `Flat colour ${r && !O.suColor ? `RAL ${r.code} ${r.name}` : colour}`;
   if (making.has(O)) return "Tile being made…";
-  if (fresh(it)) return "Tile ready";
+  if (fresh(it)) return O.tileFrom === "render" ? "Tile lifted from a render" : "Tile ready";
   const ai = !flatOf(O), cost = ai ? costTxt(e) : " (free)";
   if (O.tile) return "Picture changed: tile redrawn" + cost;
   return ai ? "AI draws a flat tile" + cost : "Tile from the flat picture (free)";
@@ -11417,7 +13647,9 @@ V.sendMaterialsToSketchUp = async (list, title) => {
   const left = (list || []).filter((it) => it && it.kind !== "material").length;
   if (!rows.length) return V.toast(left ? "Only materials go to SketchUp, and there are none here" : "No materials to send to SketchUp", true, 4000);
   closeDlg();
-  let busy = false;
+  let busy = false, sent = false, sentOnce = false;
+  // (v3.74 C3 fix 2) a row changed after a send has not been sent: Send is the amber button again, Done goes quiet
+  const unsend = () => { if (sent) { sent = false; paintFoot(); } };
   const pick = h("input", { type: "checkbox" }); pick.checked = V.store.get("suPaint", true); pick.onchange = () => V.store.set("suPaint", pick.checked);
   const state = h("div", { class: "sumstate" }), why = h("p", { class: "hint warn" }), est = h("span", { class: "hint sumest" }), res = h("p", { class: "hint sumres", hidden: true });
   const send = h("button", { class: "mini primary", onclick: () => go(true) }), tiles = h("button", { class: "mini", title: "Works without SketchUp: send them later", onclick: () => go(false) }, "Make the tiles only");
@@ -11434,11 +13666,11 @@ V.sendMaterialsToSketchUp = async (list, title) => {
   };
   const rowEl = (R) => {
     const it = R.it;
-    R.cb = h("input", { type: "checkbox", checked: true }); R.cb.onchange = () => { R.on = R.cb.checked; R.el.classList.toggle("off", !R.on); paintFoot(); };
+    R.cb = h("input", { type: "checkbox", checked: true }); R.cb.onchange = () => { R.on = R.cb.checked; R.el.classList.toggle("off", !R.on); sent = false; paintFoot(); };
     R.tile = h("div", { class: "sumtile" }); R.st = h("small", {});
-    R.seg = h("div", { class: "shseg sumkind" }, ...[["texture", "Texture"], ["colour", "Flat colour"]].map(([k, l]) => h("button", { "data-k": k, onclick: () => { if (busy) return; setSu(it, { suKind: k }); R.msg = ""; prep(R); } }, l)));
+    R.seg = h("div", { class: "shseg sumkind" }, ...[["texture", "Texture"], ["colour", "Flat colour"]].map(([k, l]) => h("button", { "data-k": k, onclick: () => { if (busy) return; if (k !== R.kind) unsend(); setSu(it, { suKind: k }); R.msg = ""; prep(R); } }, l)));
     R.w = h("input", { type: "number", min: 10, step: 1, title: "The real width one tile covers" }); R.est = h("em", { title: "An estimate: check it against something you know, e.g. a brick plus its joint is 225 mm" }, "est.");
-    R.w.oninput = () => { clearTimeout(R.wt); R.wt = setTimeout(() => { const v = Math.round(+R.w.value); if (v >= 10) { setSu(it, { tileWidthMm: v, tileWidthSet: true }); paintRow(R); } }, 400); };
+    R.w.oninput = () => { clearTimeout(R.wt); R.wt = setTimeout(() => { const v = Math.round(+R.w.value); if (v >= 10) { if (v !== Math.round(widthNext(it))) unsend(); setSu(it, { tileWidthMm: v, tileWidthSet: true }); paintRow(R); } }, 400); };
     R.wbox = h("label", { class: "sumw" }, "Width ", R.w, " mm ", R.est);
     R.hint = h("small", { class: "sumplain" });
     return (R.el = h("div", { class: "sumrow" }, h("label", { class: "sumtick", title: "Send this one" }, R.cb), R.tile, h("div", { class: "sumname" }, h("b", {}, it.name || "Material"), R.st, R.hint), h("div", { class: "sumopts" }, R.seg, R.wbox)));
@@ -11458,7 +13690,11 @@ V.sendMaterialsToSketchUp = async (list, title) => {
     const ok = canSend();
     why.textContent = ok ? "" : oldPlugin() ? OLD() : `Open SketchUp with the Clarman VizLab plugin${need.length ? ", or press Make the tiles only" : ""}.`; // (that button shows only while a tile needs making)
     why.hidden = ok;
-    send.textContent = `Send ${on.length} to SketchUp`; send.title = why.textContent;
+    send.textContent = sent ? "Send again" : `Send ${on.length} to SketchUp`; send.title = sent ? `Send ${on.length} to SketchUp again` : why.textContent;
+    // (v3.74 C3 fix) once they are in SketchUp, Done is the one amber button (last in the row) and Send again is quiet
+    send.className = sent ? "mini" : "mini primary"; cancel.className = sent ? "mini primary" : "mini"; cancel.textContent = sent ? "Done" : busy || sentOnce || cancel.textContent === "Close" ? "Close" : "Cancel";
+    if (sent && cancel.nextSibling) cancel.parentNode.append(cancel);
+    if (!sent && send.nextSibling && send.parentNode) send.parentNode.append(send); // (C3 fix 2: changed after a send, Send is last and amber again)
     send.disabled = busy || !ok || !on.length || on.some((R) => !R.kind);
     tiles.hidden = !need.length; tiles.disabled = busy;
   };
@@ -11519,6 +13755,7 @@ V.sendMaterialsToSketchUp = async (list, title) => {
         chunks.slice(ci).flat().forEach(({ R }) => { R.msg = "✗ not sent"; R.bad = true; paintRow(R); });
       }
     }
+    if (!err && got.length) sent = sentOnce = true;
     busy = false; rows.forEach(paintRow); paintFoot(); relib();
     if (err) return report(me, err, true, true);
     const nw = got.filter((m) => m.status === "added").length, up = got.length - nw, bad = on.filter((R) => R.bad).length, plain = on.filter((R) => R.plain).length, noted = on.filter((R) => R.warn && !R.plain).length;
@@ -11605,6 +13842,9 @@ function fillBlock(box, it, kind, colour, repaint, hint = "") {
 V.sceneMaterials = () => projItems().filter((i) => i.kind === "material" && i.use === true);
 V.projectMaterials = () => projItems().filter((i) => i.kind === "material");
 V.materialTile = (it) => (it && fresh(it) ? { tile: owner(it).tile, widthMm: widthOf(it) } : null); // a fresh tile and its real width, else null
+// v3.74 C3 (journey-materials:big:2): a tile the Material bucket lifted from a chosen render (matbucket.js liftMaterial):
+// kept like any tile (fresh while the item's picture stays the same), its width measured (set) or estimated
+V.suMatLift = (it, tile, widthMm, set, fromNode) => setSu(it, { tile, tileFrom: "render", tileSig: sig(srcOf(owner(it))), tileAt: Date.now(), tileWidthMm: Math.round(widthMm), tileWidthSet: !!set, tileRender: fromNode || null });
 V.suMatTest = { makeSeamless, seamScore, tilePrompt, payloadOf, kindOf, colourOf, widthOf, widthNext, guess, fnv, snap, owner, suIdOf, setSu, fresh, sig, ensureTile, uploadTile, stateOf };
 })();
 
@@ -11659,7 +13899,8 @@ function newZone(l) {
 // what a zone is made of, as kept on the zone (a snapshot, so a deleted Library item still has its words)
 const matFromItem = (it, words) => ({ src: "lib", id: it.id, name: it.name || "Material", product: it.product || "", where: it.where || "", scaleMm: it.scaleMm || null, unit: it.unit || "", sphere: !!(it.sphere && !it.flat), words: words || "" });
 const matFromRal = (code, words) => { const r = V.RAL && V.RAL[code]; return { src: "ral", ral: code, name: r ? `RAL ${code} ${r.name}` : `RAL ${code}`, words: words || "" }; };
-const matFromText = (words) => ({ src: "text", name: clean(words).slice(0, 48) || "Material", words: clean(words) });
+// (v3.74 C3, MAT-4) fields: what Describe it read from the words (short name, colour, unit size, pattern, finish)
+const matFromText = (words, fields) => ({ src: "text", name: (fields && fields.name) || clean(words).slice(0, 48) || "Material", words: clean(words), ...(fields ? { fields: { ...fields } } : {}) });
 
 // ---------- labels (slots per pixel) ----------
 const LRU = new Map(), loading = new Map();
@@ -11812,7 +14053,10 @@ async function analyse(n, type) {
   const t0 = performance.now();
   if (!E.P) E.P = readPic(comp);
   if (!E.m) { E.m = modelPass(E.P); E.P.d = null; } // (its RGBA copy is read only there: the photo pass reads the canvas)
-  if (!E.auto) E.auto = V.isCapture(n) || (E.m.flat >= 0.5 && E.m.cover >= COVER) ? "model" : "photo";
+  // (v3.74 C3 fix) an AI result is a render whatever it looks like: its soft edges and glows have no drawn lines to stop a
+  // model-view fill, which then ran into the sky and the ground (46% from one click on a side wall)
+  const aiMade = !V.isCapture(n) && ["render", "edit", "create"].includes(n.kind);
+  if (!E.auto) E.auto = V.isCapture(n) ? "model" : aiMade ? "photo" : E.m.flat >= 0.5 && E.m.cover >= COVER ? "model" : "photo";
   const t = type === "model" || type === "photo" ? type : E.auto;
   if (!E.by[t]) { E.by[t] = made(E.P, t, E.auto, t === "model" ? E.m : photoPass(E.P), { flat: E.m.flat, cover: E.m.cover }); E.by[t].ms = Math.round(performance.now() - t0); }
   return E.by[t];
@@ -11951,7 +14195,7 @@ const clashes = (c, hs) => (Array.isArray(hs) ? hs : [hs]).some((x) => !!x && x.
 // isn't keyed green
 const WORD_HUE = [[/\b(red|scarlet|crimson)\b/i, 0], [/\borange\b/i, 30], [/\byellow\b/i, 60], [/\bgreen\b/i, 120], [/\b(cyan|turquoise|teal)\b/i, 180], [/\bblue\b/i, 240], [/\b(purple|violet)\b/i, 270], [/\b(magenta|pink)\b/i, 300]];
 function wordHue(t) {
-  const m = /\bRAL ?(\d{4})\b/i.exec(t || ""), r = m && V.RAL && V.RAL[m[1]]; if (r) return hsOf(rgbOf(r.hex));
+  const m = /\bRAL ?(\d{4})(?!\d)/i.exec(t || ""), r = m && V.RAL && V.RAL[m[1]]; if (r) return hsOf(rgbOf(r.hex));
   const w = WORD_HUE.find(([re]) => re.test(t || "")); return w ? { h: w[1], s: 0.6 } : null;
 }
 // the material's mean colour: a RAL's own, or the sample's (the middle of a sphere picture, not its studio background),
@@ -11993,6 +14237,12 @@ function sampleOf(z) {
   const m = z.mat; if (!m || m.src !== "lib") return { kind: "none" };
   const it = V.libraryItem && V.libraryItem(m.id); if (!it) return { kind: "none", gone: true };
   const st = V.starterInfo && V.starterInfo(it.starterKey), mm = it.scaleMm || (st && st.mm) || null;
+  // (v3.74 C3) a swatch drawn from the words is no sample for the AI (it would copy the drawing): a tile lifted from a
+  // render, or the AI's sphere, is; otherwise the words go alone
+  if (it.patterned) {
+    const t = it.tileFrom === "render" && V.materialTile && V.materialTile(it); if (t) return { kind: "tile", src: t.tile, mm: t.widthMm, it };
+    return it.sphere && it.img ? { kind: "sphere", src: it.img, mm, it } : { kind: "none", it, swatch: it.flat || it.img };
+  }
   if (it.flat || (it.img && !it.sphere)) return { kind: "flat", src: it.flat || it.img, mm, it };
   const t = V.materialTile && V.materialTile(it); if (t) return { kind: "tile", src: t.tile, mm: t.widthMm, it };
   if (it.img) return { kind: "sphere", src: it.img, mm, it };
@@ -12199,7 +14449,11 @@ V.matKeyFor = async (n, e, { img1Url, capture = V.isCapture(n), notesUrl = null 
   const bad = V.matCheck(n, e); if (bad) throw new Error(bad);
   // the map as it is now, read once for the key and for the mask of the painted surfaces: Draw stays usable while the
   // pictures upload, so a later click mustn't make the two disagree
-  const l = { ...live, zones: live.zones.map((z) => ({ ...z, mat: z.mat && { ...z.mat } })) }, lab = await decode(l), zs = usable(l);
+  const l = { ...live, zones: live.zones.map((z) => ({ ...z, mat: z.mat && { ...z.mat } })) }, lab = await decode(l);
+  // v3.74 C3 (N13): Render options sends one job per option: that zone carries the option's material in this job only
+  const oz = optRun && optRun.node === n.id && l.zones.find((z) => z.id === optRun.zone);
+  if (oz) { oz.mat = { ...optRun.mat }; fitWith(l, oz, await matHue(oz.mat).catch(() => null)); }
+  const zs = usable(l);
   const img1 = await V.loadImg(img1Url), W1 = img1.naturalWidth, H1 = img1.naturalHeight, warnings = [];
   const key = await keyImage(l, KEY_STYLE === "flat" ? await analyse(n, l.pic) : null, img1, W1, H1, KEY_STYLE, zs, lab), keyData = key.toDataURL("image/jpeg", 0.95);
   const keyUrl = (await V.api("upload", { dataUrl: keyData })).url; // as it is: no resizing, so it lines up with image 1
@@ -12217,15 +14471,14 @@ V.matKeyFor = async (n, e, { img1Url, capture = V.isCapture(n), notesUrl = null 
   const notesAt = notesUrl ? urls.push(notesUrl) + 1 : 0;
   const circled = new Set(key.discs.map((d) => d.slot)); // zones with no letter on the key are found by their colour
   const legend = V.expandRAL(zs.map((z, i) => legendLine(l, z, S[i], 3 + withPic.indexOf(z), onBoard, !circled.has(z.slot))).join("\n"));
-  const letters = zs.map((z) => ({ letter: letterOf(l, z), colour: PAL[z.c][0], hex: PAL[z.c][1], zone: z.id, name: z.mat.name, circle: circled.has(z.slot) }));
-  const keepMaskUrl = capture ? null : (await V.api("upload", { dataUrl: await zoneMaskPng(l, zs.map((z) => z.id), W1, H1, lab) })).url;
+  const letters = zs.map((z) => ({ letter: letterOf(l, z), colour: PAL[z.c][0], hex: PAL[z.c][1], zone: z.id, name: z.mat.name, circle: circled.has(z.slot) }));  const keepMaskUrl = capture ? null : (await V.api("upload", { dataUrl: await zoneMaskPng(l, zs.map((z) => z.id), W1, H1, lab) })).url;
   const c = capOf(e), left = V.matUnassigned(n);
   if (c.warn === 0) warnings.push(`${e.name} follows a material key less closely than Nano Banana: check every painted surface in the result`);
   else if (c.warn && zs.length > c.warn) warnings.push(`${e.name} follows about ${c.warn} materials best: with ${zs.length}, check every painted surface in the result`);
   if (left.length) warnings.push(`"${left[0].name}"${left.length > 1 ? ` and ${left.length - 1} more have` : " has"} no material yet, so ${left.length > 1 ? "they were" : "it was"} left out of this render`);
   if (capture && P.lookWords) warnings.push(`${e.name} takes ${P.cap} pictures, so the project look's reference picture goes into this render as words only`);
   if (!capture && notesUrl) warnings.push("In a material change only the painted surfaces change, so Draw notes pointing anywhere else aren't applied. Hide the Material map to follow them");
-  return { urls, keyUrl, legend, sampleSentence: sampleSentence(withPic.length, onBoard), letters, skipIds, maxPics: P.maxPics, keepMaskUrl, count: zs.length, warnings, board: onBoard, notesLine: notesAt ? (capture ? T.notes : T.notes2)(notesAt) : "", size: [W1, H1] };
+  return { urls, keyUrl, legend, sampleSentence: sampleSentence(withPic.length, onBoard), letters, skipIds, maxPics: P.maxPics, keepMaskUrl, count: zs.length, warnings: oz && optRun.i > 0 ? [] : warnings, board: onBoard, notesLine: notesAt ? (capture ? T.notes : T.notes2)(notesAt) : "", size: [W1, H1] };
 };
 
 // ---------- the tool (Draw) ----------
@@ -12439,8 +14692,9 @@ const matTitle = (z) => { const m = z.mat; if (!m) return ""; const it = m.src =
 // v3.69 B3: a row = eye, the sample (48 px) with its key letter on it, name and share, Swap… (choose another material for
 // those surfaces, J-materials-S3) and ⋯. The list folds to its letters (J-materials-S9); its foot is one Material key ▾.
 function row(n, l, z, i) {
-  const s = z.mat ? sampleOf(z) : { kind: "none" }, th = h("span", { class: "lt mthumb" });
+  const s = z.mat ? sampleOf(z) : { kind: "none" }, th = h("span", { class: "lt mthumb" }), sw = z.mat && !s.src ? swatchOf(z.mat) : null; // (v3.74 C3, MAT-5: a words-only or RAL material shows its drawn swatch)
   if (s.src) th.append(h("img", { src: s.src, alt: "" }));
+  else if (sw) th.append(h("img", { src: sw, alt: "" }));
   else if (z.mat && z.mat.src === "ral") th.append(h("i", { class: "mral", style: `background:${(V.RAL[z.mat.ral] || {}).hex || "#888"}` }));
   else th.append(h("i", { class: "mtxt" }, z.mat ? "Aa" : "?"));
   th.append(h("button", { class: "mkey", style: `--k:${PAL[z.c][1]}`, title: `${LETTERS[i]} · ${PAL[z.c][0]}: the colour that marks this material for the AI. Click to paint with it` }, LETTERS[i]));
@@ -12451,7 +14705,10 @@ function row(n, l, z, i) {
     h("span", { class: "ln", title: z.mat ? matTitle(z) + "\nDouble-click to rename" : "Double-click to rename", ondblclick: (e) => { e.stopPropagation(); rename(n, z.id); } },
       h("b", {}, z.name), h("small", { class: z.mat ? "" : "warn" }, sub + (s.gone ? " (picture removed from the Library)" : "")),
       // under the name, so the name and the line under it keep the row's width (J-materials-S10)
-      h("button", { class: "mini mswap", title: z.mat ? "Swap: choose another material for these surfaces (they stay painted)" : "Choose the material for these surfaces", ondblclick: (e) => e.stopPropagation(), onclick: (e) => { e.stopPropagation(); openChooser({ zone: z.id }); } }, z.mat ? "Swap…" : "Choose…")),
+      h("span", { class: "mbtns" },
+        h("button", { class: "mini mswap", title: z.mat ? "Swap: choose another material for these surfaces (they stay painted)" : "Choose the material for these surfaces", ondblclick: (e) => e.stopPropagation(), onclick: (e) => { e.stopPropagation(); openChooser({ zone: z.id }); } }, z.mat ? "Swap…" : "Choose…"),
+        // v3.74 C3 (journey-materials:big:1): more materials to try on the same surfaces, rendered in one go
+        z.mat ? h("button", { class: "mini mswap madd", disabled: cands(z).length >= MAXOPT, title: cands(z).length >= MAXOPT ? `${MAXOPT} options is the most for one surface` : "Add another material to try on these surfaces: Render options makes one picture per option, side by side", ondblclick: (e) => e.stopPropagation(), onclick: (e) => { e.stopPropagation(); openChooser({ zone: z.id, addOpt: true }); } }, "+ Add an option") : null)),
     h("button", { class: "lmenu", title: "Material options", onclick: (e) => { e.stopPropagation(); zoneMenu(n, z, e); } }, "⋯"));
 }
 let seenActive = null, seenCount = 0; // the active material and how many there were, as last shown
@@ -12468,7 +14725,7 @@ function paintPanel(n) {
   }
   const list = h("div", { class: "llist" });
   if (l && !vis(l)) list.append(h("button", { class: "mnote", onclick: () => commit(n, () => (layerOf(n).visible = true)) }, "The Material map is hidden, so Make edits the picture as usual. Click to show it again."));
-  zs.forEach((z, i) => list.append(row(n, l, z, i)));
+  zs.forEach((z, i) => { list.append(row(n, l, z, i)); const ob = optBlock(n, l, z, i); if (ob) list.append(ob); });
   if (!zs.length) list.append(h("p", { class: "hint mempty" }, "Choose a material (+ New material), then click the faces it goes on."));
   panel.append(list); panelRO.disconnect(); panelRO.observe(list);
   const e = engine(), c = capOf(e), k = usable(l).length, over = k > c.max;
@@ -12560,6 +14817,10 @@ async function openChooser(o = {}) {
   const finish = h("input", { class: "mfinish", placeholder: "e.g. laid in Flemish bond, weathered, matt", value: cur && cur.src !== "text" ? cur.words || "" : "" });
   const search = h("input", { class: "libsearch", placeholder: "Search…", value: chQuery, oninput: (e) => { chQuery = e.target.value.trim(); paint(); } });
   const tabs = h("div", { class: "shseg pktabs" }), grid = h("div", { class: "pkgrid" });
+  { // (C3-14) a fade at the foot of the list while more is below it
+    const more = () => grid.classList.toggle("more", grid.scrollHeight - grid.scrollTop - grid.clientHeight > 4);
+    grid.addEventListener("scroll", more, { passive: true }); new ResizeObserver(more).observe(grid); new MutationObserver(() => requestAnimationFrame(more)).observe(grid, { childList: true, subtree: true });
+  }
   const close = () => { box.remove(); chooser = null; unhover(); };
   const done = (mat) => { close(); picked(n, o, mat); };
   const usedBy = (it) => l && l.zones.find((z) => z.mat && z.mat.src === "lib" && (z.mat.id === it.id || ((V.libraryItem && V.libraryItem(z.mat.id)) || {}).catId === it.id));
@@ -12570,18 +14831,45 @@ async function openChooser(o = {}) {
   };
   const fileIn = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true, onchange: (e) => { const fs = [...e.target.files]; e.target.value = ""; addSamples(fs); } });
   const addSamples = async (files) => { const it = await addSampleFiles(files); if (it) done(matFromItem(it, finish.value)); };
-  const go = () => { const w = grid.querySelector(".mdesc"), t = w && w.value.trim(); if (!t) return w && w.focus(); done(matFromText([t, finish.value.trim()].filter(Boolean).join(", "))); };
+  // v3.74 C3 (journey-materials:big:3, MAT-1, MAT-4): Describe it reads the words into fields you can correct, with a
+  // swatch drawn from them; from Swap the box starts empty (the old words only as its placeholder, so typing never joins them)
+  const dsc = { text: cur && cur.src === "text" && !o.zone && !o.addOpt ? cur.words : "", f: null, edited: new Set() };
+  const go = () => {
+    const w = grid.querySelector(".mdesc"), t = (w ? w.value : dsc.text).trim(); if (!t) return w && w.focus();
+    const f = { ...parseWords(t), ...(dsc.f ? pickEdited(dsc.f, dsc.edited) : {}) }, words = wordsWithFields(t, f, dsc.edited);
+    done(matFromText(words, f)); // (final phone-14: the general Finish or notes field is hidden on this tab; the Finish field above is the one)
+  };
+  // quick-picks (journey-materials:big:4): a click picks one; Ctrl+click several, as options for the same surfaces
+  // (final phone-07) busy at once: making the samples takes a few seconds, and a second press must not add them twice
+  const multi = [], multiBtn = h("button", { class: "mini", hidden: true, onclick: async () => {
+    if (multiBtn.disabled) return; multiBtn.disabled = true; multiBtn.setAttribute("aria-busy", "true"); multiBtn.textContent = "Adding…";
+    try { const its = []; for (const q of multi) its.push(await quickItem(q)); closeMany(its.map((it) => matFromItem(it, finish.value))); }
+    catch (er) { multiBtn.disabled = false; multiBtn.removeAttribute("aria-busy"); paintMulti(); V.toast(er.message || String(er), true); }
+  } });
+  const closeMany = (mats) => { close(); pickedMany(n, o, mats); };
+  const quickRow = () => wallish(n, z0) ? h("div", { class: "mquick", role: "group", "aria-label": "Common claddings" },
+    h("div", { class: "mqhead" }, h("b", {}, "Common claddings"), h("small", { class: "hint" }, `Click one to use it; Ctrl+click several to try them as options${sphereCost() ? `. A first use also draws a sample sphere (about ${V.money(sphereCost())} each)` : ""}`)),
+    h("div", { class: "mqgrid" }, ...QUICK.map((q) => {
+      const have = quickHave(q), on = multi.includes(q);
+      return h("button", { class: "pktile mqtile" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false", title: `${q[2]}${have ? "" : `. Made as a project Library material on first use${sphereCost() ? `, with a sample sphere drawn by the image AI (about ${V.money(sphereCost())})` : ""}`}`, onclick: async (e) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) { const i = multi.indexOf(q); if (i >= 0) multi.splice(i, 1); else if (multi.length < MAXOPT) multi.push(q); paintMulti(); return paint(); }
+        const it = await quickItem(q); done(matFromItem(it, finish.value));
+      } }, h("img", { src: quickSwatch(q), alt: "" }), h("b", {}, q[1]), h("small", {}, quickUnit(q)), on ? h("span", { class: "pkon" }, String(multi.indexOf(q) + 1)) : null);
+    }))) : null;
+  const paintMulti = () => { multiBtn.hidden = multi.length < 2; multiBtn.textContent = z0 && z0.mat ? `Add ${multi.length} as options` : `Use these ${multi.length} as options`; };
   const paint = () => {
     V.store.set("mChooseTab", chTab);
     tabs.replaceChildren(...TABS.map(([k, label]) => h("button", { class: chTab === k ? "on" : "", onclick: () => { if (chTab !== k) { chTab = k; chQuery = search.value = ""; } paint(); } }, label)));
     search.hidden = chTab === "text"; grid.replaceChildren();
     const note = typeof box !== "undefined" && box.querySelector(".pkoffice"); if (note) note.style.visibility = chTab === "office" ? "" : "hidden"; // (only where it applies)
+    const fin = typeof box !== "undefined" && box.querySelector(".mfinw"); if (fin) fin.hidden = chTab === "text"; // (final phone-14) Describe it has its own Finish field
     const q = chQuery.toLowerCase();
     if (chTab === "project" || chTab === "office") {
       const list = (chTab === "project" ? L.project : L.office).filter((it) => !q || [it.name, it.where, it.product, it.supplier, it.tags, it.notes].filter(Boolean).join(" ").toLowerCase().includes(q));
+      const qr = !q && (chTab === "project" || !list.length) ? quickRow() : null; if (qr) grid.append(qr); // (v3.74 C3, MAT-10: an empty office catalogue still offers claddings)
       if (chTab === "project" && !q) grid.append(h("button", { class: "pktile padd", title: "Add a sample picture: a photo or scan of the material from your computer (or drag it here, or paste it). It goes into this project's Library", onclick: () => fileIn.click() },
         h("span", { class: "paddi", html: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' }), h("b", {}, "Add a sample picture…"), h("small", {}, "or drag or paste one here")));
-      list.forEach((it) => grid.append(tile(it, chTab === "office")));
+      list.forEach((it) => { if (!(qr && it.quick)) grid.append(tile(it, chTab === "office")); }); // (a quick-pick shows once, in its row)
       if (!list.length && q) grid.append(h("p", { class: "hint" }, "Nothing matches."));
       else if (!list.length) { // (viewer-13) the other ways in, big, instead of an empty box
         grid.append(h("p", { class: "hint pkempty" }, chTab === "project" ? "No materials in this project's Library yet. Add a sample picture, or:" : "No office materials yet. Add a sample picture in This project, make the Starter library, or:"));
@@ -12598,23 +14886,35 @@ async function openChooser(o = {}) {
       list.forEach((r) => grid.append(h("button", { class: "pktile mraltile", title: `RAL ${r.code} ${r.name} (about ${r.hex} on screen)`, onclick: () => done(matFromRal(r.code, finish.value)) }, h("i", { style: `background:${r.hex}` }), h("b", {}, `RAL ${r.code}`), h("small", {}, r.name))));
     } else {
       const combo = (V.D.fillFields && V.D.fillFields.material && V.D.fillFields.material.combo) || [];
+      const old = (o.zone || o.addOpt) && cur && cur.src === "text" ? cur.words : "";
+      const inp = h("input", { class: "mdesc", list: "mDescList", placeholder: old ? `Was: ${old}` : "e.g. charred larch boards, 150 mm, vertical", value: dsc.text, "aria-label": "The material in words" });
+      const fw = h("div", { class: "mfields" }), warnJ = h("p", { class: "hint warn mjoined", hidden: true });
+      inp.oninput = () => { dsc.text = inp.value; paintFields(fw, dsc, warnJ); };
       grid.append(h("div", { class: "mdescw" },
-        h("label", {}, "The material in words", h("input", { class: "mdesc", list: "mDescList", placeholder: "e.g. vertical larch cladding, silver-grey", value: cur && cur.src === "text" ? cur.words : "" }), h("datalist", { id: "mDescList" }, ...combo.map((v) => h("option", { value: v })))),
-        h("button", { class: "mini primary", onclick: go }, "Use these words"),
-        h("p", { class: "hint" }, "Without a sample picture the AI goes by the words: name the material, its colour and how it's laid, e.g. buff brick in stretcher bond with white mortar.")));
+        h("label", {}, "The material in words", inp, h("datalist", { id: "mDescList" }, ...combo.map((v) => h("option", { value: v })))),
+        h("button", { class: "mini primary", onclick: go }, "Use these words"), warnJ, fw,
+        h("p", { class: "hint" }, "Without a sample picture the AI goes by the words: name the material, its colour, its size and how it's laid, e.g. buff brick in stretcher bond with white mortar. VizLab reads them into fields you can correct, and draws a swatch from them.")));
+      paintFields(fw, dsc, warnJ);
       setTimeout(() => { const w = grid.querySelector(".mdesc"); if (w) w.focus(); }, 30);
     }
   };
   const box = h("div", { class: "modal mchoose" }, h("div", { class: "mbox pkbox" },
     h("button", { class: "mclose", title: "Close (Esc)", onclick: close }, "×"),
-    h("div", { class: "pktop" }, h("h3", {}, z0 ? `Material for ${letterOf(l, z0)} · ${z0.name}` : "Choose a material to paint with")),
+    h("div", { class: "pktop" }, h("h3", {}, z0 && o.addOpt ? `Add an option for ${letterOf(l, z0)} · ${z0.name}` : z0 ? `Material for ${letterOf(l, z0)} · ${z0.name}` : "Choose a material to paint with")),
     h("div", { class: "row pkbar" }, tabs, search),
     grid,
     h("label", { class: "mfinw" }, "Finish or notes (optional)", finish),
-    h("div", { class: "row end mt" }, h("span", { class: "hint pkoffice", style: "flex:1" }, "A pick from the office catalogue is copied into this project's Library (not switched on for every render)."),
+    h("div", { class: "row end mt", "data-hzkeep": "" }, h("span", { class: "hint pkoffice", style: "flex:1" }, "A pick from the office catalogue is copied into this project's Library (not switched on for every render)."),
+      multiBtn,
       !z0 ? h("button", { class: "mini", title: "Paint first and choose the material later (the Materials list asks for it)", onclick: () => done(null) }, "Paint now, choose later") : null,
       h("button", { class: "mini", onclick: close }, "Cancel"))));
   box.addEventListener("pointerdown", (e) => { if (e.target === box) close(); });
+  { // (v3.74 C3 fix) no big hover preview while Ctrl/Shift-picking several, or until the mouse really moves after the chooser
+    // opens under it: the preview covered "Use these 2 as options" and the tiles
+    let p0 = null, moved = false;
+    box.addEventListener("mousemove", (e) => { if (!p0) p0 = [e.clientX, e.clientY]; else if (Math.hypot(e.clientX - p0[0], e.clientY - p0[1]) > 12) moved = true; });
+    box.addEventListener("mouseover", (e) => { if (!moved || multi.length || e.ctrlKey || e.metaKey || e.shiftKey) { e.stopPropagation(); unhover(); } });
+  }
   box.append(fileIn);
   box.addEventListener("dragover", (e) => { if ([...e.dataTransfer.types].includes("Files")) { e.preventDefault(); box.classList.add("drop"); } });
   box.addEventListener("dragleave", (e) => { if (e.target === box) box.classList.remove("drop"); });
@@ -12630,6 +14930,10 @@ function picked(n, o, mat) {
     mat = await libFor(mat).catch(() => mat);
     const hs = mat ? await matHue(mat) : null, l = layerOf(n);
     if (A().node() !== n) return;
+    if (o.zone && o.addOpt && mat) { // v3.74 C3: + Add an option (the zone keeps its material; this one is tried beside it)
+      const z = zoneOf(l, o.zone);
+      if (z && z.mat) { if (cands(z).some((m) => sameMat(m, mat))) return V.toast(`${mat.name} is already one of the options for ${letterOf(l, z)}`, false, 3000); edit(n, z.id, (L, Z) => { Z.opts = [...(Z.opts || []), { ...mat }].slice(0, MAXOPT - 1); L.active = Z.id; }); return; }
+    }
     if (o.zone) { // Change material…
       const z = zoneOf(l, o.zone); if (!z || !mat) return;
       const other = l.zones.find((q) => q !== z && q.mat && sameMat(q.mat, mat));
@@ -12675,6 +14979,12 @@ async function libFor(mat) {
   const L = (V.G.library = V.G.library || { items: [] }), product = mat.src === "ral" ? `RAL ${mat.ral}` : clean(mat.words);
   if (!product) return mat;
   let it = L.items.find((i) => i.kind === "material" && i.fromBucket && i.product === product);
+  if (!it && mat.src === "text" && mat.fields) { // v3.74 C3 (big:3, MAT-2): read from the words: a drawn swatch at its real size
+    const f = mat.fields;
+    it = V.catalogue.blankItem("material", drawSwatch(f), f.name || mat.name);
+    Object.assign(it, { product, fromBucket: true, patterned: true, fields: { ...f }, scaleMm: f.scaleMm || null, unit: f.unit || "", notes: "Made from the Material bucket's words (the swatch is drawn from them): swap in a real sample picture when you have one." });
+    L.items.push(it); V.changed(); V.catalogue.refresh && V.catalogue.refresh();
+  }
   if (!it) {
     const r = mat.src === "ral" ? V.RAL && V.RAL[mat.ral] : null, w = r ? null : wordHue(mat.words);
     const hex = r ? r.hex : w ? `hsl(${Math.round(w.h)},${Math.round(w.s * 55)}%,50%)` : "#8c8c8c";
@@ -12711,6 +15021,7 @@ async function showKey() {
 }
 // the chooser and the key take the keyboard while open (draw.js and nav.js stand back: V.matTool.dialog)
 window.addEventListener("keydown", (e) => {
+  if (liftBox && !(chooser && chooser.el) && !keyBox) { e.stopImmediatePropagation(); if (e.key === "Escape") { e.preventDefault(); liftBox._close(); } return; } // (v3.74 C3: Lift the texture)
   const box = chooser && chooser.el ? chooser.el : keyBox; if (!box) return;
   if (e.target.matches && e.target.matches("#ralPop input")) return; // the RAL picker's search box handles its own keys
   e.stopImmediatePropagation();
@@ -12740,8 +15051,611 @@ function onOpen(n) {
 // help (the line under the picture)
 const previewTint = async (n, w, hh) => { const l = mapOf(n); if (!l) return null; const lab = await decode(l); return tint(l, lab, w, hh, { dim: true }); };
 const selItems = () => { const n = A().node(), l = layerOf(n); return l ? l.zones.map((z, i) => ({ label: `Paint the selection with ${LETTERS[i]} · ${z.name}`, fn: () => paintSel(n, z.id) })) : []; };
-V.matTool = { down, move, up, overlay, onTool, onOpen, sync, brush: () => S.mode === "brush", key, help, previewTint, selItems, dialog: () => !!(keyBox || (chooser && chooser.el)), chooser: (o) => openChooser(o || {}), showKey, downloadKey,
+V.matTool = { down, move, up, overlay, onTool, onOpen, sync, brush: () => S.mode === "brush", key, help, previewTint, selItems, dialog: () => !!(keyBox || liftBox || (chooser && chooser.el)), chooser: (o) => openChooser(o || {}), showKey, downloadKey,
   idle: () => Promise.race([chain, new Promise((r) => setTimeout(r, 5000))]) };
+
+// ===== v3.74 C3: materials options (NEXT-LEVEL N13; journey-materials:big:1-5, MAT-1, MAT-2, MAT-4, MAT-5, MAT-10, MAT-11) =====
+// (1) Describe it reads the words into fields (short name, colour, unit size, pattern, finish) and draws a swatch from them,
+// free, in the page; (2) cladding quick-picks in the chooser; (3) a zone holds up to 4 candidate materials (zone.opts beside
+// zone.mat) and "Render N options" sends one job per option (V.matKeyFor swaps that zone's material while optRun is set),
+// the results come back as an options strip (#mOptStrip) under the picture and as versions in its stack (n.option =
+// { id (the set), i, name, zone, letter, of (the picture), mat }), with Choose (the zone takes it; n.pick, the others
+// n.rejected), Compare and Options sheet; (4) Lift this material into SketchUp: the zone's region cut from the chosen render,
+// straightened (rectify.js V.rectifyApi), made seamless (sumat.js) and kept as the Library item's SketchUp tile.
+
+// ---------- (1) the words, read ----------
+const KINDS = [["seam", /standing[- ]?seam|\bseams?\b|\bzinc\b|copper roof|metal roof/i], ["shingle", /shingles?|\bshakes?\b/i], ["brick", /\bbricks?\b|brickwork|\bbond\b/i],
+  ["tile", /\bslates?\b|\btiles?\b|pantiles?|parquet|wood blocks?/i], ["stone", /\bstone\b|ashlar|limestone|sandstone|granite|rubble|flint/i],
+  ["boards", /\bboards?\b|boarding|cladding|\bplanks?\b|weatherboard|shiplap|battens?|\blarch\b|\bcedar\b|\btimber\b|\bwood/i],
+  ["panel", /\bpanels?\b|fibre[- ]?cement|\bcorten\b|weathering steel|aluminium|\bsheets?\b/i], ["render", /\brender(ed)?\b|plaster|stucco|roughcast|pebbledash|\bconcrete\b/i]];
+const BASE_HEX = [[/\blarch\b/i, "#b88556"], [/\bcedar\b/i, "#a5653d"], [/\boak\b/i, "#a8804f"], [/thermo|accoya/i, "#8a5d3b"], [/timber|wood|pine|spruce/i, "#c09765"],
+  [/fibre[- ]?cement/i, "#8f908b"], [/\bzinc\b/i, "#7f878b"], [/copper/i, "#b4704a"], [/corten|weathering steel/i, "#8b4726"], [/aluminium/i, "#a7aaac"], [/\bslates?\b/i, "#3b4046"],
+  [/limestone|portland/i, "#d6ccb3"], [/sandstone/i, "#c9a375"], [/granite/i, "#8a8885"], [/concrete/i, "#a4a39d"], [/brick/i, "#9a4f3a"], [/stone/i, "#c8bea8"], [/render|plaster|stucco/i, "#e8e5dc"]];
+const CWORDS = [["blue-black", /blue[- ]black|engineering brick|staffordshire blue/i, "#2c2f35"], ["off-white", /off[- ]white|\bivory\b|\bcream\b/i, "#e7e0cd"], ["white", /\bwhite\b/i, "#ecebe6"],
+  ["anthracite", /anthracite/i, "#383e42"], ["charcoal", /charcoal/i, "#36383a"], ["black", /\bblack\b/i, "#1d1d1d"], ["light grey", /(light|pale) gr[ae]y/i, "#bdbdba"],
+  ["dark grey", /dark gr[ae]y/i, "#4b4e51"], ["grey", /\bgr[ae]y\b/i, "#8a8c8d"], ["silver", /\bsilver\b/i, "#a9aaab"], ["buff", /\bbuff\b/i, "#d2b07b"], ["red", /\bred\b/i, "#9b4532"],
+  ["brown", /\bbrown\b/i, "#6b4a33"], ["terracotta", /terracotta/i, "#b5603f"], ["sand", /\bsandy?\b/i, "#cdb892"], ["sage", /\bsage\b/i, "#8a9a7b"], ["green", /\bgreen\b/i, "#4f6b45"],
+  ["blue", /\bblue\b/i, "#3e5c7e"], ["yellow", /\byellow\b/i, "#d9b44a"], ["bronze", /bronze/i, "#7c5b3a"], ["gold", /\bgold(en)?\b/i, "#c79a45"]];
+const FINS = [["charred", /charred|shou sugi ban|yakisugi|\bburnt\b/i], ["weathered", /weathered|silvered|\baged\b|patina/i], ["gloss", /\bgloss(y)?\b/i], ["satin", /\bsatin\b/i],
+  ["matt", /\bmatte?\b/i], ["textured", /textured|\bsawn\b|\brough\b/i], ["smooth", /\bsmooth\b/i], ["brushed", /brushed/i], ["oiled", /\boiled\b/i], ["stained", /\bstained\b/i]];
+const PATS = [["herringbone", /herringbone|chevron/i], ["flemish", /flemish/i], ["stack", /stack(ed)?[- ]bond|\bstack(ed)?\b/i], ["stretcher", /stretcher|running bond|half bond/i],
+  ["vertical", /\bvertical(ly)?\b|\bupright\b/i], ["horizontal", /\bhorizontal(ly)?\b/i]];
+const DEF_UNIT = { boards: [150, 0], brick: [215, 65], seam: [500, 0], tile: [300, 150], shingle: [150, 125], stone: [450, 225], panel: [1200, 600], render: [0, 0], plain: [0, 0] };
+const DEF_PAT = { boards: "horizontal", brick: "stretcher", seam: "vertical", tile: "stretcher", shingle: "stretcher", stone: "stretcher", panel: "stack", render: "none", plain: "none" };
+const MATWORDS = ["fibre cement", "western red cedar", "cedar", "siberian larch", "larch", "oak", "thermowood", "accoya", "timber", "zinc", "copper", "corten", "aluminium", "slate", "limestone", "sandstone", "granite", "flint", "concrete", "brick", "stone", "render", "plaster", "terracotta"];
+const NOUNS = /\b(boards|boarding|cladding|panels|shingles|shakes|tiles|slates|sheets|battens)\b/i;
+const PATTERN_NAMES = [["vertical", "Vertical"], ["horizontal", "Horizontal"], ["stretcher", "Stretcher bond"], ["flemish", "Flemish bond"], ["stack", "Stack bond"], ["herringbone", "Herringbone"], ["none", "No pattern"]];
+const FINISH_NAMES = [["", "As it is"], ["matt", "Matt"], ["satin", "Satin"], ["gloss", "Gloss"], ["weathered", "Weathered"], ["charred", "Charred"], ["textured", "Textured"], ["smooth", "Smooth"], ["brushed", "Brushed"], ["oiled", "Oiled"], ["stained", "Stained"]];
+const cap1 = (s) => String(s || "").replace(/^./, (c) => c.toUpperCase());
+// the colour the words name: a RAL code, else a colour word ({ colour, hex, ral } or null)
+function colourOfWords(t) {
+  const m = /\bRAL ?(\d{4})(?!\d)/i.exec(t || ""), r = m && V.RAL && V.RAL[m[1]];
+  if (r) return { colour: `RAL ${m[1]} ${r.name}`, hex: r.hex, ral: m[1] };
+  const w = CWORDS.find(([, re]) => re.test(t || "")); return w ? { colour: w[0], hex: w[2], ral: "" } : null;
+}
+function unitOf(t, kind) {
+  const two = /(\d{2,4})\s*(?:mm)?\s*(?:x|×|by)\s*(\d{2,4})/i.exec(t), one = /(\d{2,4})\s*mm\b/i.exec(t), d = DEF_UNIT[kind] || [0, 0];
+  if (two) return [+two[1], +two[2]]; if (one && d[0]) return [+one[1], d[1]]; return /parquet|wood block/i.test(t) ? [280, 70] : d.slice();
+}
+const unitText = (f) => !f.uw ? "" : f.kind === "brick" ? `${f.uw} × ${f.uh} mm bricks` : f.kind === "boards" ? `${f.uw} mm boards` : f.kind === "seam" ? `${f.uw} mm between seams` : f.uh ? `${f.uw} × ${f.uh} mm` : `${f.uw} mm`;
+// the real width a swatch (and a SketchUp tile) covers: whole units, about 1.2 m (2 m of standing seam, 2.4 m of panels)
+function scaleFor(f) {
+  const step = f.kind === "brick" ? f.uw + 10 : f.uw; if (!step) return 1000;
+  const want = f.kind === "seam" ? 2000 : f.kind === "panel" ? 2400 : f.kind === "stone" ? 1500 : 1200;
+  return Math.round(Math.max(1, Math.round(want / step)) * step);
+}
+function shortName(t, body, f) {
+  const lc = body.toLowerCase(), mw = MATWORDS.find((w) => lc.includes(w)), noun = (NOUNS.exec(body) || [])[1];
+  const adj = /charred/i.test(t) ? "charred" : /silvered/i.test(t) ? "silvered" : /\bweathered\b/i.test(t) ? "weathered" : "";
+  const col = !f.ral && f.colour && !f.colourBy ? f.colour : ""; // (a colour set by the finish is in the name already: "Charred larch boards")
+  let parts;
+  if (mw) {
+    const m = mw.replace(/^(siberian|western red) /, ""), nl = noun && noun.toLowerCase();
+    const nn = f.kind === "seam" && !/seam/.test(m) ? "standing seam" : nl && !m.includes(nl.replace(/s$/, "")) ? (/^(boarding|cladding)$/.test(nl) && f.kind === "boards" ? "boards" : nl) : !nl && f.kind === "boards" && m === "fibre cement" ? "boards" : "";
+    parts = [adj, col, m, nn];
+  } else parts = [adj, ...t.split(/[,;(]/)[0].split(/\s+/).slice(0, 4)];
+  const s = cap1(parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim()) + (f.ral ? " " + f.ral : "");
+  return s.slice(0, 34).trim() || "Material";
+}
+// "charred larch boards 150 mm vertical" -> { name "Charred larch boards", kind boards, colour, hex, ral, uw 150, uh, unit,
+// pattern vertical, finish charred, mortar (hex), scaleMm 1200, words }
+function parseWords(text) {
+  // (white mortar is not the brick's colour, even when the next word is typed onto it: "white mortarhorizontal")
+  const t = clean(text), body = t.replace(/\b([a-z-]+\s+)?(mortar|joints?|pointing)/gi, " ");
+  let kind = (KINDS.find(([, re]) => re.test(body)) || ["plain"])[0];
+  const fin = (FINS.find(([, re]) => re.test(t)) || [""])[0], pat = (PATS.find(([, re]) => re.test(t)) || [])[0];
+  // (fibre cement with one width and a direction is boarding, e.g. "fibre cement RAL 7016 horizontal 180mm")
+  if (kind === "panel" && /fibre[- ]?cement/i.test(body) && (pat === "horizontal" || pat === "vertical") && /\d{2,4}\s*mm\b/i.test(t) && !/(\d{2,4})\s*(?:mm)?\s*(?:x|×|by)\s*(\d{2,4})/i.test(t)) kind = "boards";
+  const col = colourOfWords(body), base = BASE_HEX.find(([re]) => re.test(body)), [uw, uh] = unitOf(t, kind);
+  const mm = /\b([a-z-]+)\s+(?:mortar|joints?|pointing)/i.exec(t), mc = mm && (colourOfWords(mm[1]) || (/dark/i.test(mm[1]) ? { hex: "#3d3b38" } : /light|pale/i.test(mm[1]) ? { hex: "#d9d5cb" } : null));
+  // (no colour word: a charred or weathered finish sets it, and the Colour field says so)
+  const dflt = !col && fin === "charred" ? { colour: "charred black", hex: "#232120" } : !col && fin === "weathered" && kind === "boards" ? { colour: "weathered silver-grey", hex: "#9b968d" } : null;
+  const f = { words: t, kind, finish: fin, pattern: pat || DEF_PAT[kind], uw, uh, colour: col ? col.colour : dflt ? dflt.colour : "", ral: col ? col.ral : "", mortar: mc ? mc.hex : "",
+    hex: col ? col.hex : dflt ? dflt.hex : base ? base[1] : "#8c8c8c", colourBy: dflt ? "finish" : "" };
+  f.unit = unitText(f); f.scaleMm = scaleFor(f); f.name = shortName(t, body, f);
+  return f;
+}
+// MAT-1: words typed into the end of other words ("…white mortarhorizontal fibre cement…", "RAL 7016vertical")
+const JOIN_WORDS = /(mortar|boards?|bricks?|cement|larch|cedar|grey|white|matt|bond|cladding)(horizontal|vertical|buff|fibre|siberian|red|white|grey|larch|cedar|brick|black|anthracite)/i;
+const joined = (t) => /[a-z]{2}[A-Z][a-z]/.test(t) || /\d(?!\s*(?:mm|cm|m|x|×)\b)[a-z]{3,}/i.test(t) || JOIN_WORDS.test(t);
+// the fields the architect changed by hand win over a new reading of the words
+const pickEdited = (f, ed) => Object.fromEntries([...ed].flatMap((k) => (k === "unit" ? [["uw", f.uw], ["uh", f.uh], ["unit", f.unit], ["scaleMm", f.scaleMm]] : k === "colour" ? [["colour", f.colour], ["hex", f.hex], ["ral", f.ral]] : [[k, f[k]]])));
+// what the AI is told: the words, plus any field changed by hand that the words don't already say
+function wordsWithFields(t, f, ed) {
+  const add = [];
+  if (ed.has("colour") && f.colour && !t.toLowerCase().includes(f.colour.toLowerCase())) add.push(f.colour);
+  if (ed.has("unit") && f.unit) add.push(f.unit);
+  if (ed.has("pattern") && f.pattern && f.pattern !== "none") add.push((PATTERN_NAMES.find((p) => p[0] === f.pattern) || [, f.pattern])[1].toLowerCase() + (f.kind === "boards" || f.kind === "seam" ? "ly laid" : ""));
+  if (ed.has("finish") && f.finish) add.push(f.finish + " finish");
+  return [t, ...add].join(", ");
+}
+// the editable fields under Describe it, with the swatch
+function paintFields(box, dsc, warnJ) {
+  const t = (dsc.text || "").trim();
+  warnJ.hidden = !joined(t); warnJ.textContent = "Some words look run together (e.g. \"mortarhorizontal\"): check the description has a space or comma between each part.";
+  box.replaceChildren(); if (!t) { dsc.f = null; return; }
+  const f = { ...parseWords(t), ...(dsc.f ? pickEdited(dsc.f, dsc.edited) : {}) }; dsc.f = f;
+  if (!dsc.edited.has("name")) f.name = parseWords(t).name;
+  const sw = h("img", { class: "mswatch", src: drawSwatch(f, 256), alt: "The swatch drawn from these words" });
+  const redraw = () => { f.unit = unitText(f); if (!dsc.edited.has("scale")) f.scaleMm = scaleFor(f); sw.src = drawSwatch(f, 256); scale.textContent = `The swatch shows ${f.scaleMm} mm across`; };
+  const set = (k, v) => { dsc.edited.add(k); f[k] = v; redraw(); };
+  const fld = (label, el) => h("label", { class: "mfld" }, h("small", {}, label), el);
+  const name = h("input", { value: f.name, oninput: (e) => set("name", e.target.value.trim() || parseWords(t).name) });
+  const colour = h("input", { value: f.colour, placeholder: "e.g. RAL 7016, buff, anthracite", oninput: (e) => { const c = colourOfWords(e.target.value); dsc.edited.add("colour"); f.colour = e.target.value.trim(); f.ral = c ? c.ral : ""; if (c) f.hex = c.hex; redraw(); } });
+  const unit = h("input", { value: f.uw ? (f.uh ? `${f.uw} x ${f.uh}` : `${f.uw}`) : "", placeholder: "mm, e.g. 150 or 215 x 65", oninput: (e) => { const m = /(\d{2,4})\s*(?:x|×|by)?\s*(\d{2,4})?/i.exec(e.target.value); if (!m) return; dsc.edited.add("unit"); f.uw = +m[1]; f.uh = m[2] ? +m[2] : f.kind === "brick" ? 65 : 0; redraw(); } });
+  const sel = (key, list) => { const s = h("select", { onchange: (e) => set(key, e.target.value) }, ...list.map(([v, l]) => h("option", { value: v }, l))); s.value = f[key] || ""; return s; };
+  const scale = h("small", { class: "hint mscale" });
+  box.append(h("div", { class: "mfgrid" }, fld("Short name", name), fld("Colour", colour), fld("Unit size (mm)", unit), fld("Laid", sel("pattern", PATTERN_NAMES)), fld("Finish", sel("finish", FINISH_NAMES))),
+    h("div", { class: "mswbox" }, sw, scale));
+  redraw();
+}
+
+// ---------- the swatch drawn from the fields (MAT-5): flat colour, joints and courses at the real size, a little grain ----------
+const hashStr = (s) => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
+const rng = (seed) => { let s = seed || 1; return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296; };
+const tone = (rgb, k) => `rgb(${rgb.map((v) => Math.max(0, Math.min(255, Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k))))).join(",")})`;
+const swCache = new Map();
+function drawSwatch(f, P = 512) {
+  const key = JSON.stringify([f.kind, f.hex, f.mortar, f.pattern, f.finish, f.uw, f.uh, f.scaleMm, P]); if (swCache.has(key)) return swCache.get(key);
+  const c = mk(P, P), x = c.getContext("2d"), R = rng(hashStr(key)), s = P / (f.scaleMm || 1000), rgb = rgbOf(/^#[0-9a-f]{6}$/i.test(f.hex || "") ? f.hex : "#8c8c8c"), k = f.kind;
+  const vary = f.finish === "weathered" ? 0.16 : k === "render" || k === "plain" ? 0.02 : k === "brick" ? 0.13 : 0.08, dark = tone(rgb, -0.6), lite = tone(rgb, 0.3);
+  const unit = (X, Y, W, H) => { x.fillStyle = tone(rgb, (R() - 0.5) * 2 * vary); x.fillRect(X, Y, W, H); };
+  x.fillStyle = tone(rgb, 0); x.fillRect(0, 0, P, P);
+  if (k === "boards") {
+    const w = Math.max(3, f.uw * s), vert = f.pattern !== "horizontal", gap = Math.max(1, 5 * s);
+    for (let a = 0; a < P; a += w) {
+      if (vert) unit(a, 0, w, P); else unit(0, a, P, w);
+      x.globalAlpha = 0.14; x.strokeStyle = dark; x.lineWidth = 1;
+      for (let g = 0; g < 5; g++) { const o = a + R() * w, wob = (R() - 0.5) * w * 0.25; x.beginPath(); if (vert) { x.moveTo(o, 0); x.lineTo(o + wob, P); } else { x.moveTo(0, o); x.lineTo(P, o + wob); } x.stroke(); }
+      x.globalAlpha = 1; x.fillStyle = dark;
+      if (vert) x.fillRect(a, 0, gap, P); else { x.fillRect(0, a + w - gap, P, gap); x.globalAlpha = 0.35; x.fillStyle = lite; x.fillRect(0, a, P, Math.max(1, gap * 0.6)); x.globalAlpha = 1; }
+    }
+  } else if (k === "brick" || k === "stone" || k === "tile" || k === "shingle") {
+    const J = Math.max(1, (k === "brick" ? 10 : k === "stone" ? 12 : 4) * s), L = Math.max(4, f.uw * s), H = Math.max(3, (f.uh || f.uw / 2) * s);
+    x.fillStyle = k === "brick" || k === "stone" ? f.mortar || "#d6d2c8" : dark; x.fillRect(0, 0, P, P);
+    if (f.pattern === "herringbone") { // (drawn as a chevron of courses, which reads the same at swatch size)
+      const sw = L * 0.71;
+      for (let i = 0; i * sw < P + sw; i++) { x.save(); x.beginPath(); x.rect(i * sw, 0, sw + 0.5, P); x.clip(); x.translate(i * sw + sw / 2, P / 2); x.rotate(((i % 2 ? -1 : 1) * Math.PI) / 4); for (let y = -P; y < P; y += H + J) unit(-L, y, 2 * L, H); x.restore(); }
+    } else for (let y = 0, r = 0; y < P; r++) {
+      const rh = k === "stone" ? H * (0.6 + R() * 0.8) : H, flem = f.pattern === "flemish" && k === "brick", hd = (L - J) / 2;
+      let X = f.pattern === "stack" ? 0 : k === "shingle" || k === "stone" ? -R() * L : r % 2 ? -(flem ? (hd + J) / 2 + hd : (L + J) / 2) : 0, t2 = r % 2;
+      while (X < P) {
+        const bw = k === "stone" ? L * (0.7 + R() * 0.9) : k === "shingle" ? L * (0.6 + R() * 0.8) : flem ? ((t2++) % 2 ? hd : L) : L;
+        unit(X, y, bw, rh);
+        if (k === "tile" || k === "shingle") { x.fillStyle = dark; x.globalAlpha = 0.45; x.fillRect(X, y + rh - J * 1.5, bw, J * 1.5); x.globalAlpha = 1; }
+        X += bw + J;
+      }
+      y += rh + J;
+    }
+  } else if (k === "seam") {
+    const w = Math.max(6, f.uw * s), a1 = Math.max(1.5, 8 * s), a2 = Math.max(1, 6 * s);
+    for (let a = 0; a < P; a += w) { unit(a, 0, w, P); x.fillStyle = lite; x.fillRect(a, 0, a1, P); x.fillStyle = dark; x.fillRect(a + a1, 0, a2, P); }
+  } else if (k === "panel") {
+    const w = Math.max(6, f.uw * s), hh = Math.max(6, (f.uh || f.uw) * s), j = Math.max(1, 8 * s);
+    for (let y = 0; y < P; y += hh) for (let a = 0; a < P; a += w) { unit(a, y, w, hh); x.fillStyle = dark; x.fillRect(a, y, j, hh); x.fillRect(a, y, w, j); }
+  }
+  if (f.finish === "charred") { // the crackle of burnt timber
+    x.strokeStyle = tone(rgb, 0.22); x.globalAlpha = 0.45; x.lineWidth = Math.max(1, P / 400); const cw = Math.max(5, 30 * s);
+    for (let y = 0, r = 0; y < P; y += cw * 0.6, r++) for (let a = (r % 2) * cw * 0.5 - cw; a < P; a += cw * (0.7 + R() * 0.6)) x.strokeRect(a, y, cw * (0.6 + R() * 0.5), cw * 0.6);
+    x.globalAlpha = 1;
+  }
+  const d = x.getImageData(0, 0, P, P), p = d.data, amp = k === "render" || k === "plain" ? (f.finish === "smooth" ? 6 : 14) : f.finish === "charred" ? 16 : 9;
+  for (let i = 0; i < p.length; i += 4) { const v = (R() - 0.5) * amp; p[i] += v; p[i + 1] += v; p[i + 2] += v; }
+  x.putImageData(d, 0, 0);
+  if (f.finish === "gloss" || f.finish === "satin" || f.finish === "oiled") { const g = x.createLinearGradient(0, 0, P, P); g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(0.45, `rgba(255,255,255,${f.finish === "gloss" ? 0.16 : 0.08})`); g.addColorStop(0.6, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(0, 0, P, P); }
+  const u = c.toDataURL("image/png"); swCache.set(key, u); if (swCache.size > 60) swCache.delete(swCache.keys().next().value);
+  return u;
+}
+// the picture a material shows in the Materials list and the options strip: what the AI gets as its sample (a lifted tile,
+// the sample sphere, a photo) when it has one, else its drawn swatch, so one material looks the same everywhere (C3-11)
+const matPic = (m) => (m ? sampleOf({ mat: m }).src || swatchOf(m) : null); // (the same rule as the zone's own row)
+// the small picture beside a material anywhere in the bucket: its sample, its Library item's picture, or a swatch from its words
+function swatchOf(m) {
+  if (!m) return null;
+  const it = V.libraryItem && V.libraryItem(m.src === "lib" ? m.id : m.libId);
+  if (it && (it.flat || it.img)) return it.flat || it.img;
+  if (m.fields) return drawSwatch(m.fields, 256);
+  if (m.src === "ral") { const r = V.RAL && V.RAL[m.ral]; return r ? drawSwatch({ kind: "plain", hex: r.hex, finish: "smooth", scaleMm: 1000 }, 128) : null; }
+  if (m.src === "text") return drawSwatch(parseWords(m.words || m.name), 256);
+  return null;
+}
+
+// ---------- (2) cladding quick-picks (journey-materials:big:4) ----------
+const QUICK = [["larch", "Larch boards", "vertical larch boards, 150 mm, natural finish"], ["cedar", "Cedar boards", "horizontal western red cedar boards, 125 mm"],
+  ["fibre", "Fibre cement boards", "horizontal fibre cement boards, 180 mm, light grey, matt"], ["zinc", "Standing-seam zinc", "standing seam zinc, pre-weathered grey, 500 mm seams"],
+  ["buff", "Buff brick", "buff brick in stretcher bond, 215 x 65, light mortar"], ["red", "Red brick", "red brick in stretcher bond, 215 x 65, light mortar"],
+  ["blue", "Blue-black brick", "blue-black brick in stretcher bond, 215 x 65, dark mortar"], ["wrender", "White render", "smooth white render, matt"],
+  ["grender", "Grey render", "smooth grey render, matt"], ["stone", "Natural stone", "natural sandstone walling, random coursed"],
+  ["corten", "Corten", "corten weathering steel panels, 1000 x 500"], ["shingle", "Timber shingles", "cedar timber shingles, 150 mm"]];
+const quickFields = (q) => ({ ...parseWords(q[2]), name: q[1] });
+const quickSwatch = (q) => drawSwatch(quickFields(q), 256);
+const quickUnit = (q) => { const f = quickFields(q); return f.unit || "a smooth finish"; };
+const quickHave = (q) => ((V.G.library && V.G.library.items) || []).find((i) => i.kind === "material" && i.quick === q[0]) || null;
+// an exterior wall: the zone's name says so, or the picture isn't an interior (a scene in interior mode, or words saying so)
+const wallish = (n, z) => {
+  const nm = (z && z.name) || "";
+  if (/wall|cladding|fa[cç]ade|render|elevation|gable|external|exterior/i.test(nm)) return true;
+  if (/floor|ceiling|worktop|counter|cabinet|sofa|rug|kitchen|bathroom|interior/i.test(nm)) return false;
+  return !(V.G.scene && V.G.scene.mode && V.G.scene.mode !== "ext") && !/\binterior\b/i.test([n && n.label, n && n.prompt].filter(Boolean).join(" "));
+};
+// a quick-pick becomes a project Library material on first use (name, words, unit size, drawn swatch), so the next pick is
+// instant; with an image AI set up, a sample sphere is drawn for it in the background (the catalogue's sphere prompt)
+async function quickItem(q) {
+  let it = quickHave(q); if (it) return it;
+  const f = quickFields(q), L = (V.G.library = V.G.library || { items: [] });
+  it = V.catalogue.blankItem("material", drawSwatch(f), q[1]);
+  Object.assign(it, { product: q[2], where: "External walls", tags: "quick-pick", quick: q[0], patterned: true, fields: { ...f }, scaleMm: f.scaleMm, unit: f.unit, notes: "A VizLab quick-pick: swap in the supplier's own sample picture when one is chosen." });
+  L.items.push(it); V.changed(); V.catalogue.refresh && V.catalogue.refresh();
+  sphereFor(it);
+  return it;
+}
+// (C3-12) every sphere started is said, with its cost: the ones started together (Ctrl+click picks) in one message
+let sphereNews = null;
+const sphereCost = () => { if (!V.aiReady || !V.aiReady() || !V.catalogueCost) return 0; try { return V.catalogueCost(1, engine()) || 0; } catch (e) { return 0; } };
+function sphereFor(it) {
+  if (it.sphere || !V.catalogueJob || !V.aiReady || !V.aiReady() || !V.starterTest || !V.starterTest.materialPrompt) return;
+  const e = engine(), cost = V.catalogueCost ? V.catalogueCost(1, e) : 0;
+  if (!sphereNews) {
+    sphereNews = { names: [], cost: 0 };
+    setTimeout(() => {
+      const sn = sphereNews; sphereNews = null; const k = sn.names.length;
+      V.toast(`Drawing ${k === 1 ? "a sample sphere" : `${k} sample spheres`} for ${sn.names.join(", ")} with ${V.engineName ? V.engineName(e.id) : e.name}${sn.cost ? ` (about ${V.money(sn.cost)}${k > 1 ? " in all" : ""})` : ""}; the drawn swatch stands in until it's ready`, false, 6000);
+    }, 400);
+  }
+  sphereNews.names.push(it.name); sphereNews.cost += cost;
+  it._drawing = true;
+  V.catalogueJob(V.starterTest.materialPrompt({ desc: it.product, scale: `${+((it.scaleMm || 1200) / 1000).toFixed(1)} m` }), e)
+    .then(async (url) => { const png = await V.catalogue.toPng(url, 1024); it.flat = it.flat || it.img; it.img = png; it.sphere = true; V.changed(); V.catalogue.refresh && V.catalogue.refresh(); sync(); })
+    .catch((er) => console.warn("quick-pick sphere", er)).finally(() => { delete it._drawing; });
+}
+// several picks at once (Ctrl+click): the first is the material, the rest its options
+function pickedMany(n, o, mats) {
+  if (!mats.length) return;
+  if (o.zone) {
+    queue(async () => {
+      const ms = []; for (const m of mats) ms.push(await libFor(m).catch(() => m));
+      const l = layerOf(n), z = zoneOf(l, o.zone); if (!z || A().node() !== n) return;
+      const hs = z.mat ? null : await matHue(ms[0]).catch(() => null);
+      edit(n, z.id, (L, Z) => {
+        const all = (Z.mat ? [Z.mat, ...(Z.opts || []), ...ms] : [...ms, ...(Z.opts || [])]).filter((m, i, a) => a.findIndex((q) => sameMat(q, m)) === i).slice(0, MAXOPT); // (the material it has stays: the picks join it as options)
+        Z.mat = { ...all[0] }; if (!Z.named) Z.name = Z.mat.name; Z.opts = all.slice(1); if (hs) fitWith(L, Z, hs); L.active = Z.id;
+      });
+    });
+    return;
+  }
+  picked(n, o, mats[0]);
+  queue(async () => {
+    const rest = []; for (const m of mats.slice(1)) rest.push(await libFor(m).catch(() => m));
+    const l = layerOf(n), z = zoneOf(l, l && l.active); if (z && z.mat) edit(n, z.id, (L, Z) => { Z.opts = [...(Z.opts || []), ...rest].filter((m) => !sameMat(m, Z.mat)).slice(0, MAXOPT - 1); });
+    V.toast(`${mats.length} options for one material: paint its surfaces, then press Render ${mats.length} options in the Materials list`, false, 6000);
+  });
+}
+
+// ---------- (3) options per zone (journey-materials:big:1, MAT-11) ----------
+const MAXOPT = 4;
+const cands = (z) => (z && z.mat ? [z.mat, ...(z.opts || [])] : []);
+let optRun = null; // { node, zone, mat, i } while one option's job is put together (V.matKeyFor)
+const lastSet = new Map(), sending = new Map(); // sending: set id -> the materials still being sent (the strip's placeholders)
+function optBlock(n, l, z, i) {
+  const cs = cands(z); if (cs.length < 2) return null;
+  const Lt = LETTERS[i], each = V.costEach ? V.costEach() : 0;
+  const keep = (fn) => edit(n, z.id, fn);
+  // (v3.74 C3 fix) one number per option everywhere: once a set has been rendered, each option keeps the number its render
+  // has in the strip, the Options sheet and the captions (Choose or Use only moves the "in use" mark, not the numbers)
+  const sid = optSetOf(n), done = sid ? optList(sid).filter((x) => x.option.zone === z.id) : [], used = new Set();
+  const rows = cs.map((m, k) => { const x = done.find((y) => sameMat(y.option.mat, m)); const num = x && !used.has(x.option.i) ? x.option.i + 1 : 0; if (num) used.add(num - 1); return { m, k, num }; });
+  let next = 1; rows.forEach((r) => { if (!r.num) { while (used.has(next - 1)) next++; r.num = next; used.add(next - 1); } });
+  if (done.length) rows.sort((a, b) => a.num - b.num);
+  return h("div", { class: "mopts", "data-zone": z.id },
+    ...rows.map(({ m, k, num }) => h("div", { class: "moptrow" + (k ? "" : " on") },
+      h("img", { class: "moptsw", src: matPic(m) || "", alt: "" }),
+      h("span", { class: "moptbody" },
+        h("span", { class: "moptn", title: m.words || m.name }, h("b", {}, `${Lt}${num}`), " ", m.name),
+        k ? h("button", { class: "mini moptuse", title: `Make ${m.name} the material for ${Lt} (the others stay as options)`, onclick: (e) => { e.stopPropagation(); keep((L, Z) => { const all = cands(Z); Z.mat = { ...all[k] }; if (!Z.named) Z.name = Z.mat.name; Z.opts = all.filter((q, j) => j !== k); }); } }, "Use") : h("small", { class: "moptnow" }, "in use")),
+      h("button", { class: "lx", title: k ? `Take ${m.name} out of the options` : `Take ${m.name} out (the next option becomes the material)`, "aria-label": `Remove option ${Lt}${num}`, onclick: (e) => { e.stopPropagation(); keep((L, Z) => { const all = cands(Z).filter((q, j) => j !== k); Z.mat = { ...all[0] }; if (!Z.named) Z.name = Z.mat.name; Z.opts = all.slice(1); }); } }, "×"))),
+    h("div", { class: "moptfoot" },
+      h("button", { class: "mini mgo", title: `One render for each option: the same picture and words, only ${Lt}'s material changes. They come back side by side under the picture`, onclick: (e) => { e.stopPropagation(); renderOptions(n, z.id); } }, `Render ${cs.length} options`),
+      each ? h("small", { class: "mcap" }, `~${V.money(each * cs.length)} (${cs.length} × ~${V.money(each)})`) : null));
+}
+async function renderOptions(n, zid) {
+  if (!V.makeEditFor) return V.toast("Rendering options needs the Image panel: open it and try again", true);
+  if (V.matTool.idle) await V.matTool.idle();
+  const l = layerOf(n), z = zoneOf(l, zid), cs = cands(z); if (!z || cs.length < 2) return;
+  if (!z.px) return V.toast(`Paint ${letterOf(l, z)}'s surfaces first, then Render options`, true, 5000);
+  const set = V.uid(), title = (V.nodeTitle ? V.nodeTitle(n) : n.label) || "Picture", Lt = letterOf(l, z), made = [];
+  V.toast(`Sending ${cs.length} options for ${Lt} · ${z.name}…`, false, 3000);
+  sending.set(set, cs.map((m) => ({ ...m }))); // (the strip shows a card for every option from the first one sent)
+  try {
+    for (let i = 0; i < cs.length; i++) {
+      const before = new Set(V.G.nodes.map((x) => x.id)); let ok = false;
+      optRun = { node: n.id, zone: z.id, mat: cs[i], i };
+      try { ok = await V.makeEditFor(n); } catch (e) { V.toast(e.message || String(e), true); } finally { optRun = null; }
+      const fresh = V.G.nodes.filter((x) => !before.has(x.id) && x.type === "image");
+      fresh.forEach((x) => { x.option = { id: set, i, n: cs.length, name: cs[i].name, zone: z.id, letter: Lt, of: n.id, mat: { ...cs[i] } }; x.label = `${title} · ${cs[i].name}`; made.push(x); });
+      if (!ok && !fresh.length) break;
+    }
+  } finally { sending.delete(set); paintOptStrip(true); }
+  if (!made.length) return;
+  V.lastMade = null; // (the options land in the strip: the picture you are painting stays on the stage, with no "Option made" hint for one of them)
+  lastSet.set(n.id, set); V.render(); V.changed(); paintOptStrip(true);
+  V.toast(`${made.length} option${made.length === 1 ? "" : "s"} on the way: they show side by side under the picture, each with Choose`, false, 6000);
+}
+
+// ---------- the options strip (under the picture in Picture view; the film-strip's group for one set) ----------
+const ostrip = h("div", { class: "mostrip", id: "mOptStrip", hidden: true, role: "region", "aria-label": "Material options" });
+{ const ds = $("#dstatus"); if (ds) ds.after(ostrip); else if ($("#viewer")) $("#viewer").append(ostrip); }
+// --osh: the height the strip takes from the picture (the Materials list ends above it); --ooh: the height it lies over the
+// picture's foot when a short screen shows it as an overlay (C3-3: fold, never shrink; the stage keeps its size)
+const ostripSize = () => { const v = $("#viewer"); if (!v) return; const hgt = ostrip.hidden ? 0 : ostrip.offsetHeight, over = !ostrip.hidden && getComputedStyle(ostrip).position === "absolute"; v.style.setProperty("--osh", (over ? 0 : hgt) + "px"); v.style.setProperty("--ooh", (over ? hgt : 0) + "px");
+  { const side = ["#matPanel", "#layersPanel"].map((q) => $(q)).filter((e) => e && !e.hidden && e.offsetWidth); v.style.setProperty("--msidew", (side.length ? Math.max(...side.map((e) => e.offsetWidth)) : 0) + "px"); } };
+new ResizeObserver(ostripSize).observe(ostrip); addEventListener("resize", ostripSize);
+// (v3.74 C3 fix) the cards fit the strip's width; if a narrow strip still can't show them all, its right edge fades while
+// more cards are off to the side, so a half-cut card never looks like the end of the row
+// (v3.74 C3 fix 3) --ocn = how many whole cards fit (each picture stays big: never four tiny ones); the rest are a scroll
+// away behind the < > arrows, which show only when there is more that way
+const oMore = () => {
+  const c = ostrip.querySelector(".mocards"); if (!c) return;
+  const over = getComputedStyle(ostrip).position === "absolute", minW = over ? 236 : 170, all = c.children.length;
+  const fit = Math.max(1, Math.min(all, Math.floor((c.clientWidth + 10) / (minW + 10))));
+  if (ostrip.style.getPropertyValue("--ocn") !== String(fit)) ostrip.style.setProperty("--ocn", String(fit));
+  const r = c.scrollWidth - c.scrollLeft - c.clientWidth > 4, l = c.scrollLeft > 4, nav = ostrip.querySelector(".monav");
+  if (!nav) return;
+  nav.hidden = fit >= all;
+  const k = c.firstElementChild, i0 = k ? Math.min(all - fit, Math.round(c.scrollLeft / (k.offsetWidth + 10))) : 0;
+  const cnt = nav.querySelector(".mocount"), hd = ostrip.querySelector(".mohead"), say = fit === 1 ? `${i0 + 1} of ${all}` : `${i0 + 1}–${i0 + fit} of ${all}`;
+  cnt.textContent = say; cnt.hidden = false; if (hd && hd.scrollWidth > hd.clientWidth + 1) cnt.hidden = true; // (a narrow strip keeps every button whole: the count goes first)
+  const [pv, nx] = nav.querySelectorAll(".moarr"); pv.disabled = !l; nx.disabled = !r;
+  for (const [b, t] of [[pv, `Earlier options (showing ${say})`], [nx, `More options (showing ${say})`]]) { b.title = t; b.setAttribute("aria-label", t); }
+};
+const oStep = (d) => { const c = ostrip.querySelector(".mocards"), k = c && c.firstElementChild; if (k) c.scrollBy({ left: d * (k.offsetWidth + 10), behavior: V.motionOn && !V.motionOn() ? "auto" : "smooth" }); };
+ostrip.addEventListener("scroll", oMore, true); new ResizeObserver(oMore).observe(ostrip);
+// folded: the architect's last choice; until then folded on a short screen (fold, never shrink: the picture keeps its room)
+let ostripKey = "", cmpA = null, oFold0 = V.store.get("mOptFold", null), oFold = oFold0 === true;
+const foldNow = () => (oFold0 == null ? innerHeight < 860 : oFold);
+const optSetOf = (n) => { if (!n) return null; if (n.option) return n.option.id; const own = V.G.nodes.filter((x) => x.option && x.option.of === n.id).sort((a, b) => (b.created || 0) - (a.created || 0))[0]; return own ? own.option.id : null; };
+const optList = (set) => V.G.nodes.filter((x) => x.option && x.option.id === set && x.type === "image").sort((a, b) => a.option.i - b.option.i || (a.outIndex || 0) - (b.outIndex || 0));
+function paintOptStrip(force) {
+  const n = V.selNodes ? V.selNodes()[0] : null, on = !!(V.pictureView && V.pictureView()) && V.viewerMode !== "compare" && V.viewerMode !== "touch";
+  const set = on ? optSetOf(n) : null, list = set ? optList(set) : [];
+  if (!list.length) { if (!ostrip.hidden) { ostrip.hidden = true; ostrip.replaceChildren(); $("#viewer").classList.remove("hasostrip", "ostripopen"); } ostripKey = ""; return; }
+  const prog = (x) => (x.status === "done" ? "" : V.jobClock ? Math.round(V.jobClock.state(x).p * 20) : 0);
+  const pend = sending.get(set), fold = foldNow(), key = [set, n.id, fold, cmpA, pend ? pend.length : 0, ...list.map((x) => [x.id, x.status, x.thumb ? 1 : 0, x.pick ? 1 : 0, x.rejected ? 1 : 0, prog(x)].join(":"))].join("|");
+  if (!force && key === ostripKey && !ostrip.hidden) return; ostripKey = key;
+  ostrip.hidden = false; $("#viewer").classList.add("hasostrip"); ostrip.classList.toggle("fold", fold); $("#viewer").classList.toggle("ostripopen", !fold); // (open, it stands in for the film-strip: the same renders)
+  const o0 = list[0].option, src = V.node(o0.of), chosen = list.find((x) => x.pick), ready = list.filter((x) => x.status === "done" && x.url);
+  const head = h("div", { class: "mohead" },
+    h("button", { class: "mofold", "aria-label": fold ? "Show the options" : "Fold the options away", "aria-expanded": fold ? "false" : "true", title: fold ? "Show the options" : "Fold the options away (more room for the picture)", onclick: () => { oFold = oFold0 = !fold; V.store.set("mOptFold", oFold); paintOptStrip(true); } }, h("i", { class: "ic " + (fold ? "ic-chev-up" : "ic-chev"), "aria-hidden": "true" })),
+    h("b", {}, `Options for ${o0.letter}`), (() => { const tot = Math.max(list.length, o0.n || 0, pend ? pend.length : 0), t = `${tot} render${tot === 1 ? "" : "s"} of ${src ? (V.nodeTitle ? V.nodeTitle(src) : src.label) : "the picture"}, one material each${chosen ? ` · chosen: ${chosen.option.name}` : ""}`; return h("small", { title: t }, t); })(),
+    h("span", { class: "mobtnrow" }, // (C3-7: the header stays one line; the small text gives way with an ellipsis)
+      chosen && chosen.url ? h("button", { class: "mini", title: `Lift ${chosen.option.name} into SketchUp: cut it out of the chosen render, straighten it and make it a seamless SketchUp texture at its real size`, onclick: () => liftMaterial(chosen) }, "Lift into SketchUp…") : null,
+      h("button", { class: "mini", disabled: ready.length < 2, title: ready.length < 2 ? "Wait for two options to finish" : "One Sheets page with these renders in a row, each titled with its material", onclick: () => optionsSheet(list) }, "Options sheet")));
+  const cards = fold ? null : h("div", { class: "mocards" }, ...list.map((x) => {
+    const done = x.status === "done" && x.url, st = !done && V.jobClock ? V.jobClock.state(x) : null, isA = cmpA === x.id;
+    return h("div", { class: "mocard" + (x === n ? " cur" : "") + (x.pick ? " picked" : "") + (x.rejected ? " aside" : "") },
+      h("button", { class: "mopic", title: done ? `Show ${x.option.name} big` : "Still rendering", onclick: () => { if (x !== n) V.setSel([x.id]); } },
+        done ? h("img", { src: x.thumb || x.url, alt: x.option.name }) : h("span", { class: "mowait" }, x.status === "error" ? "Failed" : "Rendering…", st ? h("i", { class: "mobar" }, h("i", { style: `width:${Math.round(st.p * 100)}%` })) : null),
+        x.pick ? h("span", { class: "mochosen" }, h("i", { class: "ic ic-check", "aria-hidden": "true" }), "Chosen") : null),
+      h("div", { class: "mometa" }, h("img", { class: "mosw", src: matPic(x.option.mat) || "", alt: "" }), h("span", { class: "mon", title: `${x.option.letter}${x.option.i + 1} ${x.option.name}` }, h("b", {}, `${x.option.letter}${x.option.i + 1}`), " ", x.option.name)),
+      h("div", { class: "mobtns" },
+        h("button", { class: "mini" + (x.pick ? " on" : ""), disabled: !done, title: x.pick ? "This is the chosen material" : `Use ${x.option.name} for ${x.option.letter}: the other options are set aside`, onclick: () => chooseOption(x) }, x.pick ? "Chosen" : "Choose"),
+        h("button", { class: "mini" + (isA ? " on" : ""), disabled: !done || ready.length < 2, "aria-pressed": isA ? "true" : "false", title: isA ? "Now press Compare on the other one" : "Compare this one with another option, side by side", onclick: () => compareOpt(x) }, isA ? "Compare with…" : "Compare")));
+  }), ...(pend ? pend.map((m, i) => (list.some((x) => x.option.i === i) ? null : h("div", { class: "mocard mowaitcard" }, // (v3.74 C3 fix) the options not sent yet
+    h("span", { class: "mopic" }, h("span", { class: "mowait" }, "Waiting to send…")),
+    h("div", { class: "mometa" }, h("img", { class: "mosw", src: matPic(m) || "", alt: "" }), h("span", { class: "mon", title: `${o0.letter}${i + 1} ${m.name}` }, h("b", {}, `${o0.letter}${i + 1}`), " ", m.name)),
+    h("div", { class: "mobtns" }, h("button", { class: "mini", disabled: true }, "Choose"), h("button", { class: "mini", disabled: true }, "Compare"))))).filter(Boolean) : []));
+  const sl = (ostrip.querySelector(".mocards") || {}).scrollLeft || 0; // (kept through a repaint: progress repaints the strip)
+  if (cards) head.lastElementChild.prepend(h("span", { class: "monav", hidden: true }, // (C3 fix 3) "< 1-2 of 4 >": the cards that don't fit are a click away
+    h("button", { class: "moarr prev", "aria-label": "Earlier options", title: "Earlier options", onclick: () => oStep(-1) }, h("i", { class: "ic ic-chev-left", "aria-hidden": "true" })),
+    h("span", { class: "mocount", "aria-live": "polite" }),
+    h("button", { class: "moarr next", "aria-label": "More options", title: "More options", onclick: () => oStep(1) }, h("i", { class: "ic ic-chev-right", "aria-hidden": "true" }))));
+  ostrip.replaceChildren(head, ...(cards ? [cards] : []));
+  if (cards && sl) cards.scrollLeft = sl;
+  ostripSize(); oMore();
+}
+setInterval(() => { try { paintOptStrip(); if (!ostrip.hidden) ostripSize(); } catch (e) { console.warn(e); } }, 700);
+function compareOpt(x) {
+  if (!cmpA || cmpA === x.id || !V.node(cmpA)) { cmpA = cmpA === x.id ? null : x.id; return paintOptStrip(true); }
+  const a = V.node(cmpA); cmpA = null; paintOptStrip(true);
+  V.compareTwo([a, x]);
+  if (V.openPicture && V.pictureView && !V.pictureView()) V.openPicture({ mode: "compare" }); // (leaving Draw may have closed Picture view: Compare shows big)
+}
+async function chooseOption(x) {
+  const o = x.option, src = V.node(o.of), sibs = optList(o.id);
+  V.snapshot && V.snapshot();
+  sibs.forEach((y) => { delete y.pick; if (y !== x) y.rejected = true; }); delete x.rejected; x.pick = true;
+  const l = src && layerOf(src), z = l && zoneOf(l, o.zone);
+  if (z) {
+    const hs = await matHue(o.mat).catch(() => null);
+    const fn = (L, Z) => { const all = cands(Z); Z.mat = { ...o.mat }; if (!Z.named) Z.name = o.mat.name; Z.opts = all.filter((m) => !sameMat(m, o.mat)).slice(0, MAXOPT - 1); fitWith(L, Z, hs); };
+    if (A() && A().node() === src) edit(src, z.id, fn); else fn(l, z);
+  }
+  V.render(); V.changed(); paintOptStrip(true); sync();
+  V.toast(`${o.name} chosen for ${o.letter}${z ? "" : " (the picture's Material map is gone, so only the render is marked)"}. The other options are set aside; they stay in the strip.`, false, 8000, { action: { label: "Lift into SketchUp…", run: () => liftMaterial(x) } });
+}
+// (5) the options board (journey-materials:big:5): C2's V.sheetsFromPicks when it is there, else Sheets' own one-page layout
+function optionsSheet(list) {
+  const done = list.filter((x) => x.status === "done" && x.url); if (done.length < 2) return V.toast("Wait for at least two options to finish", true);
+  const title = `${done[0].option.letter} options: ${done.map((x) => x.option.name).join(" · ")}`;
+  if (V.optionsSheet) { // (C2: one page per view, the options side by side; C3-4: the page titled with the view and the option set,
+    // each frame with its key letter and material, and the swatches passed along for when Sheets can show them)
+    const o0 = done[0].option, src = V.node(o0.of), vn = (src && (V.nodeTitle ? V.nodeTitle(src) : src.label)) || "Picture";
+    return Promise.resolve(V.optionsSheet({ board: o0.id, title: `${vn} · options for ${o0.letter}`, swatches: Object.fromEntries(done.map((x) => [x.id, matPic(x.option.mat)])) })).then((r) => {
+      try {
+        const S0 = V.sheetsTest && V.sheetsTest.S; if (!r || !S0) return r;
+        (r.pages || []).forEach((pi) => { const pg = S0.pages[pi]; if (!pg) return;
+          if (!/options for/i.test(pg.title || "")) pg.title = `${pg.title || vn} · options for ${o0.letter}`;
+          pg.frames.forEach((f) => { const x = done.find((y) => y.id === f.node); if (x) f.caption = `${x.option.letter}${x.option.i + 1} ${x.option.name}`; }); });
+        V.G.sheets = S0; V.changed(); if (V.sheetsTest.select) V.sheetsTest.select(null);
+      } catch (e) { console.warn("options sheet titles", e); }
+      return r;
+    });
+  }
+  if (V.sheetsFromPicks) return V.sheetsFromPicks(done, { title });
+  if (!V.openSheets) return V.toast("Sheets isn't available here", true);
+  V.openSheets(done);
+  setTimeout(() => { // the pictures in a row on one page (Sheets' "Three across"), the page titled with the materials
+    try {
+      const T = V.sheetsTest, S0 = T && T.S; if (!S0 || !T.applyLayout) return;
+      const pg = S0.pages.find((p) => p.frames.some((f) => f.node === done[0].id)); if (!pg) return;
+      const lay = { 2: "2h", 3: "3c", 4: "4c" }[done.length];
+      if (lay && pg.layout !== lay) T.applyLayout(pg, lay);
+      pg.frames.forEach((f) => { const x = done.find((y) => y.id === f.node); if (x && !f.caption) f.caption = x.option.name; }); // (the frame's title: the material's short name)
+      if (!pg.title) pg.title = title;
+      V.G.sheets = S0; V.changed(); if (T.select) T.select(null);
+      V.toast(`Options sheet made: ${done.length} renders in a row, each titled with its material`, false, 5000);
+    } catch (e) { console.warn("options sheet", e); }
+  }, 150);
+}
+
+// ---------- (4) Lift this material into SketchUp (journey-materials:big:2, MAT-2) ----------
+let liftBox = null;
+const itemForMat = async (m) => { if (!m) return null; if (m.src === "lib") return V.libraryItem(m.id); let id = m.libId; if (!id || !V.libraryItem(id)) { const r = await libFor(m).catch(() => null); id = r && r.libId; } return id ? V.libraryItem(id) : null; };
+// the zone's biggest piece at up to 512 px: its four outer corners (the bounding quad, as fractions) and its mask
+function bigPiece(l, lab, slot) {
+  const sc = Math.min(1, 512 / Math.max(l.w, l.h)), pw = Math.max(1, Math.round(l.w * sc)), ph = Math.max(1, Math.round(l.h * sc)), G = new Uint8Array(pw * ph);
+  for (let y = 0; y < ph; y++) { const o = Math.min(l.h - 1, ((y + 0.5) / sc) | 0) * l.w; for (let x = 0; x < pw; x++) G[y * pw + x] = lab[o + Math.min(l.w - 1, ((x + 0.5) / sc) | 0)] === slot ? 1 : 0; }
+  const seen = new Uint8Array(pw * ph); let best = null;
+  for (let i0 = 0; i0 < G.length; i0++) {
+    if (!G[i0] || seen[i0]) continue;
+    const px = []; const st = [i0]; seen[i0] = 1;
+    while (st.length) { const q = st.pop(), qx = q % pw; px.push(q); for (const u of [qx > 0 ? q - 1 : -1, qx < pw - 1 ? q + 1 : -1, q - pw, q + pw]) if (u >= 0 && u < G.length && G[u] && !seen[u]) { seen[u] = 1; st.push(u); } }
+    if (!best || px.length > best.length) best = px;
+  }
+  if (!best || best.length < 0.002 * G.length) return null;
+  let tl = null, tr = null, br = null, bl = null;
+  for (const q of best) { const x = q % pw, y = (q / pw) | 0; if (!tl || x + y < tl[0] + tl[1]) tl = [x, y]; if (!br || x + y > br[0] + br[1]) br = [x + 1, y + 1]; if (!tr || x - y > tr[0] - tr[1]) tr = [x + 1, y]; if (!bl || x - y < bl[0] - bl[1]) bl = [x, y + 1]; }
+  const m = mk(pw, ph), mx = m.getContext("2d"), d = mx.createImageData(pw, ph); for (const q of best) { const j = q * 4; d.data[j] = d.data[j + 1] = d.data[j + 2] = d.data[j + 3] = 255; }
+  mx.fillStyle = "#000"; mx.fillRect(0, 0, pw, ph); const t = mk(pw, ph); t.getContext("2d").putImageData(d, 0, 0); mx.drawImage(t, 0, 0);
+  return { quad: [tl, tr, br, bl].map(([x, y]) => [x / pw, y / ph]), mask: m, frac: best.length / G.length };
+}
+// the largest square of the material (mask white) in a canvas: { x, y, s } in its pixels (worked out at 256 px or less)
+function maxSquare(c, minM = 0) {
+  const k = Math.min(1, 256 / Math.max(c.width, c.height)), w = Math.max(1, Math.round(c.width * k)), hh = Math.max(1, Math.round(c.height * k)), t = mk(w, hh), x = t.getContext("2d");
+  x.drawImage(c, 0, 0, w, hh); const p = x.getImageData(0, 0, w, hh).data, D = new Uint16Array(w * hh); let b = 0, bi = -1;
+  for (let y = 0; y < hh; y++) for (let X = 0; X < w; X++) { const i = y * w + X; if (p[i * 4] < 200) continue; D[i] = X && y ? 1 + Math.min(D[i - 1], D[i - w], D[i - w - 1]) : 1; if (D[i] > b) { b = D[i]; bi = i; } }
+  if (bi < 0) return null;
+  // (C3-2) kept well inside the clear area: the square found at the small size can reach a pixel or two past it in the full
+  // picture, and window frames, mask edges or shadow lines at its border become bands at every tile edge
+  const s0 = b / k, x0 = ((bi % w) + 1) / k - s0, y0 = (((bi / w) | 0) + 1) / k - s0, m = Math.max(2 / k, 0.06 * s0, minM), s = s0 - 2 * m;
+  return s > 0 ? { x: x0 + m, y: y0 + m, s } : null;
+}
+// (v3.74 C3 fix) a thin line of another surface caught at the edge of the square (the foot of the next wall, a window
+// frame) repeats in a grid once the tile is made seamless: rows or columns near the edge with far more off-colour pixels
+// than the middle has are cut off, and the biggest square left is kept. { x, y, s } in pic's pixels
+function trimStreaks(pic, sq) {
+  const k = Math.min(1, 128 / sq.s), n = Math.max(8, Math.round(sq.s * k)), t = mk(n, n), x = t.getContext("2d");
+  x.drawImage(pic, sq.x, sq.y, sq.s, sq.s, 0, 0, n, n); const d = x.getImageData(0, 0, n, n).data, Y = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) Y[i] = 0.3 * d[i * 4] + 0.59 * d[i * 4 + 1] + 0.11 * d[i * 4 + 2];
+  const M = Float32Array.from(Y).sort()[(n * n) >> 1], row = new Float32Array(n), col = new Float32Array(n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (Math.abs(Y[j * n + i] - M) > 28) { row[j] += 1 / n; col[i] += 1 / n; }
+  const mid = (a) => { let m = 0; for (let i = Math.round(n * 0.35); i < Math.round(n * 0.65); i++) m = Math.max(m, a[i]); return m; };
+  const lim = (a) => Math.max(0.12, 2 * mid(a) + 0.05), lr = lim(row), lc = lim(col), edge = Math.round(n * 0.35);
+  let y0 = 0, y1 = n, x0 = 0, x1 = n;
+  for (let i = 0; i < edge; i++) { if (row[i] > lr) y0 = i + 2; if (row[n - 1 - i] > lr) y1 = Math.min(y1, n - 3 - i); if (col[i] > lc) x0 = i + 2; if (col[n - 1 - i] > lc) x1 = Math.min(x1, n - 3 - i); }
+  if (!y0 && !x0 && y1 === n && x1 === n) return sq;
+  const s = Math.min(x1 - x0, y1 - y0); if (s < n * 0.4) return sq; // (mostly lines: a pattern, leave it to the seam check)
+  return { x: sq.x + (x0 + (x1 - x0 - s) / 2) / k, y: sq.y + (y0 + (y1 - y0 - s) / 2) / k, s: s / k };
+}
+// (C3-2) does a tile repeat cleanly? Its wrap-around seams (sumat seamScore, about 1 or less when seamless) and how far the
+// brightness of the band along its edges strays from its middle (grey levels): { seam, band, ok }
+async function tileCheck(src) {
+  const sc = V.suMatTest.seamScore ? await V.suMatTest.seamScore(src) : { x: 1, y: 1 }, im = await V.loadImg(src), W = im.naturalWidth, H = im.naturalHeight;
+  const c = mk(W, H), x = c.getContext("2d"); x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, W, H).data, col = new Float32Array(W), row = new Float32Array(H);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const p = (j * W + i) * 4, v = (d[p] + d[p + 1] + d[p + 2]) / 3; col[i] += v / H; row[j] += v / W; }
+  const mid = (a) => { const q = Math.round(a.length * 0.3); let t = 0; for (let i = q; i < a.length - q; i++) t += a[i]; return t / Math.max(1, a.length - 2 * q); };
+  const edge = (a) => { const b = Math.max(1, Math.round(a.length * 0.14)), m0 = mid(a); let worst = 0; for (let i = 0; i < b; i++) worst = Math.max(worst, Math.abs(a[i] - m0), Math.abs(a[a.length - 1 - i] - m0)); return worst; };
+  const seam = Math.max(sc.x, sc.y), band = Math.max(edge(col), edge(row));
+  return { seam, band, ok: seam < 2 && band < 8 };
+}
+// the repeat of boards, seams or courses across a straight-on crop, from the autocorrelation of its edge profile: { px, mm, what }
+function period(c, f) {
+  if (!f || !f.uw || /render|plain|stone/.test(f.kind)) return null;
+  const across = (f.kind === "boards" && f.pattern !== "horizontal") || f.kind === "seam", mm = f.kind === "brick" ? (f.uh || 65) + 10 : f.kind === "tile" || f.kind === "shingle" || f.kind === "panel" ? f.uh || f.uw : f.uw;
+  const W = c.width, H = c.height, d = c.getContext("2d").getImageData(0, 0, W, H).data, n = across ? W : H, prof = new Float32Array(n - 1);
+  const Y = (x, y) => { const j = (y * W + x) * 4; return 0.3 * d[j] + 0.59 * d[j + 1] + 0.11 * d[j + 2]; };
+  if (across) for (let x = 0; x < W - 1; x++) { let s = 0; for (let y = 0; y < H; y += 2) s += Math.abs(Y(x + 1, y) - Y(x, y)); prof[x] = s; }
+  else for (let y = 0; y < H - 1; y++) { let s = 0; for (let x = 0; x < W; x += 2) s += Math.abs(Y(x, y + 1) - Y(x, y)); prof[y] = s; }
+  const m = prof.reduce((a, b) => a + b, 0) / prof.length; for (let i = 0; i < prof.length; i++) prof[i] -= m;
+  const r = (lag) => { let s = 0, s0 = 0; for (let i = 0; i + lag < prof.length; i++) s += prof[i] * prof[i + lag]; for (let i = 0; i < prof.length; i++) s0 += prof[i] * prof[i]; return s0 ? s / s0 : 0; };
+  const rs = []; for (let lag = 0; lag < Math.floor(prof.length / 2); lag++) rs.push(lag < 4 ? 0 : r(lag));
+  let top = 0; rs.forEach((v) => (top = Math.max(top, v)));
+  for (let lag = 5; lag < rs.length - 1; lag++) if (rs[lag] >= 0.3 && rs[lag] >= 0.7 * top && rs[lag] >= rs[lag - 1] && rs[lag] >= rs[lag + 1]) return { px: lag, mm, what: f.kind === "brick" ? "brick courses" : across ? (f.kind === "seam" ? "seams" : "boards") : f.kind === "boards" ? "boards" : "courses" };
+  return null;
+}
+async function liftMaterial(x) {
+  const o = x && x.option, src = o && V.node(o.of), l = src && layerOf(src), z = l && zoneOf(l, o.zone);
+  if (!o || !x.url || x.status !== "done") return V.toast("Choose a finished option first", true);
+  if (!z) return V.toast("The picture's Material map is gone, so VizLab can't tell where the material is in the render", true, 6000);
+  if (!V.rectifyApi || !V.suMatTest || !V.suMatLift) return V.toast("Lifting a texture needs True elevation and SketchUp materials, which aren't loaded", true);
+  if (liftBox) liftBox._close();
+  const it = await itemForMat(o.mat); if (!it) return V.toast(`Couldn't find ${o.name} in this project's Library`, true);
+  const lab = await decode(l), P = bigPiece(l, lab, z.slot);
+  if (!P) return V.toast(`${o.letter} is painted only in small pieces: paint a bigger area of one wall to lift its material`, true, 6000);
+  const img = await V.loadImg(x.url), IW = img.naturalWidth, IH = img.naturalHeight, q = P.quad.map(([u, v]) => [u * IW, v * IH]);
+  const f = it.fields || (o.mat && o.mat.fields) || parseWords([it.product, it.name, it.unit].filter(Boolean).join(", ")), scale = it.scaleMm || f.scaleMm || 1200;
+  // the dialog: the render with the four corners (prefilled from the zone's outline), straighten or not, an optional width
+  const cv = h("canvas", { class: "mlcanvas", "aria-label": "The chosen render with the four corners of the wall" }), k = Math.min(Math.min(860, innerWidth * 0.86) / IW, (innerHeight * 0.46) / IH);
+  cv.width = Math.round(IW * k); cv.height = Math.round(IH * k);
+  const straight = h("input", { type: "radio", name: "mlhow", checked: true }), frontal = h("input", { type: "radio", name: "mlhow" });
+  const wHow = h("span", {}, "Real width of that wall (m)");
+  let lastCheck = null;
+  const wIn = h("input", { type: "number", min: "0", step: "0.01", placeholder: "optional, e.g. 6.40" }), stat = h("p", { class: "hint mlstat", role: "status" }), out = h("div", { class: "mlout" });
+  const main = h("div", { class: "mlmain" }, cv, out);
+  const goBtn = h("button", { class: "mini primary" }, "Make the texture"), close = () => { if (liftBox) { liftBox.remove(); liftBox = null; } };
+  const foot = h("div", { class: "row end" }, h("button", { class: "mini", onclick: () => close() }, "Cancel"), goBtn);
+  const draw = () => {
+    const c = cv.getContext("2d"); c.clearRect(0, 0, cv.width, cv.height); c.drawImage(img, 0, 0, cv.width, cv.height);
+    if (frontal.checked) return;
+    c.fillStyle = "rgba(0,0,0,.45)"; c.beginPath(); c.rect(0, 0, cv.width, cv.height); c.moveTo(q[0][0] * k, q[0][1] * k); [1, 2, 3, 0].forEach((i) => c.lineTo(q[i][0] * k, q[i][1] * k)); c.fill("evenodd");
+    c.strokeStyle = "#FAAF29"; c.lineWidth = 2; c.beginPath(); q.forEach((p, i) => (i ? c.lineTo(p[0] * k, p[1] * k) : c.moveTo(p[0] * k, p[1] * k))); c.closePath(); c.stroke();
+    q.forEach((p) => { c.fillStyle = "#FAAF29"; c.beginPath(); c.arc(p[0] * k, p[1] * k, 8, 0, 7); c.fill(); c.strokeStyle = "#000"; c.lineWidth = 1.5; c.stroke(); });
+  };
+  let drag = -1;
+  const at = (e) => { const r = cv.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * IW, ((e.clientY - r.top) / r.height) * IH]; };
+  cv.onpointerdown = (e) => { if (frontal.checked) return; const p = at(e); let bd = 1e9; q.forEach((c, i) => { const d = Math.hypot(c[0] - p[0], c[1] - p[1]); if (d < bd) { bd = d; drag = i; } }); if (bd * k > 30) drag = -1; else cv.setPointerCapture(e.pointerId); };
+  cv.onpointermove = (e) => { if (drag < 0) return; const p = at(e); q[drag] = [Math.max(0, Math.min(IW, p[0])), Math.max(0, Math.min(IH, p[1]))]; draw(); };
+  cv.onpointerup = () => { drag = -1; };
+  straight.onchange = frontal.onchange = () => { wHow.textContent = frontal.checked ? "Real width of the painted area (m)" : "Real width of that wall (m)"; draw(); }; // (C3-6: a width works both ways)
+  goBtn.onclick = async () => {
+    goBtn.disabled = true; stat.textContent = "Cutting it out and straightening it…"; await new Promise((r) => setTimeout(r, 30));
+    try {
+      const R = V.rectifyApi, big = mk(IW, IH), bx = big.getContext("2d"); bx.imageSmoothingEnabled = false; bx.drawImage(P.mask, 0, 0, IW, IH);
+      const mImg = await V.loadImg(big.toDataURL("image/png"));
+      let pic, msk;
+      if (!frontal.checked) {
+        const fl = R.focal(q, IW / 2, IH / 2), ratio = R.aspect(q, fl || Math.max(IW, IH), IW / 2, IH / 2), long = 1024;
+        const oW = Math.max(16, Math.round(ratio >= 1 ? long : long * ratio)), oH = Math.max(16, Math.round(ratio >= 1 ? long / ratio : long));
+        pic = R.warp(img, q, oW, oH, 0); msk = R.warp(mImg, q, oW, oH, 0);
+      } else { // a frontal view: the piece's box as it is
+        const xs = q.map((p) => p[0]), ys = q.map((p) => p[1]), x0 = Math.max(0, Math.min(...xs)), y0 = Math.max(0, Math.min(...ys)), bw = Math.max(16, Math.min(IW, Math.max(...xs)) - x0), bh = Math.max(16, Math.min(IH, Math.max(...ys)) - y0), s = Math.min(1, 1024 / Math.max(bw, bh));
+        pic = mk(bw * s, bh * s); pic.getContext("2d").drawImage(img, x0, y0, bw, bh, 0, 0, pic.width, pic.height);
+        msk = mk(bw * s, bh * s); msk.getContext("2d").drawImage(mImg, x0, y0, bw, bh, 0, 0, msk.width, msk.height);
+      }
+      // (C3-2) the mask is coarser than the render (one mask pixel = blk render pixels): stay that far inside its edges too
+      const xs0 = q.map((p) => p[0]), blk = IW / P.mask.width, span = Math.max(1, Math.max(...xs0) - Math.min(...xs0));
+      // (v3.74 C3 fix) and a little further in again (2% of the piece): an AI render moves edges by a few pixels, so the
+      // mask's edge can carry a sliver of the surface next to it; then any thin line left at the edge is cut off
+      const m0 = Math.ceil(blk * (pic.width / span)) + 2, sq1 = maxSquare(msk, m0 + Math.round(0.02 * Math.max(pic.width, pic.height)));
+      let sq = sq1 && sq1.s >= 48 ? sq1 : maxSquare(msk, m0);
+      if (sq && sq.s >= 96) sq = trimStreaks(pic, sq);
+      if (!sq || sq.s < 48) throw new Error("there isn't a big enough clear area of the material (windows and doors are left out): paint more of one wall, or move the corners");
+      const sqc = mk(sq.s, sq.s); sqc.getContext("2d").drawImage(pic, sq.x, sq.y, sq.s, sq.s, 0, 0, sq.s, sq.s);
+      const Wm = +wIn.value; let mmpx = null, how = "";
+      if (Wm > 0) { mmpx = (Wm * 1000) / pic.width; how = "from the width you typed"; } // (straightened: the wall's width; straight on: the painted piece's width)
+      else { const per = period(sqc, f); if (per) { mmpx = per.mm / per.px; how = `measured from its ${per.what} (${per.mm} mm each)`; } }
+      const side = mmpx ? Math.max(32, Math.min(sq.s, Math.round(scale / mmpx))) : sq.s, widthMm = mmpx ? Math.round(side * mmpx) : scale;
+      const crop = mk(side, side); crop.getContext("2d").drawImage(sqc, (sq.s - side) / 2, (sq.s - side) / 2, side, side, 0, 0, side, side);
+      const tile = await V.suMatTest.makeSeamless(crop.toDataURL("image/png"), { even: true });
+      const chk = await tileCheck(tile).catch(() => null); lastCheck = chk;
+      V.suMatLift(it, tile, widthMm, !!mmpx, x.id);
+      stat.textContent = `Done: a seamless tile ${widthMm} mm wide, ${mmpx ? how : `an estimate (no boards or courses could be measured: type the ${frontal.checked ? "painted area's" : "wall's"} real width above for an exact size)`}. It is now the SketchUp texture for ${it.name}.` +
+        (chk && !chk.ok ? " Its edges don't match its middle well, so a repeat may show in SketchUp: move the corners onto a plain stretch of the wall and make it again." : "");
+      main.classList.add("done"); // (the tile goes beside the picture, so it stays on a short screen)
+      out.replaceChildren(h("div", { class: "sumtile mltile", style: `background-image:url("${tile}")`, role: "img", "aria-label": "The new tile, repeated 3 × 3" }),
+        h("div", { class: "row wrap" }, h("button", { class: "mini primary", onclick: () => { close(); V.sendMaterialsToSketchUp([it], `${o.name}, lifted from ${V.nodeTitle ? V.nodeTitle(x) : "the render"}`); } }, "Send to SketchUp…"), h("button", { class: "mini", onclick: close }, "Close")));
+      goBtn.hidden = true; foot.hidden = true; // (Send and Close are beside the tile now: one amber button)
+    } catch (e) { stat.textContent = "Couldn't lift it: " + e.message; goBtn.disabled = false; }
+  };
+  liftBox = V.modal(h("div", { class: "modal mliftbox" }, h("div", { class: "mbox" },
+    h("button", { class: "mclose", title: "Close (Esc)", "aria-label": "Close", onclick: close }, "×"),
+    h("h3", {}, `Lift into SketchUp: ${o.name}`),
+    h("p", { class: "hint" }, `VizLab cuts ${o.letter}'s surfaces out of this render, straightens them and makes a seamless texture at the material's real size, so SketchUp gets exactly the material the render shows. The corners start on the outline of the biggest painted piece: drag them onto the wall's corners if they're off.`),
+    main,
+    h("div", { class: "row wrap mlopts" }, h("label", { class: "chk" }, straight, " A flat wall seen at an angle: straighten it"), h("label", { class: "chk" }, frontal, " Seen straight on: use it as it is"),
+      h("label", { class: "fl mlw" }, wHow, wIn)),
+    stat, foot)), { label: `Lift into SketchUp: ${o.name}` });
+  liftBox._close = close; liftBox._check = () => lastCheck;
+  liftBox.addEventListener("pointerdown", (e) => { if (e.target === liftBox) close(); });
+  document.body.append(liftBox); draw();
+}
+// (C3-10) the message after a normal Render from the view open in Draw (draw.js): point at + Add an option, not the old
+// swap-and-render loop; with options already set up on a zone, at Render options
+V.matMadeText = (n, names) => {
+  const l = n && layerOf(n), zs = l ? l.zones.filter((z) => z.mat && !z.hidden) : [], wo = zs.find((z) => cands(z).length > 1);
+  return `Render made${names ? ": " + names : ""}. ` + (wo ? `To compare ${letterOf(l, wo)}'s options side by side, press Render ${cands(wo).length} options in the Materials list` : "To try other materials on the same surfaces, use + Add an option in the Materials list, then Render options");
+};
+V.matOptions = { render: renderOptions, choose: chooseOption, lift: liftMaterial, sheet: optionsSheet, paint: paintOptStrip, setOf: optSetOf, list: optList,
+  test: { parseWords, drawSwatch, period, maxSquare, trimStreaks, bigPiece, joined, quickItem, QUICK, wallish, swatchOf } };
 
 V.matTest = { analyse, fill, decode, encode, keyImage, plan, PAL, board, sampleOf, wordHue, labelsNow, labSize, blank, newZone, assign, fitColour, matHue, clashes, matFromItem, matFromRal, matFromText, paintMask, clearSlot, zoneMaskPng, tint, legendLine, sampleSentence, edgeDist, mapOf, usable, capOf, KEY_STYLE, forget: () => { LRU.clear(); anCache.clear(); tintKey = ""; tintLab = null; }, tool: { S, layerOf, labs, idle: () => chain, found } };
 })();
@@ -12999,51 +15913,40 @@ const V = window.V, { $, h } = V;
 const cv = $("#canvas");
 
 // ---------- Tidy up ----------
-const COL = () => V.NODE_W + 110, ROW = () => V.NODE_H + 30, WRAP = 5;
+// v3.74 B1 (N5, ia-08): one view per row. Each version stack (canvas.js V.stacks: a view, or any picture without exactly
+// one parent, plus everything made from it along single-parent chains) takes a row: the root first, then its versions left
+// to right in the order they were made (spread; a long run wraps after 6), the next stack on the row below, each row as
+// tall as its tallest picture. Lone pictures (nothing made from them, made from nothing: added photos, PDF pages) go in one
+// block, side by side, up to 5 a row, where the first of them comes. Animated, undoable; folded-away pictures wait at
+// their parent and are laid out again when it unfolds.
+const COL = () => V.NODE_W + 40, GAP = 30, WRAP = 6;
 V.tidy = (animate = true) => {
   const hid = V.hiddenSet(), vis = V.G.nodes.filter((n) => !hid.has(n.id));
   if (vis.length < 2) return;
-  const visSet = new Set(vis.map((n) => n.id));
   const byPos = (a, b) => a.y - b.y || a.x - b.x || (a.created || 0) - (b.created || 0);
-  const kids = (n) => V.children(n.id).filter((c) => visSet.has(c.id)).sort(byPos);
-  const roots = vis.filter((n) => !V.parents(n.id).some((p) => visSet.has(p.id))).sort(byPos);
+  const sts = V.stacks().sort((a, b) => byPos(a.root, b.root));
   const X0 = Math.min(...vis.map((n) => n.x)), Y0 = Math.min(...vis.map((n) => n.y));
-  const pos = new Map(), done = new Set();
+  const pos = new Map(), hOf = (n) => V.nodeH(n);
   let next = Y0;
-  const place = (n, d) => {
-    done.add(n.id);
-    const ks = kids(n).filter((k) => !done.has(k.id));
-    ks.forEach((k) => done.add(k.id));
-    let ys = [];
-    // many versions: the ones with follow-ons keep a row each (their branches carry on to the right), and the
-    // finished ones with nothing made from them wrap into a compact block of columns instead of one tall column
-    const leaves = ks.filter((k) => !kids(k).some((c) => !done.has(c.id))), branches = ks.filter((k) => !leaves.includes(k));
-    for (const k of ks.length > WRAP ? branches : ks) { done.delete(k.id); place(k, d + 1); ys.push(pos.get(k.id).y); }
-    if (ks.length > WRAP && leaves.length) {
-      const rows = Math.min(WRAP, Math.ceil(leaves.length / Math.ceil(leaves.length / WRAP))), top = next;
-      leaves.forEach((k, i) => { const c = Math.floor(i / rows), r = i % rows; pos.set(k.id, { x: X0 + (d + 1 + c) * COL(), y: top + r * ROW() }); ys.push(top + r * ROW()); });
-      next = top + rows * ROW();
-    }
-    let y;
-    if (!ys.length) { y = next; next += ROW(); } else y = (Math.min(...ys) + Math.max(...ys)) / 2;
-    pos.set(n.id, { x: X0 + d * COL(), y });
-  };
-  // v3.69: pictures with nothing made from them and nothing they were made from (captures, added photos) go in one
-  // block, side by side, up to 5 a row, where the first of them comes, instead of one tall column
-  const lone = roots.filter((r) => !kids(r).length), GX = V.NODE_W + 40;
-  for (const r of roots) {
-    if (done.has(r.id)) continue;
-    if (lone.length > 1 && r === lone[0]) {
+  const isLone = (s) => !s.n && !V.parents(s.root.id).length, lone = sts.filter(isLone), rows = [];
+  let loneDone = false;
+  for (const s of sts) {
+    if (isLone(s) && lone.length > 1) {
+      if (loneDone) continue;
       const rows = Math.ceil(lone.length / 5), cols = Math.ceil(lone.length / rows);
-      lone.forEach((n, i) => { done.add(n.id); pos.set(n.id, { x: X0 + (i % cols) * GX, y: next + Math.floor(i / cols) * ROW() }); });
-      next += rows * ROW() + ROW() * 0.5; continue;
+      for (let r = 0; r < rows; r++) { const row = lone.slice(r * cols, (r + 1) * cols); row.forEach((l, i) => pos.set(l.root.id, { x: X0 + i * COL(), y: next })); next += Math.max(...row.map((l) => hOf(l.root))) + GAP; }
+      next += GAP / 2; loneDone = true; continue;
     }
-    place(r, 0); next += ROW() * 0.5;
+    const ms = s.members, lines = Math.ceil(ms.length / WRAP);
+    for (let l = 0; l < lines; l++) { const row = ms.slice(l * WRAP, (l + 1) * WRAP); row.forEach((m, i) => pos.set(m.id, { x: X0 + i * COL(), y: next })); next += Math.max(...row.map(hOf)) + GAP; }
+    next += GAP / 2;
+    if (s.n) rows.push(s.id); // (the row is the spread stack)
   }
-  for (const n of vis) if (!done.has(n.id)) { place(n, 0); next += ROW() * 0.5; } // loops, if any
   // folded-away nodes wait at their folded parent, and are laid out again when it unfolds
   for (const n of V.G.nodes) if (hid.has(n.id)) { const p = V.parents(n.id).map((q) => pos.get(q.id)).find(Boolean); if (p) pos.set(n.id, { ...p }); n._stacked = true; }
-  V.snapshot();
+  V.snapshot(); // (before the flags: Ctrl+Z brings the stacks back as they were, gathered or spread)
+  // the rows are marked "tidy", not true: Esc leaves them be (the badge, Space or the menu gathers one)
+  if (rows.length) { const ui = V.G.ui || (V.G.ui = {}); ui.spread = ui.spread || {}; rows.forEach((id) => { ui.spread[id] = "tidy"; }); }
   const from = new Map(V.G.nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
   const finish = () => { V.render(); V.changed(); V.fit(V.visibleNodes()); };
   if (!animate || !V.motionOn()) { for (const [id, p] of pos) Object.assign(V.node(id), p); return finish(); }
@@ -13094,20 +15997,30 @@ function drawMap() {
   mapRaf = 0; paintMapBtn(); if (map.hidden) return; sizeMap();
   const vis = V.visibleNodes(), r = cv.getBoundingClientRect(), { x, y, z } = V.G.view;
   const view = { x1: -x / z, y1: -y / z, x2: (r.width - x) / z, y2: (r.height - y) / z };
-  let x1 = Math.min(view.x1, ...vis.map((n) => n.x)), y1 = Math.min(view.y1, ...vis.map((n) => n.y));
-  let x2 = Math.max(view.x2, ...vis.map((n) => n.x + V.NODE_W)), y2 = Math.max(view.y2, ...vis.map((n) => n.y + V.NODE_H));
+  // (v3.74 B1) every card at its own height, where it is drawn; a gathered stack is one box at its root (its versions keep
+  // their own saved places underneath, not shown), its inner links left out
+  const box = (n) => (V.nodeBox ? V.nodeBox(n) : { x: n.x, y: n.y, w: V.NODE_W, h: V.NODE_H, ih: V.NODE_IMG_H });
+  const cards = vis.filter((n) => { const st = V.stackOf && V.stackOf(n); return !(st && st.gathered && n !== st.root); });
+  let x1 = Math.min(view.x1, ...cards.map((n) => box(n).x)), y1 = Math.min(view.y1, ...cards.map((n) => box(n).y));
+  let x2 = Math.max(view.x2, ...cards.map((n) => box(n).x + V.NODE_W)), y2 = Math.max(view.y2, ...cards.map((n) => box(n).y + box(n).h));
   const W = map.width, H = map.height, pad = 8, s = Math.min((W - pad * 2) / (x2 - x1), (H - pad * 2) / (y2 - y1));
   const ox = pad + (W - pad * 2 - (x2 - x1) * s) / 2 - x1 * s, oy = pad + (H - pad * 2 - (y2 - y1) * s) / 2 - y1 * s;
   mapBox = { s, ox, oy };
   const c = map.getContext("2d"); c.clearRect(0, 0, W, H);
   c.strokeStyle = "#ffffff22"; c.lineWidth = 1; c.beginPath();
-  for (const e of V.G.edges) { const a = V.node(e.from), b = V.node(e.to); if (!a || !b || V.isHidden(a.id) || V.isHidden(b.id)) continue; c.moveTo(ox + (a.x + V.NODE_W) * s, oy + (a.y + V.NODE_IMG_H / 2) * s); c.lineTo(ox + b.x * s, oy + (b.y + V.NODE_IMG_H / 2) * s); }
+  for (const e of V.G.edges) {
+    const a = V.node(e.from), b = V.node(e.to); if (!a || !b || V.isHidden(a.id) || V.isHidden(b.id)) continue;
+    const sa = V.stackOf && V.stackOf(a), sb = V.stackOf && V.stackOf(b); if (sa && sa === sb && sa.gathered) continue;
+    const ba = box(a), bb = box(b);
+    c.moveTo(ox + (ba.x + V.NODE_W) * s, oy + (ba.y + ba.ih / 2) * s); c.lineTo(ox + bb.x * s, oy + (bb.y + bb.ih / 2) * s);
+  }
   c.stroke();
   const sel = new Set(V.sel);
-  for (const n of vis) {
-    c.fillStyle = sel.has(n.id) ? "#FAAF29" : n.status === "done" ? "#9a9da3" : n.status === "error" ? "#c0504d" : "#5c5f64";
-    if (V.nodeDim && V.nodeDim(n)) c.fillStyle = "#3a3c40";
-    c.fillRect(ox + n.x * s, oy + n.y * s, Math.max(2, V.NODE_W * s), Math.max(2, V.NODE_IMG_H * s));
+  for (const n of cards) {
+    const st = V.stackOf && V.stackOf(n), ms = st && st.gathered ? st.members : [n], b = box(n);
+    c.fillStyle = ms.some((m) => sel.has(m.id)) ? "#FAAF29" : n.status === "done" ? "#9a9da3" : n.status === "error" ? "#c0504d" : "#5c5f64";
+    if (V.nodeDim && ms.every((m) => V.nodeDim(m))) c.fillStyle = "#3a3c40";
+    c.fillRect(ox + b.x * s, oy + b.y * s, Math.max(2, V.NODE_W * s), Math.max(2, b.ih * s));
   }
   c.strokeStyle = "#FAAF29"; c.lineWidth = 1.5;
   c.strokeRect(ox + view.x1 * s, oy + view.y1 * s, (view.x2 - view.x1) * s, (view.y2 - view.y1) * s);
@@ -13142,7 +16055,12 @@ function search() {
   const q = input.value.trim().toLowerCase();
   if (!q) { matches = []; V.nodeDim = null; count.textContent = ""; V.render(); return; }
   const fav = /★|\bfav(ourite)?s?\b/.test(q), words = q.replace(/★|\bfav(ourite)?s?\b/g, "").split(/\s+/).filter(Boolean);
-  matches = V.G.nodes.filter((n) => (!fav || n.fav) && words.every((w) => textOf(n).includes(w))).sort((a, b) => a.x - b.x || a.y - b.y);
+  // (IB-9) the closest first: the words as typed are the picture's whole name ("Render 1", not "Render 12"), then its name
+  // holds them, then the rest; each in canvas order
+  const ph = words.join(" "), exact = ph && new RegExp("(^|[^a-z0-9])" + ph.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-z0-9])");
+  const nameOf = (n) => [n.label, V.nodeTitle && V.nodeTitle(n)].filter(Boolean).join(" · ").toLowerCase();
+  const rank = (n) => { const t = nameOf(n); return !ph ? 2 : exact.test(t) ? 0 : t.includes(ph) ? 1 : 2; };
+  matches = V.G.nodes.filter((n) => (!fav || n.fav) && words.every((w) => textOf(n).includes(w))).map((n) => [rank(n), n]).sort((a, b) => a[0] - b[0] || a[1].x - b[1].x || a[1].y - b[1].y).map((x) => x[1]);
   const set = new Set(matches.map((n) => n.id));
   V.nodeDim = (n) => !set.has(n.id);
   at = -1; count.textContent = matches.length ? `${matches.length} found` : "none";
@@ -13154,7 +16072,7 @@ function go(d) {
   const n = matches[at];
   // unfold whatever is hiding it
   if (V.isHidden(n.id)) { let changed = false; const up = (id) => V.parents(id).forEach((p) => { if (p.collapsed) { p.collapsed = false; changed = true; } up(p.id); }); up(n.id); if (changed) { V.render(); V.changed(); } }
-  V.sel = [n.id]; V.render(); V.selectionChanged(); V.centerOn(n);
+  V.sel = [n.id]; V.render(); V.selectionChanged(); if (!V.onScreen(n)) V.centerOn(n); // (IB-9: a match already in full view is not panned to; one that is not comes to the middle, clear of the tool rail)
   count.textContent = `${at + 1} of ${matches.length}`;
 }
 function openFind() { const was = bar.hidden; bar.hidden = false; input.focus(); input.select(); if (input.value) search(); else if (was) V.render(); }
@@ -13192,6 +16110,10 @@ const tab = (t) => () => document.querySelector(`#modeTabs button[data-v="${t}"]
 const seeCard = (q) => setTimeout(() => { const c = $(q); if (c && c.offsetParent) c.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, 60);
 const noun = () => ({ video: "video", model: "3D model", world: "3D world" }[(sel() || {}).type] || "picture"); // what is selected
 const views = () => V.visibleNodes().filter((n) => V.isCapture(n) && n.status === "done" && n.type === "image"); // v3.69 the SketchUp / Revit views on the canvas
+// v3.74 C4 (N14, power:big:1): the picture actions work on the whole selection, with the count in the label (V.forSelection)
+const selK = (act) => { const a = V.selActions ? V.selActions().find((x) => x.act === act) : null; return a ? a.k : 0; };
+const many = () => V.sel.length > 1;
+const FS = (act, arg) => () => V.forSelection(act, null, arg);
 // v3.69: Save as my preset (panel.js's own, when it offers it; else the same call it makes)
 async function saveMine() {
   if (V.saveMyPreset) return V.saveMyPreset(V.tab === "video" ? "video" : "image");
@@ -13205,7 +16127,7 @@ const P = { g: "pic" }, was = (id) => ({ g: "pic", id }), CV = { cv: true }; // 
 // a label can be a function, read each time Ctrl+K opens, so it names the view or the connection as the pill does
 const ACTIONS = [
   // the selected picture, the node menu's everyday actions first
-  ["Retry the failed job", "", () => V.retry(sel()), () => !!(sel() && sel().status === "error" && sel().retry), "Try again", P],
+  [() => (selK("retry") > 1 ? `Try the ${selK("retry")} failed pictures again` : "Retry the failed job"), "", FS("retry"), () => selK("retry") > 0, "Try again, retry, failed, try all again", was("Retry the failed job")],
   ["Render it (View to render)", "", () => V.renderIt(img()), () => !!img() && V.isCapture(img()), "Render this SketchUp or Revit view", P],
   ["Draw on the picture", "D", () => V.setViewerMode("draw"), () => !!img(), "Draw on the image, notes, arrows, select an area, layers", was("Draw on the image")],
   // v3.69 (D7, J-interior-S6) the What next steps (guide.js V.nextStep), so the keyboard has them too
@@ -13213,13 +16135,16 @@ const ACTIONS = [
   ["Change part of it (select with AI)", "", () => V.nextStep.changePart(img()), () => !!img(), "AI select, describe what to change, Draw", P],
   ["Material bucket: paint materials on the picture", "G", () => { V.setViewerMode("draw"); if (V.viewerMode === "draw") V.drawApi.setTool("bucket"); }, () => !!img(), "Try materials, Paint Bucket, paint the faces of a SketchUp view, materials, brick, cladding, RAL, material key", P], // v3.68 (matbucket.js)
   ["Touch-ups (paint the original back in)", "U", () => V.setViewerMode("touch"), () => { const n = img(); return !!(n && (n.touchup || src(n) || (V.cmp.a && V.cmp.a !== n.id))); }, "Fix text or logos", P],
-  ["Upscale ×2 (this picture)", "", () => V.upscale2x(img()), () => !!img(), "Upscale x2, enlarge, sharpen, print, Google 4K", P],
+  [() => (selK("upscale") > 1 ? `Upscale ×2 (${selK("upscale")} pictures)` : "Upscale ×2 (this picture)"), "Shift+U", FS("upscale"), () => selK("upscale") > 0, "Upscale x2, enlarge, sharpen, print, Google 4K, upscale all, upscale the selection", was("Upscale ×2 (this picture)")],
   ["Compare the two selected pictures (A and B)", "", () => V.compareTwo(two()), () => !!two(), "Compare A/B in one go, side by side, before and after", P],
   [() => `Compare with the ${V.viewName(V.captureOf(img()))}`, "C", () => V.compareWith(img(), V.captureOf(img())), () => !!(img() && V.captureOf(img())), "Compare this render with the SketchUp or Revit view it was made from", was("Compare with the view")],
   ["Compare with the original", "C", () => V.compareWith(img(), src(img())), () => { const n = img(), p = n && src(n), c = n && V.captureOf(n); return !!(p && (!c || p.id !== c.id)); }, "Before and after, the picture it came from", P],
   ["Review versions", "R", () => V.openReview(), () => !!sel(), "", P],
-  [() => `Download this ${noun()}`, "", () => V.downloadNode(sel()), () => sel() && sel().status === "done", "Download the picture, save it", was("Download this node")],
-  ["Add the selected pictures to sheets…", "", () => V.openSheets(V.selImages()), () => V.selImages().length > 0, "Sheets, page layout, Presentation PDF on Sheets", { g: "pic", page: true }],
+  [() => (selK("download") > 1 ? `Download ${selK("download")} pictures` : `Download this ${noun()}`), "Ctrl+Shift+S", FS("download"), () => selK("download") > 0, "Download the picture, save it, download all, download the selection", was("Download this node")],
+  [() => (selK("sheets") > 1 ? `Add ${selK("sheets")} to sheets…` : "Add the selected pictures to sheets…"), "", FS("sheets"), () => V.selImages().length > 0, "Sheets, page layout, Presentation PDF on Sheets", { g: "pic", page: true, id: "Add the selected pictures to sheets…" }],
+  [() => `Set aside ${selK("aside") > 1 ? selK("aside") + " versions" : "this version"}`, "X", FS("aside"), () => selK("aside") > 0, "Set aside, reject, hide this version, not this one, as Review's X", { g: "pic", cv: true, id: "Set aside" }],
+  [() => `Relight ${selK("relight") > 1 ? selK("relight") + " pictures" : "this picture"}…`, "", () => { const r = $("#btnCmd") ? $("#btnCmd").getBoundingClientRect() : { left: innerWidth / 2, bottom: 80 }; V.runSelAction("relight", r.left, r.bottom + 4); }, () => selK("relight") > 0, "Relight, sunrise, midday, overcast, golden hour, blue hour, night, new light", { g: "pic", cv: true, id: "Relight" }],
+  [() => `Copy this ${noun()} (paste into an email, Teams or Word)`, "Ctrl+C", () => V.copyPicture(img()), () => !!img() && !many() && !!V.copyPicture, "Copy picture, clipboard, paste, send to a colleague, Outlook, Teams", { g: "pic", id: "Copy picture" }],
   [() => `Rename the ${noun()}…`, "", () => V.renameAsk(sel()), () => !!(sel() && sel().status === "done"), "Name it, its title on Sheets", was("Rename the picture…")],
   [() => `Again from the ${V.viewName(V.captureOf(img()))}`, "", () => V.againFromView(img()), () => !!(img() && V.captureOf(img())), "Again from the SketchUp or Revit view, back to the model, select the capture this render came from, use the view", was("Again from the SketchUp view")],
   [() => `Use this ${noun()}'s prompt`, "", () => V.usePromptOf(sel().prompt, undefined, sel()), () => !!(sel() && sel().prompt), "Use prompt, load its prompt and scene", was("Use this picture's prompt")],
@@ -13263,12 +16188,12 @@ const ACTIONS = [
   ["Make a 3D model from this picture…", "", () => { tab("3d")(); V.setDTool("model"); }, () => !!img(), "3D model, image to 3D, Meshy, Tripo, Modly", P],
   ["Walk-around 3D scene from this picture…", "", () => { tab("3d")(); V.setDTool("world"); }, () => !!img(), "3D world, gaussian splat, walk around", P],
   // v3.69 (ctrlk-verbs) the canvas's own verbs
-  ["Remove the selected pictures from the canvas", "Del", () => V.deleteSelected(), () => V.sel.length > 0, "Delete, erase, bin, take away, remove picture", { g: "pic", cv: true }],
+  [() => (V.sel.length > 1 ? `Remove ${V.sel.length} pictures from the canvas` : `Remove this ${noun()} from the canvas`), "Del", FS("remove"), () => V.sel.length > 0, "Delete, erase, bin, take away, remove picture, remove the selected pictures", { g: "pic", cv: true, id: "Remove the selected pictures from the canvas" }],
   ["Select all pictures", "Ctrl+A", () => V.setSel(V.visibleNodes().map((n) => n.id)), () => V.G.nodes.length > 1, "Select everything on the canvas", CV],
   ["Ungroup", "Ctrl+Shift+G", () => V.ungroupSelected(), () => !!(V.inGroup && V.inGroup()), "Take the selected pictures out of their group", CV],
   [() => `Zoom to the ${noun()}`, "", () => V.zoomToNode(sel()), () => !!sel(), "", was("Zoom to the node")],
   ["Fold away / show the versions made from this", "", () => V.toggleCollapse(sel()), () => sel() && V.children(sel().id).length > 0, "", P],
-  [() => `Favourite this ${noun()}`, "Shift+F", () => $("#aFav").click(), () => !!sel(), "Star, favourite, unfavourite, take the star off", was("Favourite this node")],
+  [() => { const k = selK("favourite"), off = V.selNodes().length && V.selNodes().every((n) => n.fav); return k > 1 ? (off ? `Take the star off ${k} pictures` : `Favourite ${k} pictures`) : `Favourite this ${noun()}`; }, "Shift+F", FS("favourite"), () => selK("favourite") > 0, "Star, favourite, unfavourite, take the star off, favourite all", was("Favourite this node")],
   // v3.67 Draw and Touch-ups end with Done (Esc); Draw's save button
   ["Done: leave Draw or Touch-ups", "Esc", () => V.setViewerMode("preview"), () => V.viewerMode === "draw" || V.viewerMode === "touch", "Back to Preview, close Draw, close Touch-ups, finish", P],
   ["Save as new picture (Draw)", "", click("#dSave"), () => V.viewerMode === "draw", "Save the Draw result as a new picture, save layers, flatten, apply the layers, edited copy", was("Save the Draw result as a new picture")],
@@ -13292,6 +16217,15 @@ const ACTIONS = [
   // v3.69 (B2)
   [() => `Select all ${views().length} SketchUp views`, "", () => { V.setSel(views().map((n) => n.id)); }, () => views().length > 1, "Select every SketchUp or Revit view on the canvas, captures, then Render them all", { id: "Select all SketchUp views", cv: true }],
   [() => `Render all ${views().length} views…`, "", () => V.nextStep.renderAll(views()), () => views().length > 1 && !!V.nextStep, "Batch render every SketchUp or Revit view on the canvas, one render each", { id: "Render all views", cv: true }],
+  // v3.74 C4 (PW-02, PW-08): smart selections, and every failed picture again in one go
+  ...(V.SMART_SEL || []).map(([name, key, get], i) => [() => `Select ${name.replace(/^The /, "the ").replace(/^All /, "all ").replace(/^Every /, "every ")} (${get().length})`, key, () => V.smartSelect(i), () => get().length > 0, "Select, smart selection, choose a set, " + name, { id: "Select: " + name, cv: true }]).filter((_, i) => i > 0), // (all the views: the row above)
+  [() => { const k = V.visibleNodes().filter((n) => n.status === "error" && n.retry).length; return `Try every failed picture again (${k})`; }, "", () => V.forSelection("retry", V.visibleNodes().filter((n) => n.status === "error" && n.retry)), () => V.visibleNodes().some((n) => n.status === "error" && n.retry), "Retry all, try all again, failed renders, quota, network hiccup", { id: "Try every failed picture again", cv: true }],
+  // v3.74 C4 (N14, power:big:2-4): setups, the History of changes, repeat the last action
+  ["Setups…", "", () => V.openSetups(), () => !!V.openSetups, "Saved setups, templates, house style, the office's usual scene, look, furniture, AI model, 4K, versions"],
+  ["Save as a setup…", "", () => V.saveSetup(), () => !!V.saveSetup, "Save these settings, template, keep the scene, look, furniture, AI model, resolution, versions, shape"],
+  ["New project from a setup…", "", () => V.openSetups({ forNew: true }), () => !!V.openSetups && V.setups().length > 0, "Template, start a project like this, office template", { page: true }],
+  ["History of changes…", "", () => V.openUndoTimeline(), () => !!V.openUndoTimeline, "Undo history, timeline, go back several steps, what changed, list of changes, undo list", CV],
+  [() => `Again: ${lastName() || "repeat the last action"}`, "Ctrl+.", () => V.repeatLast(), () => !!lastName(), "Repeat the last command, do it again, again, same again", { id: "Repeat the last action" }],
   ["Insert a RAL colour…", "", () => V.insertRAL(), () => !!V.insertRAL, "RAL Classic colour picker, colour code, paint colour into the prompt", CV],
   ["Fill in the blanks…", "", () => V.openFill($("#prompt").value, "Fill prompt", true), () => V.hasHoles($("#prompt").value), "Fill prompt builder, the {blanks} in the prompt", CV],
   ["Save as my preset…", "", () => saveMine(), () => !!$("#prompt").value.trim(), "Save the prompt as a preset, My presets, keep these words", CV],
@@ -13303,7 +16237,7 @@ const ACTIONS = [
   ["Sheets: page layout and PDF (A1-A4)…", "", () => V.openSheets(), null, "Work, presentation pages"],
   ["Project look…", "L", () => V.openLook(), null, "Look, materials, colours, the approved render every render follows"],
   ["Add images or PDF drawings…", "", click("#tUpload"), null, "Upload, import, open file, add picture, photo, drawing, browse", CV],
-  [() => $("#tCapture span").textContent, "V", click("#tCapture"), () => (V.canCapture ? V.canCapture() : !!(V.bridge && V.bridge.ok)), "Capture the SketchUp or Revit view, capture view, camera button, the amber button on the canvas", { id: "Capture the SketchUp or Revit view" }],
+  [() => $("#tCapture span").textContent, "V", click("#tCapture"), () => (V.canCapture ? V.canCapture() : !!(V.bridge && V.bridge.ok)), "Capture the SketchUp or Revit view, capture view, camera button, the button at the top right of the canvas", { id: "Capture the SketchUp or Revit view" }],
   ["Capture SketchUp view (not connected: how to connect)", "", () => V.openSettings("#sHosts"), () => !(V.canCapture ? V.canCapture() : !!(V.bridge && V.bridge.ok)),
  "Capture the SketchUp or Revit view, connect SketchUp, plugin, bridge, Revit", { id: "Capture (not connected)" }],
   ["Scenes…", "S", () => V.openScenes(), null, "Choose a scene, change the scene, find a scene, one-click scenes, environment, Scenes tab, golden hour, blue hour, rain, dusk, snow, night"],
@@ -13316,7 +16250,8 @@ const ACTIONS = [
   ["Use the project look again", "", () => V.lookOff(false), () => !!(V.G.look && (!V.G.look.on || V.lookSkipped()) && (V.G.look.name || V.G.look.ref || V.G.look.refUrl || V.G.look.notes || V.G.look.materials)), "Look on, turn on the project look"],
   ["Leave the Library products and materials out of the next render", "", () => V.libraryOff(true), () => !!(V.G.library && !V.librarySkipped() && V.G.library.items.some((i) => i.use)), "Library off, furniture off, skip them once"],
   ["Use the Library products and materials again", "", () => V.libraryOff(false), () => V.librarySkipped(), "Library on, furniture on"],
-  [() => (document.body.classList.contains("enlarged") ? "Back to canvas (shrink the picture)" : "Enlarge the picture"), "E", () => V.setEnlarged(!document.body.classList.contains("enlarged")), null, "Enlarge or shrink the viewer, enlarge picture, back to canvas, big view", { id: "Enlarge or shrink the viewer", cv: true }],
+  [() => ((V.pictureView ? V.pictureView() : document.body.classList.contains("enlarged")) ? "Back to canvas (Picture view off)" : "Picture view: the picture big with its versions"), "E", () => V.setEnlarged(!(V.pictureView ? V.pictureView() : document.body.classList.contains("enlarged"))), null, "Enlarge or shrink the viewer, enlarge picture, back to canvas, big view, open big, film strip, versions", { id: "Enlarge or shrink the viewer", cv: true }],
+  ["Present: full screen, no controls", "P", () => V.present(), () => !!V.present, "Presentation, slideshow, show the client, favourites full screen, Ctrl+Shift+P", { id: "Present" }], // v3.74 B2 (present.js)
   ["Picture shape: same as the view", "", () => V.setAspect("auto"), () => V.tab === "image" && $("#arImage").value !== "auto", "Aspect ratio Original, reset the shape", CV],
   ["AI model, resolution and picture shape…", "", () => V.openImgSettings(), null, "Engine, aspect ratio, number of images, how many versions, A3 paper, Change the settings line"],
   ["Tools…", "", () => V.openMore(), null, "More tools, More, Batch render, Make elevation, Cut out an object, Describe this picture, From reference, the Tools menu in the Image tab", { id: "More tools…" }],
@@ -13325,8 +16260,8 @@ const ACTIONS = [
   ["Show or hide the mini-map", "", () => V.toggleMap(), null, "Overview, map of the whole canvas", CV],
   [() => (V.toolbarLabels() ? "Hide the labels under toolbar buttons" : "Show labels under toolbar buttons"), "", () => V.setToolbarLabels(!V.toolbarLabels()), null, "Toolbar words, button names, icons only, Show labels on toolbars", { id: "Toolbar labels" }],
   ["Scene builder (build your own scene)…", "", () => V.openEnv(), null, "Environment builder, layers, sky, atmosphere, light, sun, VFX"],
-  ["Take the tour", "", () => V.startTour(), null, "Tour, show me round, the main controls in six steps, help"],
-  ["Take the tour: more tips", "", () => V.startTour("more"), () => !!V.startTour, "Tour, five more tips: presets, your own words, AI model and size, Review, Settings"],
+  ["Take the tour", "", () => V.startTour(), null, "Tour, show me round, the main controls in a few short steps, help"],
+  ["Take the tour: more tips", "", () => V.startTour("more"), () => !!V.startTour, "Tour, more tips: presets, versions, your own words, AI model and size, Review, Settings"],
   ["First render guide", "", () => { V.setView && V.setView("canvas"); V.startFirstRender(); },() => !!V.startFirstRender, "Start rendering, first render, three steps: capture, render, download, beginner"],
   ["Welcome card (Google key and SketchUp)", "", () => V.openWelcome(), () => !!V.openWelcome, "Welcome, first run, start here, office Google key, is SketchUp connected"],
   ["Search help", "", () => V.searchHelp(), () => !!V.searchHelp, "Help search, Tutorial, how to, find a help topic"],
@@ -13374,7 +16309,123 @@ const ACTIONS = [
   ["Example pictures of scenes and builder options…", "", () => V.openEnvCatalogue(), null, "Environment pictures: generate an example of every environment option and scene", { id: "Environment pictures (generate examples of every environment option)…" }],
 ].map(([label, keys, run, when, hint, o = {}]) => ({ id: "a:" + (o.id || label), label, keys, run: o.cv || (o.g === "pic" && !o.page) ? () => { V.setView("canvas"); run(); } : run, when: when || undefined, hint, kind: "Action", g: o.g, grey: o.grey })); // hint: other words it is found by; grey: listed even when it can't run, greyed with this reason
 
-let box = null, list, input, items = [], at = 0;
+// ---------- v3.74 C4 (N14, power:big:4, PW-19): repeat the last action (Ctrl+.) ----------
+// The last thing run from Ctrl+K (a row or a command line) or from the selection's actions is kept; Ctrl+. runs it again on
+// whatever is selected now, and the empty Ctrl+K starts with "Again: …".
+let last = null;
+// (loop-02) a tweak or relight chip clicked (guide.js) is the last action too: Ctrl+. runs it on whatever is selected next
+const tweak0 = V.tweak;
+if (tweak0) V.tweak = (n, id, o = {}) => { if (!o.words && V.noteSelAction) V.noteSelAction("tweak", id); return tweak0(n, id, o); };
+const lastName = () => { const s = V.lastSelAction ? V.lastSelAction() : null; const L = s && (!last || (s.t || 0) > last.t) ? { label: s.label + " (the selection)" } : last; return L ? L.label : ""; };
+V.repeatLast = () => {
+  const s = V.lastSelAction ? V.lastSelAction() : null;
+  if (s && (!last || (s.t || 0) > last.t)) return V.forSelection(s.act, null, s.arg);
+  if (!last) return V.toast("Nothing to repeat yet: run something from Ctrl+K or the selection first", false, 3500);
+  if (last.q) { const c = parseChain(last.q); if (c) return c.run(); }
+  const it = allItems().find((x) => x.id === last.id);
+  if (!it || it.dis) return V.toast(`"${last.label}" can't run now`, false, 3500);
+  try { it.run(); } catch (e) { V.toast("Couldn't do that: " + e.message, true); }
+};
+// ---------- v3.74 C4 (N14, power:big:4): Ctrl+K as a command line ----------
+// The words typed are read as settings, a scene, a set of pictures and a verb, in any order: "4k", "versions 3", "chatgpt",
+// "16:9", "dusk all views" (scene + select every view + render), "upscale favourites", "sheet picks", "render view 2 golden
+// hour", "versions 2 4k". A line above the list says what Enter will do; the first row runs it. Words it can't read as a
+// command fall back to the usual search. Only a real command makes a chain: settings, a scene with pictures or a verb, or a
+// verb with pictures (a verb alone, "upscale", or a mood alone, "dusk", is a search as before).
+const FILL = new Set(["with", "and", "then", "at", "in", "the", "a", "to", "on", "for", "of", "it", "them", "use", "using"]);
+const VERBS = [[/^(render|make|go)$/, "render", "Render"], [/^(upscale|enlarge|sharpen)$/, "upscale", "Upscale ×2"], [/^(download|save)$/, "download", "Download"],
+  [/^(favourite|favorite|fav|star)$/, "favourite", "Favourite"], [/^(sheet|sheets|layout)$/, "sheets", "Add to sheets"], [/^compare$/, "compare", "Compare"],
+  [/^(remove|delete|bin)$/, "remove", "Remove"], [/^(aside|reject)$/, "aside", "Set aside"], [/^select$/, "select", "Select"], [/^retry$/, "retry", "Try again"]];
+const verbOf = (id) => VERBS.find((v) => v[1] === id);
+const engs = () => D.imageEngines.filter((x) => !x.codex || V.desk || V.engines.image === x.id);
+const pickEng = (w, nx) => {
+  const by = (re) => engs().find((x) => re.test(x.name.toLowerCase()));
+  if (/^(chatgpt|gpt|openai)$/.test(w)) return [by(/chatgpt/), 1];
+  if (w === "nano" && nx === "banana") return [by(/nano banana 2\.1/) || by(/nano banana/), 2];
+  if (/^(nano|banana)$/.test(w)) return nx === "pro" ? [by(/nano banana pro/), 2] : [by(/nano banana 2\.1/) || by(/nano banana/), 1];
+  if (w === "seedream") return [by(/seedream/), 1];
+  if (/^flux(\.?2)?$/.test(w)) return [nx === "max" ? by(/flux.*max/) : by(/flux.*pro/), nx === "max" || nx === "pro" ? 2 : 1];
+  return [null, 0];
+};
+const arOpt = (v) => { const s = $("#arImage"); return s && [...s.options].some((o) => o.value === v) ? v : null; };
+function parseChain(q) {
+  const w = q.toLowerCase().replace(/[,;]+/g, " ").split(/\s+/).filter(Boolean), used = w.map(() => false);
+  const set = [], take = (i, n = 1) => { for (let j = i; j < i + n; j++) used[j] = true; };
+  let verb = null, target = null, scene = null, noScene = false;
+  for (let i = 0; i < w.length; i++) {
+    if (used[i]) continue;
+    const x = w[i], nx = w[i + 1] || "";
+    if (/^[124]k$/.test(x)) { set.push(["res", x.toUpperCase(), "Resolution " + x.toUpperCase()]); take(i); continue; }
+    if (/^versions?$/.test(x) && /^[1-4]$/.test(nx)) { set.push(["num", +nx, `${nx} version${nx > 1 ? "s" : ""}`]); take(i, 2); continue; }
+    if (/^[1-4]$/.test(x) && /^versions?$/.test(nx)) { set.push(["num", +x, `${x} version${x > 1 ? "s" : ""}`]); take(i, 2); continue; }
+    if (/^\d{1,2}:\d{1,2}$/.test(x) && arOpt(x)) { set.push(["ar", x, "Shape " + x]); take(i); continue; }
+    if (x === "square" && arOpt("1:1")) { set.push(["ar", "1:1", "Shape 1:1"]); take(i); continue; }
+    if (/^a[1-4]$/.test(x)) { const v = x + (nx === "portrait" ? "-p" : "-l"); if (arOpt(v)) { set.push(["ar", v, `Shape ${x.toUpperCase()} ${nx === "portrait" ? "portrait" : "landscape"}`]); take(i, nx === "portrait" || nx === "landscape" ? 2 : 1); continue; } }
+    const [e, n] = pickEng(x, nx); if (e) { set.push(["engine", e.id, "AI model " + e.name]); take(i, n); continue; }
+    if (x === "no" && nx === "scene") { noScene = true; take(i, 2); continue; }
+    if (x === "set" && nx === "aside") { verb = verbOf("aside"); take(i, 2); continue; }
+    if (x === "try" && nx === "again") { verb = verbOf("retry"); take(i, 2); continue; }
+    const vb = !verb && VERBS.find(([re]) => re.test(x)); if (vb) { verb = vb; take(i); continue; }
+    if (/^(all|every|each)$/.test(x) && /^views?$/.test(nx)) { target = ["views", null]; take(i, 2); continue; }
+    if (x === "views") { target = ["views", null]; take(i); continue; }
+    if (x === "view" && /^\d{1,2}$/.test(nx)) { target = ["view", +nx]; take(i, 2); continue; }
+    if (/^(favourites|favorites|favs|stars|starred)$/.test(x)) { target = ["favs", null]; take(i); continue; }
+    if (/^(picks|picked|heroes|hero)$/.test(x)) { target = ["picks", null]; take(i); continue; }
+    if (/^(failed|failures)$/.test(x)) { target = ["failed", null]; take(i); continue; }
+    if (/^(selection|selected|these)$/.test(x)) { target = ["sel", null]; take(i); continue; }
+    if (x === "renders" || (x === "all" && nx === "renders")) { target = ["renders", null]; take(i, x === "all" ? 2 : 1); continue; }
+    if (FILL.has(x)) take(i);
+  }
+  const rest = w.filter((_, i) => !used[i]);
+  if (rest.length) { // the words left over name a scene ("dusk", "golden hour"), or this isn't a command
+    const sc = (V.sceneCommands ? V.sceneCommands() : []).map((it) => ({ ...it, find: `${it.label} ${it.hint || ""} ${moodOf(it)}` })).map((it) => [it, score(it, rest)]).filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1])[0];
+    if (!sc) return null;
+    scene = sc[0];
+  }
+  if (!verb && target && (scene || set.length || noScene) && /^views?$/.test(target[0])) verb = verbOf("render"); // "dusk all views" renders them
+  if (!verb && target) verb = verbOf("select");
+  if (!(set.length || ((scene || noScene) && (target || verb)) || (verb && target))) return null;
+  const vs = views().sort((a, b) => (a.created || 0) - (b.created || 0)), done = (n) => n.status === "done";
+  const ns = !target || target[0] === "sel" ? V.selNodes()
+    : target[0] === "views" ? vs
+    : target[0] === "view" ? [vs.find((n) => new RegExp(`\\bview ${target[1]}\\b`, "i").test(V.nodeTitle(n))) || vs[target[1] - 1]].filter(Boolean)
+    : target[0] === "favs" ? V.visibleNodes().filter((n) => n.fav && done(n))
+    : target[0] === "picks" ? ((p) => (p.length ? p : V.visibleNodes().filter((n) => n.fav && done(n))))(V.visibleNodes().filter((n) => (n.pick || n.hero) && done(n)))
+    : target[0] === "failed" ? V.visibleNodes().filter((n) => n.status === "error")
+    : V.visibleNodes().filter((n) => done(n) && n.type === "image" && !V.isCapture(n));
+  const k = ns.length, pl = (w1) => `${k} ${w1}${k === 1 ? "" : "s"}`;
+  // (C4-5) one phrase a verb, said the way a person would: "Upscale the 3 favourites ×2", "Add the 3 picks to sheets",
+  // and, when there are none, "no favourites to upscale"
+  const T0 = target ? target[0] : "sel", the = (w1, many) => (k === 1 ? `the ${w1}` : k ? `the ${k} ${many || w1 + "s"}` : `the ${many || w1 + "s"}`);
+  const tName = T0 === "sel" ? (k === 1 ? "the selected picture" : `the ${k} selected`) : T0 === "views" ? the("view") : T0 === "view" ? (ns[0] ? V.nodeTitle(ns[0]) : `view ${target[1]}`)
+    : T0 === "favs" ? the("favourite") : T0 === "picks" ? the("pick") : T0 === "failed" ? the("failed picture") : the("render");
+  const none = { sel: "pictures selected", views: "SketchUp views on the canvas", view: `view ${target ? target[1] : ""} on the canvas`, favs: "favourites", picks: "picks or favourites", failed: "failed pictures", renders: "finished renders" }[T0];
+  const said = (id) => ({ render: `Render ${target ? tName : "it"}`, upscale: `Upscale ${tName} ×2`, download: `Download ${tName}`, favourite: `Favourite ${tName}`, sheets: `Add ${tName} to sheets`,
+    compare: `Compare ${tName}`, remove: `Remove ${tName}`, aside: `Set aside ${tName}`, select: `Select ${tName}`, retry: `Try ${tName} again` }[id]);
+  const steps = [...set.map((x) => x[2]), noScene ? "No scene" : scene ? scene.label : null, target && verb && verb[1] === "render" ? `select ${tName}` : null, verb ? said(verb[1]) : null].filter(Boolean);
+  const bad = verb && !k ? `no ${none} to ${{ upscale: "upscale", sheets: "add to sheets", favourite: "favourite", retry: "try again", aside: "set aside", select: "select" }[verb[1]] || verb[2].toLowerCase()}` : "";
+  const run = async () => {
+    V.setView("canvas");
+    if (bad) return V.toast("Not done: " + bad, true);
+    for (const [kind, v] of set) {
+      if (kind === "engine") { V.engines.image = v; V.store.set("engines", { ...V.store.get("engines", {}), image: v }); V.engRedraw && V.engRedraw(); }
+      else if (kind === "num" && V.setVersions) V.setVersions(v);
+      else { const el = $("#" + { res: "resImage", num: "numImage", ar: "arImage" }[kind]); if (el && [...el.options].some((o) => o.value === String(v))) { el.value = String(v); el.dispatchEvent(new Event("change")); } }
+    }
+    if (set.length && V.updateMake) V.updateMake();
+    if (noScene && V.clearScene) V.clearScene();
+    if (scene) { V.chainRenders = !!(verb && verb[1] === "render"); try { await Promise.resolve(scene.run()); } finally { V.chainRenders = false; } } // (the scene's toast says "Rendering now", not "Press Render")
+    if (target && verb) V.setSel(ns.map((n) => n.id));
+    if (!verb) return V.toast("Set: " + steps.join(", "), false, 3000);
+    if (verb[1] === "select") { if (!ns.every((n) => V.onScreen(n))) V.fit(ns, true, Math.max(0.5, V.G.view.z)); }
+    else if (verb[1] === "render") { if (V.tab !== "image") tab("image")(); V.make(); }
+    else await V.forSelection(verb[1], ns);
+  };
+  return { steps, bad, run, label: steps.join(" → ") };
+}
+V.parseCommand = (q) => { const c = parseChain(q); return c ? { steps: c.steps, bad: c.bad } : null; }; // (tests)
+
+let box = null, list, input, items = [], at = 0, parseLine = null, footScope = null;
 const recentCmds = () => V.store.get("recentCmds", []);
 // v3.69 (J-poweruser-S7): Shift+Enter (or Shift+click) adds a preset to the prompt instead of replacing the one there;
 // a fill-in brief opens as usual (it is a whole brief)
@@ -13404,10 +16455,20 @@ function allItems() {
     ...V.recentCombos().filter((c) => !V.combos().some((s) => s.text === c.text)).map((c) => ({ id: "r:" + c.text.slice(0, 40), label: c.name, kind: "Recent combo", hint: c.text.slice(0, 90), icon: icon(c), run: useC(c) }))];
   // (v3.69: named for what they do and ranked below the one-click "Scene:" rows, J-poweruser-S6)
   const envs = (V.envSets ? V.envSets() : []).map((s) => ({ id: "e:" + s.name, label: "Open in Scene builder: " + s.name, kind: "Scene builder", find: `${s.name} ${({ ext: "exterior", int: "interior", prod: "product" }[s.env.mode || "ext"])} environment ${s.mine ? "my own" : ""}`, hint: `Opens the Scene builder with this ${s.mine ? "saved " : ""}${({ ext: "exterior", int: "interior", prod: "product" }[s.env.mode || "ext"])} environment loaded, to adjust it`, run: () => V.openEnv(s.env) }));
-  const help = (V.helpTopics ? V.helpTopics() : []).map((t) => ({ id: "h:" + t.title, label: "How to: " + t.title, kind: "Help", hint: t.text.slice(0, 90), run: () => V.showHelpTopic(t) }));
+  // (v3.74 D1 fix D1-4: a topic is found by its whole text and its own keywords, data-kw, not just the 90 characters shown;
+  // a word among its keywords counts for more, so "try again" finds When something goes wrong first)
+  const help = (V.helpTopics ? V.helpTopics() : []).map((t) => { const kw = ((t.el && t.el.dataset.kw) || "").toLowerCase(); return { id: "h:" + t.title, label: "How to: " + t.title, kind: "Help", hint: t.text.slice(0, 90), find: `${t.title} ${kw} ${t.text}`, kw, run: () => V.showHelpTopic(t) }; });
   const sets = [...(V.sceneCommands ? V.sceneCommands() : []).map((it) => ({ ...it, find: `${it.label} ${it.hint || ""} ${moodOf(it)}` })), ...(V.catalogueCommands ? V.catalogueCommands() : [])];
   const acts = ACTIONS.filter((a) => !a.when || a.when() || a.grey).map((a) => ({ ...a, label: typeof a.label === "function" ? a.label() : a.label, dis: a.when && a.grey && !a.when() ? a.grey : "" }));
-  return [...acts, ...cmb, ...sets, ...envs, ...V.projectCommands(), ...presets, ...help];
+  const sus = V.setupCommands ? V.setupCommands() : [];
+  // (loop-02) the tweak and relight chips, on every picture selected ("Tweak: Warmer", "Relight: Night (3)"); Ctrl+. repeats them
+  // (C4v-03: counted as V.forSelection picks them, so a bare SketchUp view is left out; C4v-02: ord keeps the chips' own order)
+  const twk = V.SEL_ACTS ? V.SEL_ACTS.tweak.pick(V.selNodes()).length : (V.selImages ? V.selImages() : []).filter((n) => n.status === "done" && n.url).length;
+  const tws = twk && V.tweaks && V.tweak ? V.tweaks().map((t, i) => ({ id: "tw:" + t.id, ord: i, label: `${t.row === "relight" ? "Relight" : "Tweak"}: ${t.name}${twk > 1 ? ` (${twk})` : ""}`, kind: "Action", g: "pic",
+    hint: `${t.row === "relight" ? "Relight at " + t.name.toLowerCase() : t.name}: an edit of ${twk > 1 ? `each of the ${twk} pictures` : "this picture"}, the rest kept; it opens compared with it`,
+    run: () => { V.setView("canvas"); V.forSelection(t.row === "relight" ? "relight" : "tweak", null, t.id); } })) : [];
+  const ext = V.commands ? V.commands() : []; // (v3.74 C2 hook: other files' commands, e.g. presentflow.js Make a presentation, Options board, Client pack)
+  return [...acts, ...tws, ...sus, ...ext, ...cmb, ...sets, ...envs, ...V.projectCommands(), ...presets, ...help];
 }
 // v3.69 (PG-11): every project by name ("Open project: Riverside House"), from the project list, read again each time
 // Ctrl+K opens (the list arrives a moment later and the results are redrawn)
@@ -13422,10 +16483,20 @@ const NTYPE = { image: "Picture", video: "Video", model: "3D model", world: "3D 
 const nodeItems = () => V.G.nodes.map((n) => ({ id: "n:" + n.id, label: V.nodeTitle(n) || n.label || NTYPE[n.type] || "Picture", find: `${n.label || ""} ${n.prompt || ""} ${V.engineName(n.engine)}`, kind: NTYPE[n.type] || "Picture", g: "node", hint: (V.nodeSub(n) || V.engineName(n.engine) || "").slice(0, 90), thumb: n.thumb || (n.type === "image" ? n.url : ""),
   run: () => { V.setView("canvas"); if (V.isHidden(n.id)) { let p = V.parents(n.id); while (p.length) { p.forEach((x) => (x.collapsed = false)); p = p.flatMap((x) => V.parents(x.id)); } V.render(); } V.sel = [n.id]; V.render(); V.selectionChanged(); V.centerOn(n); } }));
 // headings, in this order when scores tie
-const HEADS = ["Recent", "Selected", "Actions", "Scenes", "Presets", "Collections", "Projects", "Pictures on the canvas", "How to"];
-const headOf = (it) => it.g === "pic" && !it.dis ? "Selected" : it.g === "node" ? "Pictures on the canvas" : it.kind === "Action" ? "Actions" : it.kind === "Help" ? "How to" : it.kind === "Collection" ? "Collections" : it.kind === "Project" ? "Projects" : it.kind === "Scene" || it.kind === "Scene builder" || / environment$/.test(it.kind) ? "Scenes" : "Presets";
-const headText = (hd) => hd !== "Selected" ? hd : "Selected " + noun();
-const CAP = { Presets: 12, "Pictures on the canvas": 6 };
+const HEADS = ["Command", "Again", "Recent", "Selected", "Actions", "Setups", "Scenes", "Presets", "Collections", "Projects", "Pictures on the canvas", "Recent prompts", "How to"];
+// v3.74 C4 (PW-17): the words of the renders on this canvas, newest first, found by what they say; Enter puts them back in the prompt
+const promptItems = () => {
+  const seen = new Set(), out = [];
+  V.G.nodes.slice().sort((a, b) => (b.created || 0) - (a.created || 0)).forEach((n) => {
+    const t = String(n.prompt || "").replace(/^(\[[^\]]*\] ?)+/, "").trim();
+    if (!t || t.length < 8 || seen.has(t) || out.length >= 30 || /^(Upscaled|Topaz|SeedVR|Creative Upscale)/.test(t)) return; seen.add(t);
+    out.push({ id: "pr:" + t.slice(0, 40), label: t.length > 90 ? t.slice(0, 88) + "…" : t, find: t, kind: "Prompt", hint: `Put these words back in the prompt (from ${V.nodeTitle(n)})`, run: () => { V.setView("canvas"); const m = V.promptMark(); V.setPrompt(t); V.toast("The words of an earlier render are in the prompt", false, 3500, V.promptUndo(m)); } });
+  });
+  return out;
+};
+const headOf = (it) => it.g === "pic" && !it.dis ? "Selected" : it.g === "node" ? "Pictures on the canvas" : it.kind === "Setup" ? "Setups" : it.kind === "Prompt" ? "Recent prompts" : it.kind === "Action" ? "Actions" : it.kind === "Help" ? "How to" : it.kind === "Collection" ? "Collections" : it.kind === "Project" ? "Projects" : it.kind === "Scene" || it.kind === "Scene builder" || / environment$/.test(it.kind) ? "Scenes" : "Presets";
+const headText = (hd) => hd !== "Selected" ? hd : V.sel.length > 1 ? `Selected (${V.sel.length})` : "Selected " + noun();
+const CAP = { Presets: 12, "Pictures on the canvas": 6, "Recent prompts": 4 };
 // a word matches the start of a word best, anywhere in the name next, and the prompt text last
 // (a long name costs a little so short names win ties, capped so a picture listed by its long prompt still shows)
 function score(it, words) {
@@ -13441,28 +16512,47 @@ function score(it, words) {
     if (name.startsWith(w)) s += 30;
     else if (new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(name)) s += 20;
     else if (name.includes(w)) s += 10;
-    else if (more.includes(w)) s += 3;
+    else if (more.includes(w)) s += it.kw && it.kw.includes(w) ? 6 : 3;
     else return 0;
   }
   // v3.69: an action whose name starts with the first word typed is a verb match ("remove", "add"), and beats presets
   // (v3.69: a one-click scene is the best answer to a mood word such as "dusk"; the builder rows come after the scenes)
   return s + (it.kind === "Action" ? (name.startsWith(words[0]) ? 8 : name.includes(words[0]) ? 2 : 0) : 0)
  // (C1, J-poweruser N5: an action found only by its hidden words, "Scenes…" for "dusk", goes below the scenes themselves)
- + (it.kind === "Scene" ? 1 : 0) - (it.kind === "Scene builder" ? 25 : 0) - (it.dis ? 4 : 0) - Math.min(name.length, 80) / 100;
+ + (it.kind === "Scene" ? 1 + sceneBias(name, more, words) : 0) - (it.kind === "Scene builder" ? 25 : 0) - (it.dis ? 4 : 0) - (it.ord != null ? 0.12 + it.ord / 1000 : Math.min(name.length, 80) / 100); // (C4v-02: tweak and relight rows by their own order, Sunrise to Night, not by name length)
+}
+// (C4-3) a mood word prefers the scene named for it ("dusk" is Blue hour, lights on), and a scene that adds weather (snow,
+// rain, mist) comes below the plain light changes unless a weather word is typed: "dusk all views" must not render snow
+const SCENE_SYN = { dusk: /blue hour|dusk|twilight/, twilight: /blue hour|twilight/, evening: /blue hour|golden|evening|dusk/, sunset: /golden|sunset/, morning: /sunrise|morning/, dawn: /sunrise|dawn/ };
+const WEATHER = /\b(snow|snowy|rain|rainy|wet|frost|frosty|icy|mist|misty|fog|foggy|storm|stormy|drizzle|winter)\b/; // (the name only: the mood words are found loosely)
+function sceneBias(name, more, words) {
+  let b = 0;
+  for (const w of words) if (SCENE_SYN[w] && SCENE_SYN[w].test(name)) b += 6;
+  if (WEATHER.test(name) && !words.some((w) => WEATHER.test(w))) b -= 2.5; // (stays found, just lower)
+  return b;
 }
 function search() {
   const q = input.value.trim().toLowerCase(), words = q.split(/\s+/).filter(Boolean);
   const all = allItems();
+  // v3.74 C4: what the palette will act on, in the footer ("acts on: 6 selected"); a command line's plan above the list
+  if (footScope) footScope.textContent = V.sel.length ? `acts on: ${V.sel.length === 1 ? "the selected " + noun() : V.sel.length + " selected"}` : "nothing selected";
+  const chain = words.length ? parseChain(q) : null;
+  if (parseLine) { parseLine.hidden = !chain; parseLine.className = "cmdparse" + (chain && chain.bad ? " bad" : ""); parseLine.textContent = chain ? (chain.bad ? "Can't do that now: " + chain.bad : "Enter will: " + chain.steps.join(" → ")) : ""; }
   if (!words.length) { // recent commands, then the selected picture's everyday actions, then the general ones
-    const rc = recentCmds().map((id) => all.find((x) => x.id === id)).filter((x) => x && !x.dis);
-    let rest = all.filter((x) => x.kind === "Action" && !rc.includes(x) && !x.dis);
+    const again = all.find((x) => x.id === "a:Repeat the last action" && !x.dis);
+    const rc = recentCmds().map((id) => all.find((x) => x.id === id)).filter((x) => x && !x.dis && x !== again);
+    let rest = all.filter((x) => x.kind === "Action" && !rc.includes(x) && !x.dis && x !== again);
     // v3.69: with nothing selected, the ways to start come first: capture, add pictures, scenes, projects
     const FIRST = ["a:Capture the SketchUp or Revit view", "a:Capture (not connected)", "a:Add images or PDF drawings…", "a:Scenes…", "a:Projects"];
     if (!V.sel.length) rest = [...FIRST.map((id) => rest.find((x) => x.id === id)).filter(Boolean), ...rest.filter((x) => !FIRST.includes(x.id))];
-    items = [...rc.map((x) => ({ ...x, head: "Recent" })), ...rest.filter((x) => x.g === "pic").slice(0, 8).map((x) => ({ ...x, head: "Selected" })), ...rest.filter((x) => x.g !== "pic").slice(0, 12).map((x) => ({ ...x, head: "Actions" }))];
+    // (v3.74 C4) with several selected, what works on them all comes first (Upscale 3, Favourite 3, Download 3, Add 3 to sheets…)
+    const SETW = ["a:Upscale ×2 (this picture)", "a:Favourite this node", "a:Download this node", "a:Add the selected pictures to sheets…", "a:Compare the two selected pictures (A and B)", "a:Set aside", "a:Relight", "a:Retry the failed job", "a:Remove the selected pictures from the canvas"];
+    if (many()) rest = [...SETW.map((id) => rest.find((x) => x.id === id)).filter(Boolean), ...rest.filter((x) => !SETW.includes(x.id))];
+    items = [...(again ? [{ ...again, head: "Again" }] : []), ...rc.map((x) => ({ ...x, head: "Recent" })), ...rest.filter((x) => x.g === "pic").slice(0, 8).map((x) => ({ ...x, head: "Selected" })), ...rest.filter((x) => x.g !== "pic").slice(0, 12).map((x) => ({ ...x, head: "Actions" }))];
   } else { // grouped by kind; the group with the best match first, the best matches first within it
     const by = new Map();
-    for (const it of [...all, ...nodeItems()]) { const s = score(it, words); if (s > 0) { const hd = headOf(it); if (!by.has(hd)) by.set(hd, []); by.get(hd).push([it, s]); } }
+    const ag = wantsAgain(words); // (final review: "Again: …" only when again / repeat is typed, never above the real matches)
+    for (const it of [...all, ...nodeItems(), ...promptItems()]) { if (it.id === "a:Repeat the last action" && !ag) continue; const s = score(it, words); if (s > 0) { const hd = headOf(it); if (!by.has(hd)) by.set(hd, []); by.get(hd).push([it, s]); } }
     const gs = [...by.entries()].map(([hd, xs]) => [hd, xs.sort((a, b) => b[1] - a[1])]).sort((a, b) => b[1][0][1] - a[1][0][1] || HEADS.indexOf(a[0]) - HEADS.indexOf(b[0]));
     items = gs.flatMap(([hd, xs]) => {
       const out = xs.slice(0, CAP[hd] || 8).map(([it]) => ({ ...it, head: hd }));
@@ -13470,6 +16560,7 @@ function search() {
       if (hd === "Pictures on the canvas") out.push({ id: "f:find", label: `Show ${xs.length === 1 ? "the match" : `all ${xs.length} matches`} on the canvas`, keys: "Ctrl+F", kind: "Action", head: hd, hint: "Find on the canvas with these words: the rest are dimmed", run: () => V.findOnCanvas(q) });
       return out;
     });
+    if (chain) items.unshift({ id: "chain", q, label: "Do: " + chain.label, kind: "Action", head: "Command", keys: "Enter", hint: chain.bad ? "" : "Runs these steps in order", dis: chain.bad || "", run: chain.run });
   }
   at = 0; paint();
 }
@@ -13487,10 +16578,15 @@ function paint() {
   });
 }
 const mark = () => { [...list.querySelectorAll(".cmdrow")].forEach((r, i) => r.classList.toggle("on", i === at)); list.querySelectorAll(".cmdrow")[at]?.scrollIntoView({ block: "nearest" }); };
+// (final review) help topics, pages, projects, finding a picture and the tours are never the action Ctrl+. repeats
+const NOREP_IDS = /^a:(Projects|History|Find an old render|Tutorial|Usage and costs|Settings|Back to the canvas|Keyboard shortcuts|Search help|What's new|Take the tour|First render guide|Welcome card|Library:|Image tab|Video tab|3D tab)/;
+const NOREP = (it) => !it.q && (it.kind === "Help" || it.kind === "Project" || it.g === "node" || it.id === "f:find" || NOREP_IDS.test(it.id));
+const wantsAgain = (words) => words.some((w) => (w.length >= 2 && ("again".startsWith(w) || "repeat".startsWith(w))) || /^(again|repeat)/.test(w));
 function run(i, o = {}) {
   const it = items[i]; if (!it) return;
-  if (it.dis) return V.toast(`${it.label.replace(/…$/, "")}: ${it.dis}`, false, 4000); // greyed: says why, stays open
-  V.store.set("recentCmds", [it.id, ...recentCmds().filter((x) => x !== it.id)].slice(0, 6));
+  if (it.dis) return V.toast(it.id === "chain" ? `Not done: ${it.dis}` : `${it.label.replace(/…$/, "")}: ${it.dis}`, false, 4000); // greyed: says why, stays open
+  if (it.id !== "a:Repeat the last action" && !NOREP(it)) last = it.q ? { q: it.q, label: it.label.replace(/^Do: /, ""), t: Date.now() } : { id: it.id, label: it.label.replace(/…$/, ""), t: Date.now() }; // (Ctrl+. does it again)
+  if (!it.q && it.id !== "a:Repeat the last action") V.store.set("recentCmds", [it.id, ...recentCmds().filter((x) => x !== it.id)].slice(0, 6));
   close();
   try { it.run(o.add && it.canAdd ? { add: true } : undefined); } catch (e) { V.toast("Couldn't do that: " + e.message, true); }
 }
@@ -13498,15 +16594,17 @@ function open() {
   if (!box) {
     input = h("input", { placeholder: "Type a preset, a tool, a scene or a picture… e.g. dusk, tidy, batch, kitchen", autocomplete: "off", spellcheck: "false" });
     list = h("div", { class: "cmdlist" });
+    parseLine = h("div", { class: "cmdparse", hidden: true, "aria-live": "polite" });
+    footScope = h("span", { class: "cmdscope" });
     box = h("div", { class: "cmdk", hidden: true, onclick: (e) => { if (e.target === box) close(); } },
-      h("div", { class: "cmdbox" }, h("div", { class: "cmdin" }, h("span", { html: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>' }), input, h("kbd", {}, "Esc")), list,
-        h("div", { class: "cmdfoot" }, h("span", {}, h("kbd", {}, "↑"), h("kbd", {}, "↓"), " move"), h("span", {}, h("kbd", {}, "Enter"), " run"), h("span", {}, h("kbd", {}, "Shift+Enter"), " add a preset to the prompt"), h("span", {}, h("kbd", {}, "Ctrl+K"), " open this any time"))));
+      h("div", { class: "cmdbox" }, h("div", { class: "cmdin" }, h("span", { html: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>' }), input, h("kbd", {}, "Esc")), parseLine, list,
+        h("div", { class: "cmdfoot" }, h("span", {}, h("kbd", {}, "↑"), h("kbd", {}, "↓"), " move"), h("span", {}, h("kbd", {}, "Enter"), " run"), h("span", {}, h("kbd", {}, "Shift+Enter"), " add a preset to the prompt"), h("span", {}, h("kbd", {}, "Ctrl+."), " again"), footScope)));
     document.body.append(box);
     input.addEventListener("input", search);
     input.addEventListener("keydown", (e) => {
       if (e.key === "ArrowDown") { e.preventDefault(); at = Math.min(items.length - 1, at + 1); mark(); }
       else if (e.key === "ArrowUp") { e.preventDefault(); at = Math.max(0, at - 1); mark(); }
-      else if (e.key === "Enter") { e.preventDefault(); run(at, { add: e.shiftKey }); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); run(at, { add: e.shiftKey && !e.ctrlKey && !e.metaKey }); } // (v3.74 C4, PW-12: Ctrl+Enter runs the row; it no longer starts a render behind the palette)
       else if (e.key === "Escape") { e.preventDefault(); close(); }
     });
   }
@@ -13518,6 +16616,12 @@ function close() { if (box) box.hidden = true; }
 V.openCommand = open;
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); e.stopPropagation(); box && !box.hidden ? close() : open(); }
+  // v3.74 C4 (N14, PW-19): Ctrl+. repeats the last action (not while typing in another box, or with a dialog open)
+  else if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === ".") {
+    const t = e.target, inPal = box && !box.hidden && t === input, typing = t && t.matches && t.matches("input,textarea,select,[contenteditable]");
+    if ((typing && !inPal) || document.querySelector(".modal:not([hidden]) .mbox")) return;
+    e.preventDefault(); e.stopPropagation(); close(); V.repeatLast();
+  }
 }, true);
 $("#btnCmd") && ($("#btnCmd").onclick = open);
 })();
@@ -13534,10 +16638,44 @@ $("#btnCmd") && ($("#btnCmd").onclick = open);
    SketchUp views that have renders are reviewed through their latest renders (J-poweruser-S3). Side by side (S) shows
    2-4 versions as a grid: the favourites when there are two or more, else the current one and the next (J-materials-S4).
    A favourite is a star, as everywhere else; "Favourites (N)" downloads, upscales, puts on sheets or selects them (T16,
-   PG-16). Titles are the pictures' own names (V.nodeTitle). */
+   PG-16). Titles are the pictures' own names (V.nodeTitle).
+   v3.74 C1 (N9, loop:big:3, loop-08, journey-presentation:big:2): Pick the best (A): two versions large side by side, left or
+   right arrow (or a click) keeps the better one and brings in the next; the loser is set aside (n.rejected) and the last one
+   standing is the view's pick. Pick (P; Enter too when the set has several views) gives the view its one pick (n.pick) and
+   moves on to the next view; Hero (H) marks the one picture for the project (n.hero). When every view has its pick, an end
+   card offers Upscale hero, Make the sheet and Download picks. Picks and the hero are marked on the canvas cards
+   (V.cardMarks) and in Picture view's film strip (V.stripMark), which also groups a round's versions. Present's P works
+   outside Review. */
 (() => {
 const V = window.V, { $, h } = V;
 let ov = null, set = [], at = 0, peek = false, grid = false, menu = null;
+let duel = null, endCard = false; // v3.74 C1 (N9): Pick the best, two at a time; the end card once every view has its pick
+let pickName = ""; // (the duel's pick, folded into the one "set aside" message on close)
+// (v3.74 final) the keyboard goes back to the control that opened Review / Present when it closes, as V.modal does.
+// The card bar and menus are rebuilt while it is open, so a stand-in with the same class and words is found if the
+// opener itself is gone; opened by a key from the page itself (body), the keyboard simply stays on the page.
+let opener = null;
+// (final 2) a pop-up menu (the '…' menus, role=menu) is gone by the time Review closes, so its owner button stands in:
+// the last control focused outside a menu when the keyboard went into one (menuAt: a menu item just chose this)
+const MENU = '[role="menu"],.tool-menu,.summenu';
+let outside = null, menuOwner = null, menuAt = 0;
+document.addEventListener("focusin", (e) => { const t = e.target; if (!t || !t.closest) return; if (t.closest(MENU)) { if (outside && outside.isConnected) menuOwner = outside; menuAt = Date.now(); } else outside = t; }, true);
+["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, (e) => { if (e.target && e.target.closest && e.target.closest(MENU)) menuAt = Date.now(); }, true)); // (the choice itself)
+V.focusFrom = () => {
+  const a = document.activeElement, inMenu = a && a.closest && a.closest(MENU);
+  const o = (inMenu || ((!a || a === document.body) && Date.now() - menuAt < 1500)) && menuOwner && menuOwner.isConnected ? menuOwner : a;
+  return o && o !== document.body && o.isConnected ? { el: o, tag: o.tagName, cls: o.className, txt: o.textContent } : null;
+};
+V.focusBack = (r) => {
+  if (!r) return;
+  setTimeout(() => { // (after What next and the selection bar have repainted)
+    const a = document.activeElement, ok = (x) => x && x.isConnected && !x.closest("[hidden],[inert]") && x.getClientRects().length > 0;
+    if (a && a !== document.body && ok(a)) return; // (something else already took the keyboard)
+    const words = (s) => String(s || "").replace(/\s*\(\d+\)\s*$/, "").trim(); // ("Pick the best (2)" may come back as "(1)")
+    const t = ok(r.el) ? r.el : [...document.querySelectorAll(r.tag)].find((x) => x.className === r.cls && words(x.textContent) === words(r.txt) && ok(x));
+    if (t) try { t.focus({ preventScroll: true }); } catch (e) { /* stays on the page */ }
+  }, 120);
+};
 const pics = (ns) => ns.filter((n) => n && n.status === "done" && (n.type === "image" || n.type === "video"));
 const kindOf = (n) => (V.pictureKind ? V.pictureKind(n) : "render");
 const title = (n) => (V.nodeTitle ? V.nodeTitle(n) : n.label) || "Picture";
@@ -13572,7 +16710,8 @@ function setFor() {
 }
 V.openReview = (o = {}) => { // o.sideBySide: open on Side by side (What next "Compare options")
   const s = setFor(); if (!s || !s.list.length) return V.toast("Select a picture (or a source with versions) to review", true);
-  set = s.list; at = s.start; grid = false;
+  if (!V.reviewOpen()) opener = V.focusFrom();
+  set = s.list; at = s.start; grid = false; duel = null; endCard = false; pickName = "";
   if (!ov) build();
   ov.querySelector(".rvtitle").textContent = s.title;
   ov.hidden = false; document.body.classList.add("reviewing"); strip(); setGrid(!!(o && o.sideBySide));
@@ -13580,8 +16719,9 @@ V.openReview = (o = {}) => { // o.sideBySide: open on Side by side (What next "C
 // (C1b fixer, J-presentation-P7) the key line follows the current mode: repainted whenever Side by side goes on or off
 function paintKeys() {
   const k = ov && ov.querySelector(".rvkeys"); if (!k) return;
+  if (duel) { k.textContent = "← keep the left · → keep the right · click a picture to keep it · A or Esc stop picking"; return; }
   k.textContent = grid ? "← → move · click a picture to see it on its own · F favourite · X set aside · S or Enter one at a time · hold C original · Esc back"
-    : (groupsOn() ? "↑ ↓ next view · ← → versions" : "← → move") + " · F favourite · X set aside · S side by side · hold C original · Enter show on canvas · Esc close";
+    : (groupsOn() ? "↑ ↓ next view · ← → versions · P or Enter pick and next view" : "← → move · P pick") + " · A pick the best · H hero · F favourite · X set aside · S side by side · hold C original · U upscale · D download" + (groupsOn() ? "" : " · Enter show on canvas") + " · Esc close";
 }
 V.reviewOpen = () => !!ov && !ov.hidden;
 function build() {
@@ -13589,23 +16729,42 @@ function build() {
     h("div", { class: "rvtop" },
       h("div", { class: "rvinfo" }, h("b", { class: "rvtitle" }), h("span", { class: "rvcount" }), h("small", { class: "rvprompt" })),
       h("div", { class: "rvtools" },
-        h("button", { class: "rvfav", title: "Favourite (F): a star on the picture, as on the canvas", onclick: () => fav() }, "☆ Favourite (F)"),
+        h("button", { class: "rvfav", title: "Favourite (F): a star on the picture, as on the canvas", onclick: () => fav() }, V.icoEl("star"), " Favourite (F)"),
         h("button", { class: "rvrej", title: "Set aside: hide it on the canvas (X)", onclick: () => reject() }, "Set aside (X)"),
         h("button", { class: "rvorig", title: "Hold C to see the original it came from", onpointerdown: () => setPeek(true), onpointerup: () => setPeek(false), onpointerleave: () => setPeek(false) }, "Original (hold C)"),
+        h("button", { class: "rvduelb", title: "Pick the best (A): two at a time, keep the better one until one is left; it becomes this view's pick", onclick: () => startDuel() }, "Pick the best (A)"),
+        h("button", { class: "rvpickb", title: "Pick (P): this view's one pick, for the sheet and the client; then on to the next view", onclick: () => pick() }, "Pick (P)"),
+        h("button", { class: "rvherob", title: "Hero (H): the one picture of the project, made big on the sheet", onclick: () => hero() }, "Hero (H)"),
         h("button", { class: "rvside", title: "Side by side (S): two to four versions next to each other, the favourites when there are two or more", onclick: () => setGrid(!grid) }, "Side by side (S)"),
-        h("button", { class: "rvfavs", title: "Do something with the favourites in this set", onclick: (e) => favMenu(e.currentTarget) }, "Favourites ▾"),
+        h("button", { class: "rvfavs", title: "Do something with the favourites in this set", onclick: (e) => favMenu(e.currentTarget) }, "Favourites", V.icoEl ? V.icoEl("chev") : null),
         h("button", { class: "rvgo", title: "Show it on the canvas (Enter)", onclick: () => goTo() }, "Show on canvas"),
-        h("button", { class: "rvclose", title: "Close (Esc)", onclick: () => close() }, "×"))),
+        h("button", { class: "rvclose", title: "Close (Esc)", "aria-label": "Close Review", onclick: () => close() }, V.icoEl("close", "md")))),
     h("div", { class: "rvstage" },
       h("button", { class: "rvnav prev", title: "Previous (←)", onclick: () => move(-1), html: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>' }),
       h("div", { class: "rvpics" }, h("img", { class: "rvimg a", alt: "" }), h("img", { class: "rvimg b", alt: "" }), h("span", { class: "rvtag" }, "Original")),
       h("div", { class: "rvgrid", hidden: true }),
+      h("div", { class: "rvduel", hidden: true }),
+      h("div", { class: "rvend", hidden: true, role: "dialog", "aria-label": "Your picks" }),
       h("button", { class: "rvnav next", title: "Next (→)", onclick: () => move(1), html: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' })),
+    h("div", { class: "rvbar", role: "group", "aria-label": "For the picture shown" }), // (v3.74 D2, loop-07, MAT-3)
     h("div", { class: "rvstrip" }),
     h("div", { class: "rvkeys" }, "← → move · F favourite · X set aside · S side by side · hold C original · Enter show on canvas · Esc close"));
   document.body.append(ov);
+  if (V.stage) { // v3.74 B2: the gallery stage's look and background switch (Shift+B); each picture sized to its true shape so the radius and shadow sit on the picture
+    V.stage(ov.querySelector(".rvpics"), null, { bare: true });
+    ov.querySelectorAll(".rvimg").forEach((im) => im.addEventListener("load", fitPics));
+    if (window.ResizeObserver) new ResizeObserver(fitPics).observe(ov.querySelector(".rvpics"));
+  }
   ov.querySelector(".rvstage").addEventListener("wheel", (e) => { e.preventDefault(); if (Math.abs(e.deltaY) > 20) move(e.deltaY > 0 ? 1 : -1); }, { passive: false });
-  ov.addEventListener("pointerdown", (e) => { if (menu && !e.target.closest(".rvmenu,.rvfavs")) closeMenu(); });
+  ov.addEventListener("pointerdown", (e) => { if (menu && !e.target.closest(".rvmenu,.rvfavs,.rvmb")) closeMenu(); });
+}
+// (v3.74 B2) the two stacked pictures take the size that fits the room inside the stage's padding (never stretched over it),
+// so the stage's radius and shadow follow the picture's own edges; fitted again when the window changes
+function fitPics() {
+  const box = ov && ov.querySelector(".rvpics"); if (!box || box.hidden) return;
+  const cs = getComputedStyle(box), w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  if (!(w > 0 && h > 0)) return;
+  ov.querySelectorAll(".rvimg").forEach((im) => { if (!im.naturalWidth) return; const s = Math.min(w / im.naturalWidth, h / im.naturalHeight); im.style.width = Math.round(im.naturalWidth * s) + "px"; im.style.height = Math.round(im.naturalHeight * s) + "px"; });
 }
 const cur = () => set[at];
 const srcOf = (n) => V.parents(n.id).find((p) => p.status === "done" && p.type === "image");
@@ -13613,6 +16772,7 @@ const urlOf = (n) => (n.type === "image" ? n.url : n.poster || n.thumb || n.url)
 let front = "a";
 function show(instant) {
   const n = cur(); if (!n) return;
+  if (duel) { paintDuel(); return paintBar(); }
   if (grid) { paintGrid(); return paintBar(); }
   const shown = peek && srcOf(n) ? srcOf(n).url : urlOf(n);
   // cross-fade between two stacked images
@@ -13632,7 +16792,7 @@ function paintGrid() {
     const src = peek && srcOf(n) ? srcOf(n).url : urlOf(n), sub = V.nodeSub ? V.nodeSub(n) : "";
     g.append(h("div", { class: "rvcell" + (n === cur() ? " on" : "") + (n.rejected ? " rej" : ""), title: "Click to see it on its own", onclick: () => { at = set.indexOf(n); setGrid(false); } },
       h("img", { src, alt: "" }),
-      h("div", { class: "rvcap" }, h("button", { class: "rvstar" + (n.fav ? " on" : ""), title: n.fav ? "Favourite: click to take the star off" : "Favourite", onclick: (e) => { e.stopPropagation(); n.fav = !n.fav; sendFav(n); if (n.fav) at = set.indexOf(n); touched(); show(); } }, n.fav ? "★" : "☆"),
+      h("div", { class: "rvcap" }, h("button", { class: "rvstar" + (n.fav ? " on" : ""), title: n.fav ? "Favourite: click to take the star off" : "Favourite", onclick: (e) => { e.stopPropagation(); n.fav = !n.fav; sendFav(n); if (n.fav) at = set.indexOf(n); touched(); show(); } }, V.icoEl(n.fav ? "star-fill" : "star")),
         h("b", {}, title(n)), sub ? h("small", {}, sub) : null)));
   });
 }
@@ -13653,15 +16813,20 @@ function paintBar() {
   }
   ov.querySelector(".rvcount").textContent = grid ? `${gridSet().length} side by side · ${at + 1} of ${set.length}` : where;
   ov.querySelector(".rvprompt").textContent = [title(n), V.nodeSub ? V.nodeSub(n) : (n.prompt || "").slice(0, 160)].filter(Boolean).join(" · ");
-  const fb = ov.querySelector(".rvfav"); fb.classList.toggle("on", !!n.fav); fb.textContent = n.fav ? "★ Favourite (F)" : "☆ Favourite (F)";
+  const fb = ov.querySelector(".rvfav"); fb.classList.toggle("on", !!n.fav); fb.replaceChildren(V.icoEl(n.fav ? "star-fill" : "star"), " Favourite (F)");
   ov.querySelector(".rvrej").classList.toggle("on", !!n.rejected);
   ov.querySelector(".rvrej").textContent = n.rejected ? "Set aside · undo (X)" : "Set aside (X)";
   ov.querySelector(".rvorig").disabled = !srcOf(n);
+  const pb = ov.querySelector(".rvpickb"), hb = ov.querySelector(".rvherob"), db = ov.querySelector(".rvduelb");
+  pb.classList.toggle("on", !!n.pick); pb.textContent = n.pick ? "Picked (P)" : "Pick (P)"; pb.setAttribute("aria-pressed", String(!!n.pick));
+  hb.classList.toggle("on", !!n.hero); hb.setAttribute("aria-pressed", String(!!n.hero));
+  db.disabled = duelPool().length < 2 && !duel; db.classList.toggle("on", !!duel); db.textContent = duel ? "Stop picking (A)" : "Pick the best (A)";
   const sb = ov.querySelector(".rvside"); sb.disabled = set.length < 2; sb.classList.toggle("on", grid); sb.textContent = grid ? "One at a time (S)" : "Side by side (S)";
-  const fm = ov.querySelector(".rvfavs"); fm.hidden = !favs; fm.textContent = `Favourites (${favs}) ▾`;
+  const fm = ov.querySelector(".rvfavs"); fm.hidden = !favs; if (V.icoLabel) V.icoLabel(fm, `Favourites (${favs})`, "chev"); else fm.textContent = `Favourites (${favs})`;
   ov.querySelector(".rvtag").hidden = !(peek && srcOf(n)) || grid;
+  paintActs(n);
   ov.querySelector(".rvpics").classList.toggle("rejected", !!n.rejected);
-  ov.querySelectorAll(".rvthumb").forEach((t, i) => { t.classList.toggle("on", i === at); t.classList.toggle("rej", !!set[i].rejected); t.querySelector(".rvr").textContent = set[i].fav ? "★" : ""; });
+  ov.querySelectorAll(".rvthumb").forEach((t, i) => { t.classList.toggle("on", i === at); t.classList.toggle("rej", !!set[i].rejected); t.classList.toggle("pick", !!set[i].pick); t.classList.toggle("c1hero", !!set[i].hero); t.querySelector(".rvr").replaceChildren(...(set[i].fav ? [V.icoEl("star-fill")] : [])); });
   ov.querySelector(".rvthumb.on")?.scrollIntoView({ block: "nearest", inline: "center", behavior: V.motionOn() ? "smooth" : "auto" });
 }
 function strip() {
@@ -13690,6 +16855,42 @@ function fav() { const n = cur(); n.fav = !n.fav; sendFav(n); touched(); show();
 function reject() { const n = cur(); n.rejected = !n.rejected; if (!n.rejected) delete n.rejected; touched(); show(); if (n.rejected && at < set.length - 1 && !grid) setTimeout(() => move(1), 180); }
 function setPeek(on) { if (peek === on) return; peek = on; show(); }
 function goTo() { const n = cur(); close(); if (n.rejected) { delete n.rejected; } V.sel = [n.id]; V.render(); V.selectionChanged(); V.centerOn(n); }
+// ---------- v3.74 D2 (loop-07, MAT-3): the action bar along the bottom, for the picture shown ----------
+// Tweak ▾ / Relight ▾ (panel.js V.tweak: an edit of this picture, the rest kept), Fix one area…, Upscale ×2 (U), Download (D);
+// on a materials option (matbucket.js n.option): Use these materials (chooses it, as the options strip does) and Send these
+// materials to SketchUp (the Library material, else the texture lifted from the render). Everything but Download leaves
+// Review with the picture selected, so the result lands beside it on the canvas.
+const onCanvas = (n, fn) => () => { closeMenu(); close(); V.setSel ? V.setSel([n.id]) : (V.sel = [n.id]); V.render(); V.selectionChanged(); fn(); };
+const optItem = (n) => { const m = n && n.option && n.option.mat; return m && V.libraryItem ? V.libraryItem(m.src === "lib" ? m.id : m.libId) : null; };
+function actsFor(n) {
+  if (!imgOk(n)) return [];
+  const out = [], tw = V.tweaks && V.tweak && !(V.isCapture && V.isCapture(n)) ? V.tweaks() : [];
+  [["tweak", "Tweak"], ["relight", "Relight"]].forEach(([row, name]) => { const l = tw.filter((t) => t.row === row); if (l.length) out.push({ label: name, menu: l.map((t) => [t.name, onCanvas(n, () => V.tweak(n, t.id))]), title: `${name} this picture: an edit of it, the rest kept` }); });
+  if (V.fixArea && kindOf(n) !== "view") out.push({ label: "Fix one area…", run: onCanvas(n, () => V.fixArea(n)), title: "Paint over one part of this picture and say what should be there" });
+  if (V.upscale2x) out.push({ label: "Upscale ×2", key: "U", run: onCanvas(n, () => V.upscale2x(n)), title: "A sharper copy at twice the size (U)" });
+  out.push({ label: "Download", key: "D", run: () => V.downloadNode(n), title: "Download this picture (D)" });
+  if (n.option && V.matOptions) {
+    const it = optItem(n), nm = n.option.name || "this material";
+    out.push({ label: "Use these materials", run: onCanvas(n, () => V.matOptions.choose(n)), title: `Choose ${nm} for ${n.option.letter || "the surface"}: the other options are set aside`, cls: "rvmat" });
+    if (it && V.sendMaterialsToSketchUp) out.push({ label: "Send these materials to SketchUp", run: () => { closeMenu(); V.sendMaterialsToSketchUp([it], nm); }, title: `Send ${nm} to SketchUp as a real material (Paint Bucket)`, cls: "rvmat" });
+    else if (V.matOptions.lift) out.push({ label: "Send these materials to SketchUp", run: onCanvas(n, () => V.matOptions.lift(n)), title: "Lift the material from this render into a seamless SketchUp texture", cls: "rvmat" });
+  }
+  return out;
+}
+function paintActs(n) {
+  const bar = ov && ov.querySelector(".rvbar"); if (!bar) return;
+  const acts = duel || endCard ? [] : actsFor(n), key = (n ? n.id : "") + "|" + acts.map((a) => a.label).join("|");
+  bar.hidden = !acts.length; if (bar.dataset.k === key) return; bar.dataset.k = key;
+  bar.replaceChildren(...acts.map((a) => h("button", { class: "mini" + (a.menu ? " rvmb" : "") + (a.cls ? " " + a.cls : ""), type: "button", title: a.title || "", "aria-haspopup": a.menu ? "menu" : null,
+    onclick: (e) => (a.menu ? actMenu(e.currentTarget, a.menu) : a.run()) }, a.label, a.menu && V.icoEl ? V.icoEl("chev") : null, a.key ? h("kbd", {}, a.key) : null))); // (v3.74 D2, N1: the shared chevron icon, not a ▾ glyph)
+}
+function actMenu(btn, rows) {
+  if (menu && menu._for === btn) return closeMenu(); closeMenu();
+  const r = btn.getBoundingClientRect();
+  menu = h("div", { class: "rvmenu rvmenuup", role: "menu", style: `bottom:${Math.round(innerHeight - r.top + 4)}px;left:${Math.round(Math.max(8, Math.min(r.left, innerWidth - 248)))}px` }, ...rows.map(([l, fn]) => h("button", { role: "menuitem", onclick: fn }, l)));
+  menu._for = menu._vmBack = btn; ov.append(menu); menu.querySelector("button").focus();
+}
+const runAct = (key) => { const a = actsFor(cur()).find((x) => x.key === key); if (a) a.run(); };
 // T16: what to do with the favourites, from Review
 function closeMenu() { if (menu) menu.remove(); menu = null; }
 function favMenu(btn) {
@@ -13707,15 +16908,157 @@ function favMenu(btn) {
   menu = h("div", { class: "rvmenu", style: `top:${Math.round(r.bottom + 4)}px;right:${Math.round(innerWidth - r.right)}px` }, ...items.map(([l, fn]) => h("button", { onclick: fn }, l)));
   ov.append(menu); menu.querySelector("button").focus();
 }
-function close() {
+function close(o = {}) {
   if (!ov || ov.hidden) return;
   closeMenu();
-  ov.hidden = true; document.body.classList.remove("reviewing"); peek = false;
+  ov.hidden = true; document.body.classList.remove("reviewing"); peek = false; duel = null; endCard = false;
+  ov.querySelector(".rvduel").hidden = ov.querySelector(".rvend").hidden = true; ov.classList.remove("rvduelon");
   const rej = set.filter((n) => n.rejected).length;
   V.sel = V.sel.filter((id) => !V.node(id)?.rejected);
   V.render(); V.selectionChanged(); V.changed();
-  if (rej) V.toast(`${rej} set aside and hidden. The "${rej} set aside" chip on the source brings them back.`, false, 5000);
+  V.focusBack(opener); opener = null;
+  // (one message: the duel's own "is the pick" note is folded into this one)
+  const pk = pickName; pickName = "";
+  // (loop-07) an end-card action that closes Review says its own message: the set-aside note is dropped (the chip stays)
+  if (o.quiet) { V.closeToastKey("rvpick"); return; }
+  if (rej) { V.closeToastKey("rvpick"); V.toast(`${pk ? pk + " is the pick; " : ""}${rej} set aside and hidden. The "${rej} set aside" chip on the source brings them back.`, false, 5000); }
 }
+// ---------- v3.74 C1 (N9): Pick the best, Pick, Hero, the end card ----------
+const imgOk = (n) => !!n && n.type === "image" && n.status === "done" && !!n.url;
+// the view a version belongs to (its SketchUp / Revit view, else the picture it was made from): one pick each
+const viewOf = (n) => (V.captureOf && V.captureOf(n)) || srcOf(n) || n;
+// the versions of a picture's view, renders only, oldest first (What next's "Pick the best (N)" counts these)
+V.versionsOf = (n) => {
+  if (!n) return [];
+  const all = V.versionSet ? V.versionSet(n) : pics(V.children(viewOf(n).id));
+  return all.filter((x) => imgOk(x) && !x.rejected && MADE.includes(kindOf(x)));
+};
+const duelPool = () => { const n = cur(); if (!n) return []; const g = groupOf(n); return set.filter((x) => imgOk(x) && !x.rejected && groupOf(x) === g); };
+function startDuel() {
+  if (duel) return stopDuel();
+  const pool = duelPool(); if (pool.length < 2) return V.toast("Pick the best needs two or more versions of this view", false, 3000);
+  V.snapshot("Pick the best");
+  const cn = cur(), first = pool.includes(cn) ? cn : pool[0], rest = pool.filter((x) => x !== first);
+  duel = { pair: [first, rest[0]], queue: rest.slice(1), out: 0 };
+  hideEnd(); if (grid) setGrid(false);
+  ov.classList.add("rvduelon"); ov.querySelector(".rvpics").hidden = true; ov.querySelector(".rvduel").hidden = false;
+  paintKeys(); show(true);
+}
+function stopDuel() {
+  duel = null; ov.classList.remove("rvduelon"); ov.querySelector(".rvduel").hidden = true; ov.querySelector(".rvpics").hidden = grid;
+  const a = ov.querySelector(".rvimg.a"), b = ov.querySelector(".rvimg.b"); a.removeAttribute("src"); b.removeAttribute("src");
+  paintKeys(); strip(); show(true);
+}
+function paintDuel() {
+  const box = ov.querySelector(".rvduel"); box.innerHTML = "";
+  duel.pair.forEach((n, side) => box.append(h("button", { class: "rvdcell", type: "button", title: `Keep ${title(n)} (${side ? "right arrow" : "left arrow"})`, onclick: () => keepSide(side) },
+    h("img", { src: n.url, alt: title(n) }),
+    h("span", { class: "rvdcap" }, h("b", {}, title(n)), h("small", {}, side ? "Keep this one →" : "← Keep this one")))));
+  const left = duel.queue.length;
+  box.append(h("div", { class: "rvdcount" }, left ? `${left + 1} still to compare · ${duel.out} set aside` : "The last two: the one you keep is the pick"));
+}
+function keepSide(side) {
+  if (!duel) return;
+  const win = duel.pair[side], lose = duel.pair[1 - side];
+  lose.rejected = true; duel.out++;
+  if (duel.queue.length) { duel.pair = side ? [duel.queue.shift(), win] : [win, duel.queue.shift()]; at = set.indexOf(win); touched(); show(); return; }
+  const out = duel.out; duel = null; ov.classList.remove("rvduelon"); ov.querySelector(".rvduel").hidden = true; ov.querySelector(".rvpics").hidden = false;
+  at = set.indexOf(win); setPick(win); touched(); paintKeys(); strip(); show(true);
+  pickName = title(win);
+  V.toast(`${title(win)} is the pick; ${out} set aside (the "set aside" chip on the canvas brings them back)`, false, 5000, { key: "rvpick" });
+  if (nextView(win)) return; // (loop-04: on to the next view without a pick, as P does)
+  afterPick();
+}
+// several views in the set: go to the first version of the next view that has no pick yet (true = moved)
+function nextView(n) {
+  if (!groupsOn()) return false;
+  const gs = [...new Set(set.map(groupOf))], gi = gs.indexOf(groupOf(n)), nextG = gs.slice(gi + 1).concat(gs.slice(0, gi)).find((g) => !set.some((x) => groupOf(x) === g && x.pick));
+  if (!nextG) return false;
+  at = set.findIndex((x) => groupOf(x) === nextG && !x.rejected); if (at < 0) at = set.findIndex((x) => groupOf(x) === nextG);
+  setTimeout(show, 160); return true;
+}
+// (loop-04) the project's other views that have versions but no pick yet (the end card offers the next one)
+const viewsLeft = () => {
+  const by = new Map();
+  V.G.nodes.forEach((x) => { if (!imgOk(x) || x.rejected || !MADE.includes(kindOf(x))) return; const v = viewOf(x); if (!v || v === x) return; if (!by.has(v.id)) by.set(v.id, { v, n: 0, pick: false }); const o = by.get(v.id); o.n++; if (x.pick) o.pick = true; });
+  return [...by.values()].filter((o) => !o.pick).sort((a, b) => (a.v.created || 0) - (b.v.created || 0));
+};
+function openView(o) {
+  hideEnd(); close({ quiet: true });
+  V.setSel ? V.setSel([o.v.id]) : (V.sel = [o.v.id]); V.render(); V.selectionChanged();
+  V.openReview(); if (V.reviewOpen() && o.n > 1) setTimeout(() => startDuel(), 60);
+}
+function setPick(n) {
+  const g = viewOf(n).id;
+  V.G.nodes.forEach((x) => { if (x !== n && x.pick && viewOf(x).id === g) delete x.pick; });
+  n.pick = true; if (n.rejected) delete n.rejected;
+}
+function pick() {
+  const n = cur(); if (!imgOk(n)) return;
+  V.snapshot("Pick");
+  if (n.pick) { delete n.pick; touched(); return show(); }
+  setPick(n); touched(); strip(); show();
+  // several views: on to the first version of the next view that has no pick yet
+  if (nextView(n)) return;
+  afterPick();
+}
+// the one hero of the project (again on the hero: taken off); a hero is also its view's pick. true = it is the hero now
+function setHero(n) { const on = !n.hero; V.G.nodes.forEach((x) => { if (x.hero) delete x.hero; }); if (on) { n.hero = true; if (!n.pick) setPick(n); } return on; }
+function hero(n = cur()) {
+  if (!imgOk(n)) return;
+  V.snapshot("Hero");
+  const on = setHero(n);
+  touched(); strip(); show();
+  V.toast(on ? `${title(n)} is the hero: the one picture for the project` : "Hero taken off", false, 2800);
+  if (endCard) showEnd(); else if (on) afterPick(); // (the end card repaints either way)
+}
+// every view in the set has its pick: the end card
+function afterPick() {
+  const gs = [...new Set(set.filter(imgOk).map(groupOf))];
+  if (gs.length && gs.every((g) => set.some((x) => groupOf(x) === g && x.pick))) showEnd();
+}
+const allPicks = () => V.G.nodes.filter((x) => x.pick && imgOk(x) && !x.rejected).sort((a, b) => (a.hero ? -1 : b.hero ? 1 : 0) || ((viewOf(a).created || 0) - (viewOf(b).created || 0)));
+function showEnd() {
+  const box = ov.querySelector(".rvend"), picks = allPicks(), hn = picks.find((x) => x.hero);
+  endCard = true; box.hidden = false;
+  const act = (fn) => () => { hideEnd(); close({ quiet: true }); fn(); };
+  const left = viewsLeft(), nv = left[0];
+  const up = h("button", { class: "mini", type: "button", disabled: !hn || !V.upscale2x, title: hn ? `A sharper, bigger copy of ${title(hn)}` : "Press H on the best picture to make it the hero", onclick: act(() => V.upscale2x(hn)) }, "Upscale hero");
+  const sheet = h("button", { class: "mini rvendgo", type: "button", disabled: !picks.length, title: "A presentation sheet of the picks, the hero first", onclick: act(() => (V.sheetsFromPicks ? V.sheetsFromPicks(picks, { hero: hn || null }) : V.openSheets(picks))) }, "Make the sheet");
+  const dl = h("button", { class: "mini", type: "button", disabled: !picks.length, title: "Download every pick", onclick: act(() => (V.downloadMany ? V.downloadMany(picks) : picks.forEach((x) => V.downloadNode(x)))) }, `Download picks (${picks.length})`);
+  box.replaceChildren(h("b", { class: "rvendt" }, `${picks.length} pick${picks.length === 1 ? "" : "s"}${hn ? " · hero " + title(hn) : ""}`),
+    // (loop-05, present-8) a click on a pick makes it the hero (again: takes it off); H does it for the picture you were on
+    h("div", { class: "rvendpics" }, ...picks.slice(0, 8).map((x) => h("button", { class: "rvendpic" + (x.hero ? " c1hero" : ""), type: "button", "aria-pressed": String(!!x.hero), title: x.hero ? `${title(x)} is the hero: click to take it off` : `Make ${title(x)} the hero`, onclick: () => hero(x) }, h("img", { src: x.thumb || x.url, alt: "" }), h("small", {}, (x.hero ? "Hero · " : "") + title(x))))),
+    h("p", { class: "hint" }, hn ? "Press H again, or click the hero, to take it off." : "No hero yet: press H, or click the pick that should be the hero."),
+    ...(nv ? [h("p", { class: "hint" }, `${left.length === 1 ? "One more view has" : left.length + " more views have"} versions and no pick yet: ${title(nv.v)} (${nv.n} version${nv.n === 1 ? "" : "s"}).`)] : []),
+    h("div", { class: "rvendrow" }, up, sheet, dl, nv ? h("button", { class: "mini", type: "button", title: `Review ${title(nv.v)}'s versions and pick the best`, onclick: () => openView(nv) }, "Next view") : null, h("button", { class: "mini", type: "button", onclick: hideEnd }, "Back to Review")));
+  (sheet.disabled ? box.querySelector("button:not(:disabled)") : sheet).focus();
+}
+function hideEnd() { endCard = false; const box = ov && ov.querySelector(".rvend"); if (box) box.hidden = true; }
+V.openDuel = () => { V.openReview(); if (V.reviewOpen()) setTimeout(() => startDuel(), 60); };
+// v3.74 D3 hook: the phone's own Pick the best screen (mobile/phone.js) keeps these same rules for picks and the hero
+V.pickApi = { viewOf, setPick, setHero, allPicks, viewsLeft };
+// the pick and hero marks on a canvas card, a round's letter, and the number of rounds on a stack's badge (canvas.js hook)
+const LET = "ABCDEFGH";
+V.cardMarks = (n, el) => {
+  el.classList.toggle("picked", !!n.pick); el.classList.toggle("c1hero", !!n.hero);
+  const im = el.querySelector(".nimg") || el;
+  if (n.pick || n.hero) im.append(h("span", { class: "npick", title: n.hero ? "The hero: the one picture of the project" : "This view's pick" }, h("i", { class: "ic ic-star-fill", "aria-hidden": "true" }), n.hero ? "Hero" : "Pick"));
+  if (n.round && n.round.n > 1 && n.round.i < LET.length && n.status === "done") im.append(h("span", { class: "nround", title: `Version ${LET[n.round.i]} of a round of ${n.round.n}` }, LET[n.round.i]));
+  const sb = el.querySelector(".stbadge");
+  if (sb && V.versionSet) { const r = new Set(V.versionSet(n).filter((x) => x.round && x.round.n > 1).map((x) => x.round.id)).size; if (r) sb.insertBefore(h("span", { class: "stround" }, ` · ${r} round${r > 1 ? "s" : ""}`), sb.querySelector(".ic")); }
+};
+// the film strip (draw.js paintStrip hook): picks and the hero marked, a round's versions grouped under "Round N"
+V.stripMark = (b, x, list) => {
+  b.classList.toggle("pick", !!x.pick); b.classList.toggle("c1hero", !!x.hero);
+  if (x.pick || x.hero) { const pic = b.querySelector(".svpic"); if (pic) pic.append(h("span", { class: "svpickm" }, x.hero ? "Hero" : "Pick")); }
+  if (!x.round || x.round.n < 2) return;
+  const ids = [...new Set(list.filter((m) => m.round && m.round.n > 1).map((m) => m.round.id))], i = list.indexOf(x), prev = list[i - 1], next = list[i + 1];
+  b.classList.add("inround");
+  if (!prev || !prev.round || prev.round.id !== x.round.id) { b.classList.add("rstart"); b.dataset.round = `Round ${ids.indexOf(x.round.id) + 1}`; }
+  if (!next || !next.round || next.round.id !== x.round.id) b.classList.add("rend");
+};
+V.isPick = (n) => !!(n && n.pick); // (for Sheets' strip: C2 may mark picks with it)
 // put set-aside versions back (the chip on the source)
 V.unreject = (id) => { V.snapshot(); V.children(id).forEach((c) => delete c.rejected); V.render(); V.changed(); };
 document.addEventListener("keydown", (e) => {
@@ -13723,11 +17066,28 @@ document.addEventListener("keydown", (e) => {
     const k = e.key.toLowerCase(), stop = () => { e.preventDefault(); e.stopImmediatePropagation(); }, mod = e.ctrlKey || e.metaKey || e.altKey;
     if (menu) { // the Favourites menu: up/down, Enter, Esc
       const bs = [...menu.querySelectorAll("button")], i = bs.indexOf(document.activeElement);
-      if (k === "escape") { stop(); closeMenu(); ov.querySelector(".rvfavs").focus(); return; }
+      if (k === "escape") { stop(); const b = menu._for || ov.querySelector(".rvfavs"); closeMenu(); b.focus(); return; }
       if (k === "arrowdown" || k === "arrowup") { stop(); bs[(i + (k === "arrowdown" ? 1 : bs.length - 1)) % bs.length].focus(); return; }
       if (k === "enter" || k === " ") { stop(); (bs[i] || bs[0]).click(); return; }
       stop(); return;
     }
+    if (endCard) { // the end card: its buttons; Esc goes back to Review
+      if (k === "escape") { stop(); hideEnd(); return; }
+      // (loop-05, present-8) H makes the picture you were on the hero (a pick), else the first pick; the card repaints.
+      // (C1v-03) H again takes it off, as a click on the hero does (a hero on the card: H takes it off)
+      if (k === "h" && !mod) { stop(); const c = cur(), ps = allPicks(), t = ps.find((x) => x.hero) || (c && c.pick && imgOk(c) ? c : ps[0]); if (t) hero(t); return; }
+      if (k === "tab" || k === "enter" || k === " ") return; // (the focused button)
+      stop(); return;
+    }
+    if (duel) { // Pick the best: left arrow keeps the left, right arrow the right; A or Esc stops
+      if (k === "arrowleft" || k === "arrowright") { stop(); keepSide(k === "arrowleft" ? 0 : 1); return; }
+      if (k === "a" || k === "escape") { stop(); stopDuel(); return; }
+      stop(); return;
+    }
+    if (k === "a" && !mod) { stop(); startDuel(); return; }
+    if (k === "p" && !mod) { stop(); pick(); return; }
+    if (k === "h" && !mod) { stop(); hero(); return; }
+    if (k === "enter" && !grid && groupsOn()) { stop(); pick(); return; } // (several views: Enter picks and moves on, as P)
     if ((k === "arrowdown" || k === "arrowup") && groupsOn()) { stop(); jumpGroup(k === "arrowdown" ? 1 : -1); }
     else if (k === "arrowright" || k === "arrowdown") { stop(); move(1); }
     else if (k === "arrowleft" || k === "arrowup") { stop(); move(-1); }
@@ -13735,6 +17095,8 @@ document.addEventListener("keydown", (e) => {
     else if ((k === "x" || k === "delete") && !mod) { stop(); reject(); }
     else if (k === "s" && !mod) { stop(); setGrid(!grid); }
     else if (k === "c" && !mod) { stop(); setPeek(true); }
+    else if ((k === "u" || k === "d") && !mod && !grid) { stop(); runAct(k.toUpperCase()); } // (v3.74 D2, loop-07: Upscale ×2, Download)
+    else if (k === "b" && e.shiftKey && !mod && V.stageCycleBg) { stop(); V.stageCycleBg(); } // (v3.74 B2: the stage's background)
     else if (k === "enter") { stop(); if (grid) setGrid(false); else goTo(); }
     else if (k === "escape" && grid) { stop(); setGrid(false); }
     else if (k === "escape" || k === "r" || k === " ") { stop(); close(); }
@@ -13744,6 +17106,154 @@ document.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof Element && e.target.matches("input,textarea,select,[contenteditable]")) && V.viewerMode !== "draw" && V.viewerMode !== "touch" && V.selNodes().length && (!V.canvasLive || V.canvasLive())) { e.preventDefault(); V.openReview(); } // (v3.69 A2: not over another page or a pop-up)
 }, true);
 document.addEventListener("keyup", (e) => { if (ov && !ov.hidden && e.key.toLowerCase() === "c") setPeek(false); }, true);
+})();
+
+;
+
+/* ===== web/present.js ===== */
+/* VizLab Present mode (v3.74 B2, NEXT-LEVEL N3, journey-presentation:big:5): show a client straight from VizLab.
+   Full screen, black, no chrome: one picture per slide with the Clarman logo, the project title and the picture's name in a
+   quiet corner (they fade after 2 s and come back when the mouse moves). The arrow keys, a click or a swipe move on
+   (PageUp / PageDown, Home / End too); holding C or the mouse button shows the picture it came from (the SketchUp view or
+   the photo); Esc leaves (so does leaving the browser's full screen).
+   The set: the favourites on the canvas, else the selected pictures (two or more), else the versions of the selected or
+   newest picture (V.versionSet without the view, as Review shows renders only). From Sheets: the sheet's pictures in page
+   and reading order (V.sheetPictures). Ways in: P on the canvas or on Sheets, Ctrl+Shift+P anywhere, "Present" in
+   Picture view and on Sheets, Ctrl+K. Reduced motion (Settings > Animations off, or the OS setting) drops the cross-fade. */
+(() => {
+const V = window.V, { $, h } = V;
+let ov = null, P = null; // P = { list, at, peek, title, quietT, holdT, down }
+const pics = (ns) => (ns || []).filter((n) => n && n.status === "done" && (n.type === "image" || n.type === "video") && n.url);
+const byTime = (a, b) => (a.created || 0) - (b.created || 0);
+const kindOf = (n) => (V.pictureKind ? V.pictureKind(n) : "render");
+const title = (n) => (V.nodeTitle ? V.nodeTitle(n) : n.label) || "Picture";
+const srcOf = (n) => (V.captureOf && V.captureOf(n)) || V.parents(n.id).find((p) => p.status === "done" && p.type === "image" && p.url) || null;
+const motion = () => !!(V.motionOn && V.motionOn());
+// what to show from the canvas: favourites, else the selection, else the versions of the picture on the stage
+V.presentSet = () => {
+  const vis = V.visibleNodes ? V.visibleNodes() : V.G.nodes;
+  const favs = pics(vis.filter((n) => n.fav)).sort(byTime);
+  if (favs.length) return { list: favs, why: "favourites", start: Math.max(0, favs.indexOf(V.selNodes()[0])) };
+  const sel = pics(V.selNodes());
+  if (sel.length > 1) return { list: sel, why: "selection", start: 0 };
+  const n = sel[0] || pics(vis).sort(byTime).pop();
+  if (!n) return null;
+  let set = V.versionSet ? pics(V.versionSet(n)) : [n];
+  const made = set.filter((x) => kindOf(x) !== "view" && kindOf(x) !== "photo" && kindOf(x) !== "drawing");
+  if (made.length) set = made; // (the view is what they were made from: hold C shows it)
+  if (!set.includes(n)) set = [n].concat(set);
+  return { list: set, why: "versions", start: Math.max(0, set.indexOf(n)) };
+};
+// o: { list (nodes), title (the project's), start, from ("sheets") }
+V.present = (o = {}) => {
+  let list = pics(o.list || []), start = o.start || 0;
+  if (!list.length) {
+    const s = o.from === "sheets" && V.sheetPictures ? { list: pics(V.sheetPictures()), start: 0, why: "sheets" } : V.presentSet();
+    if (!s || !s.list.length) return V.toast(o.from === "sheets" ? "Put a picture on a sheet first, then Present" : "Nothing to present yet: capture a view or add a picture, then render it", false, 5000);
+    list = s.list; start = s.start || 0;
+  }
+  if (!ov) build();
+  const back = ov.hidden ? (V.focusFrom ? V.focusFrom() : null) : P && P.back; // (v3.74 final: review.js; the keyboard goes back there on close)
+  P = { back, list, at: Math.min(list.length - 1, Math.max(0, start)), peek: false, title: o.title || projectTitle(), quietT: 0, holdT: 0, down: null, front: "a" };
+  ov.classList.toggle("nomotion", !motion());
+  ov.querySelector(".prproj").textContent = P.title;
+  ov.hidden = false; document.body.classList.add("presenting");
+  ov.querySelector(".prs.a").replaceChildren(); ov.querySelector(".prs.b").replaceChildren();
+  ov.querySelectorAll(".prs").forEach((x) => x.classList.remove("on"));
+  show(true); wake();
+  try { if (document.fullscreenEnabled && !document.fullscreenElement && ov.requestFullscreen) ov.requestFullscreen().catch(() => {}); } catch (e) { /* the page stays as it is */ }
+  ov.focus();
+};
+V.presentOpen = () => !!ov && !ov.hidden;
+const projectTitle = () => { const n = V.project && V.project.name; return n && !(V.isAutoName && V.isAutoName(n)) ? n : "Clarman VizLab"; };
+function build() {
+  ov = h("div", { class: "present", role: "dialog", "aria-modal": "true", "aria-label": "Presentation", tabindex: "-1", hidden: true },
+    h("div", { class: "prs a" }), h("div", { class: "prs b" }),
+    h("div", { class: "prcap" }, V.logoSrc ? h("img", { class: "prlogo", src: V.logoSrc("white"), alt: "Clarman Architects" }) : null, h("div", { class: "prtext" }, h("b", { class: "prproj" }), h("span", { class: "prname" })), h("small", { class: "prcount" })),
+    h("div", { class: "prsrc", hidden: true }, "The view it came from"),
+    h("button", { class: "prclose", type: "button", title: "Leave the presentation (Esc)", "aria-label": "Leave the presentation", html: V.ico ? V.ico("close", "md") : "×", onclick: (e) => { e.stopPropagation(); close(); } }),
+    h("div", { class: "prhint" }, "← → move · hold C for the view it came from · Esc leaves"));
+  document.body.append(ov);
+  // the mouse: a click moves on, holding the button shows the source, a swipe (pointer or finger) moves either way
+  ov.addEventListener("pointerdown", (e) => { if (!P || e.button !== 0 || e.target.closest(".prclose")) return; P.down = { x: e.clientX, y: e.clientY, t: Date.now(), peeked: false }; clearTimeout(P.holdT); P.holdT = setTimeout(() => { if (P && P.down) { P.down.peeked = true; setPeek(true); } }, 260); });
+  ov.addEventListener("pointermove", (e) => { wake(); if (P && P.down && Math.hypot(e.clientX - P.down.x, e.clientY - P.down.y) > 12) { clearTimeout(P.holdT); } });
+  const up = (e) => {
+    if (!P || !P.down) return; const d = P.down; P.down = null; clearTimeout(P.holdT);
+    if (d.peeked) { setPeek(false); return; }
+    const dx = e.clientX - d.x;
+    if (Math.abs(dx) > 40) move(dx < 0 ? 1 : -1); else if (Date.now() - d.t < 600 && !e.target.closest(".prclose")) move(1);
+  };
+  ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", () => { if (P) { P.down = null; clearTimeout(P.holdT); setPeek(false); } });
+  ov.addEventListener("contextmenu", (e) => { e.preventDefault(); move(-1); });
+  ov.addEventListener("wheel", (e) => { e.preventDefault(); if (Math.abs(e.deltaY) > 20) move(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+  document.addEventListener("fullscreenchange", () => { if (ov && !ov.hidden && !document.fullscreenElement) close(true); });
+}
+const cur = () => P && P.list[P.at];
+function mediaFor(n, peekSrc) {
+  if (peekSrc) return h("img", { src: peekSrc.url, alt: "", draggable: "false" });
+  if (n.type === "video") return h("video", { src: n.url, autoplay: true, loop: true, muted: true, playsinline: true });
+  return h("img", { src: n.url, alt: "", draggable: "false" });
+}
+function show(instant) {
+  const n = cur(); if (!n || !ov) return;
+  const src = P.peek ? srcOf(n) : null;
+  const next = P.front === "a" ? "b" : "a", el = ov.querySelector(".prs." + next), old = ov.querySelector(".prs." + P.front);
+  const key = (src ? "src:" + src.id : n.id) + ":" + n.url;
+  if (old.dataset.key === key) return paintCap();
+  el.dataset.key = key; el.replaceChildren(mediaFor(n, src));
+  const swap = () => { el.classList.add("on"); old.classList.remove("on"); P.front = next; };
+  const m = el.firstChild;
+  if (instant || !motion() || !(m instanceof HTMLImageElement) || m.complete) swap(); else { m.onload = swap; m.onerror = swap; }
+  paintCap();
+}
+function paintCap() {
+  const n = cur(); if (!n) return;
+  ov.querySelector(".prname").textContent = title(n) + (V.nodeSub && V.nodeSub(n) ? " · " + V.nodeSub(n) : "");
+  ov.querySelector(".prcount").textContent = `${P.at + 1} / ${P.list.length}`;
+  const s = srcOf(n), tag = ov.querySelector(".prsrc"); tag.hidden = !(P.peek && s); if (s) tag.textContent = V.isCapture && V.isCapture(s) ? (V.viewName ? V.viewName(s) : "SketchUp view") : title(s);
+}
+const move = (d) => { if (!P) return; const i = Math.max(0, Math.min(P.list.length - 1, P.at + d)); if (i === P.at) return; P.at = i; P.peek = false; show(); wake(); };
+const jump = (i) => { if (!P) return; P.at = Math.max(0, Math.min(P.list.length - 1, i)); P.peek = false; show(); wake(); };
+function setPeek(on) { if (!P || P.peek === on) return; if (on && !srcOf(cur())) return; P.peek = on; show(true); }
+// the caption, the close button and the cursor go quiet 2 s after the mouse last moved
+function wake() { if (!ov || !P) return; ov.classList.remove("quiet"); clearTimeout(P.quietT); P.quietT = setTimeout(() => ov && ov.classList.add("quiet"), 2000); }
+function close(fromFs) {
+  if (!ov || ov.hidden) return;
+  clearTimeout(P && P.quietT); clearTimeout(P && P.holdT);
+  const back = P && P.back;
+  ov.hidden = true; document.body.classList.remove("presenting"); P = null;
+  if (V.focusBack) V.focusBack(back);
+  ov.querySelectorAll(".prs").forEach((x) => { x.replaceChildren(); x.classList.remove("on"); delete x.dataset.key; });
+  if (!fromFs && document.fullscreenElement === ov && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+}
+V.presentClose = close;
+// keys while presenting (every other key is swallowed, as in Review); P / Ctrl+Shift+P open it
+const typing = (e) => e.target instanceof Element && e.target.matches("input,textarea,select,[contenteditable],[contenteditable] *");
+const popOpen = () => !!document.querySelector(".modal:not([hidden]), .review:not([hidden]), .cmdk:not([hidden]), .tour:not([hidden]), .keysheet:not([hidden])") || (!!$("#ralPop") && !$("#ralPop").hidden) || !!(V.matTool && V.matTool.dialog && V.matTool.dialog());
+window.addEventListener("keydown", (e) => {
+  if (ov && !ov.hidden) {
+    if (e.key === "?" || (V.keySheetOpen && V.keySheetOpen())) return; // (v3.74 D1: the ? sheet works here; guide.js takes the keys while it is open)
+    const k = e.key.toLowerCase(), stop = () => { e.preventDefault(); e.stopImmediatePropagation(); }, mod = e.ctrlKey || e.metaKey || e.altKey;
+    if (k === "escape") { stop(); close(); }
+    else if (k === "arrowright" || k === "arrowdown" || k === "pagedown" || k === " " || k === "enter") { stop(); move(1); }
+    else if (k === "arrowleft" || k === "arrowup" || k === "pageup" || k === "backspace") { stop(); move(-1); }
+    else if (k === "home") { stop(); jump(0); }
+    else if (k === "end") { stop(); jump(P.list.length - 1); }
+    else if (k === "c" && !mod) { stop(); setPeek(true); }
+    else if (!mod || k !== "p") stop(); // (nothing else reaches the canvas while presenting; Present is always black, so Shift+B does nothing here)
+    return;
+  }
+  if (typing(e)) return;
+  const k = e.key.toLowerCase(), page = document.body.dataset.view;
+  const onSheets = page === "sheets" && !$("#ovSheets").hidden;
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && k === "p" && !popOpen()) { e.preventDefault(); e.stopImmediatePropagation(); V.present(onSheets ? { from: "sheets" } : {}); return; }
+  if (k !== "p" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || popOpen()) return;
+  if (onSheets) { e.preventDefault(); e.stopImmediatePropagation(); V.present({ from: "sheets" }); return; }
+  if (V.viewerMode === "draw" || V.viewerMode === "touch") return; // (P is Draw's polygon; Touch-ups keeps its keys)
+  if (page && page !== "canvas") return;
+  e.preventDefault(); e.stopImmediatePropagation(); V.present();
+}, true);
+window.addEventListener("keyup", (e) => { if (ov && !ov.hidden && e.key.toLowerCase() === "c") setPeek(false); }, true);
 })();
 
 ;
@@ -15097,7 +18607,7 @@ const toImage = () => {
   if (V.tool === "upscale" && V.setTool) V.setTool("editor");
 };
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
-const nextStep = () => (V.selImages && V.selImages()[0] ? "Press Render." : "Select your view and press Render.");
+const nextStep = () => (V.chainRenders ? "Rendering now." : V.selImages && V.selImages()[0] ? "Press Render." : "Select your view and press Render."); // (v3.74 C4 hook: a Ctrl+K line that also renders)
 
 // ---------- v3.69: which kind of scene the panel opens on, remembered per project ----------
 const modeOf = new WeakMap(); // V.G (the project as it is open) -> the kind last used
@@ -15628,7 +19138,7 @@ function myTile(s) {
     menu = h("div", { class: "libmenu scmenu", role: "menu" },
       h("button", { role: "menuitem", onclick: () => { closeMenu(); V.renameMyScene(s.name); } }, "Rename…"),
       h("button", { role: "menuitem", onclick: () => { closeMenu(); V.deleteMyScene(s.name); } }, "Delete…"));
-    menu._for = more; document.body.append(menu);
+    menu._for = menu._vmBack = more; document.body.append(menu); // (_vmBack, v3.74 D2: Rename…/Delete… give the keyboard back to ⋯)
     const r = more.getBoundingClientRect(); menu.style.top = Math.round(Math.min(r.bottom + 4, innerHeight - menu.offsetHeight - 8)) + "px"; menu.style.left = Math.round(Math.max(8, r.right - menu.offsetWidth)) + "px";
     menu.querySelector("button").focus({ preventScroll: true });
   } }, "⋯");
@@ -15692,10 +19202,13 @@ let cur = null, hideT = 0, lastX = 0, lastY = 0, fading = null, muted = [];
 const unmute = () => { for (const el of muted) if (el.dataset.hztitle != null) { el.setAttribute("title", el.dataset.hztitle); delete el.dataset.hztitle; } muted = []; };
 const mute = (img) => { unmute(); for (let el = img; el && el !== document.body; el = el.parentElement) if (el.hasAttribute("title")) { el.dataset.hztitle = el.getAttribute("title"); el.removeAttribute("title"); muted.push(el); } };
 const place = (x, y) => {
-  const r = box.getBoundingClientRect(), pad = 18, W = innerWidth, H = innerHeight;
+  const r = { width: box.offsetWidth, height: box.offsetHeight }, pad = 18, W = innerWidth, H = innerHeight; // (v3.74 C3 fix 3: layout size, not the grow animation's scaled box, which let a mousemove mid-grow drop the preview over the action row)
   let left = x + pad, top = y + pad;
   if (left + r.width > W - 8) left = x - pad - r.width; // flip to the left of the mouse
   if (top + r.height > H - 8) top = H - 8 - r.height;
+  // (v3.74 C3) a dialog's action row marked data-hzkeep stays in sight: the preview sits above it
+  const md = cur && cur.closest(".modal"), keep = md && md.querySelector("[data-hzkeep]");
+  if (keep) { const k = keep.getBoundingClientRect(), L = Math.max(8, left); if (top + r.height > k.top - 8 && L < k.right && L + r.width > k.left) { top = k.top - 8 - r.height; if (top < 8) { const ih = im.offsetHeight, s = Math.max(.3, (ih - (8 - top)) / ih); im.style.width = Math.round(im.offsetWidth * s) + "px"; im.style.height = Math.round(ih * s) + "px"; top = 8; } } }
   box.style.left = Math.max(8, left) + "px"; box.style.top = Math.max(8, top) + "px";
 };
 const nameOf = (img) => { const c = img.closest(".libcard, .sctile, .pktile, .envopt, .envset"); return (c && (c.querySelector("b, .envlab")?.textContent || "").trim()) || img.title || img.closest("[title]")?.title || ""; };
@@ -15750,6 +19263,9 @@ const SIZES = { A4: [297, 210], A3: [420, 297], A2: [594, 420], A1: [841, 594] }
 // so an A1 sheet is an A4 sheet enlarged: the same proportions at every size
 const K = { A4: 1, A3: Math.SQRT2, A2: 2, A1: 2 * Math.SQRT2 };
 const CAP_PT = 8.5; // picture titles at A4
+// v3.74 C2 (journey-presentation PR-11): the sheet can have larger picture titles (S.capBig), titles without the number
+// (S.capMode "name") or none at all ("none"); the default is as before ("01  Title" at 8.5 pt)
+const capPt = () => CAP_PT * (S && S.capBig ? 1.3 : 1), noTitles = () => !!(S && S.capMode === "none");
 const PT = 0.3528; // mm per point
 // layouts = split trees (drawn for landscape; portrait pages swap across and down). A part is a weight (one frame)
 // or [weight, sub-split]; across = side by side, down = stacked. Old ids (1, 2h, 2v, 3l, 3t, 4, 6) are kept.
@@ -15777,6 +19293,9 @@ const LAYOUTS = [
   ["gs6", "Offset pairs (6)", GR(3, 7, [0, 0, 1, 3], [0, 3, 1, 3], [1, 1, 1, 3], [1, 4, 1, 3], [2, 0, 1, 3], [2, 3, 1, 3])],
   ["gsb7", "Brick (7)", GR(8, 2, [0, 0, 2, 1], [2, 0, 2, 1], [4, 0, 2, 1], [6, 0, 2, 1], [1, 1, 2, 1], [3, 1, 2, 1], [5, 1, 2, 1])],
   ["gsm8", "Masonry (8)", GR(4, 6, [0, 0, 1, 4], [0, 4, 1, 2], [1, 0, 1, 2], [1, 2, 1, 4], [2, 0, 1, 3], [2, 3, 1, 3], [3, 0, 1, 4], [3, 4, 1, 2])],
+  // v3.74 C2 (N12, journey-presentation:big:4): hero grids, the hero (first frame) spanning two columns and two rows
+  ["gh5", "Hero and four (grid)", GR(4, 2, [0, 0, 2, 2], [2, 0, 1, 1], [3, 0, 1, 1], [2, 1, 1, 1], [3, 1, 1, 1])],
+  ["gh6", "Hero and five (grid)", GR(3, 3, [0, 0, 2, 2], [2, 0, 1, 1], [2, 1, 1, 1], [0, 2, 1, 1], [1, 2, 1, 1], [2, 2, 1, 1])],
   // collage: overlapping frames with a white border
   ["cl2", "Overlap", FR([0, 0, 0.7, 0.8], [0.52, 0.42, 0.48, 0.58, 1])],
   ["cl3", "Cascade", FR([0, 0, 0.46, 0.56], [0.27, 0.22, 0.46, 0.56, 1], [0.54, 0.44, 0.46, 0.56, 1])],
@@ -15868,7 +19387,15 @@ function chrome(p, ed) {
   out.push({ t: "line", x1: tb.x, y1: tb.y, x2: tb.x + tb.w, y2: tb.y, w: 0.2, c: "#bbbbbb" });
   const lh = 7.5 * k, lw = lh * 808 / 200, base = tb.y + tb.h * 0.66, pt = 13 * k;
   out.push({ t: "logo", x: tb.x + tb.w - lw, y: base - lh * 0.86, w: lw, h: lh });
-  const room = tb.w - lw - 10 * k, gap = 5 * k, name = projTitle();
+  // (C2, PR-11) optional date and "Sheet 1 of 3" just left of the logo (Title block › Date and sheet number; off by default,
+  // so the v3.40 one-line block stays as Stephen asked unless it is ticked)
+  let metaW = 0;
+  if (S && S.tb && S.tb.meta) {
+    const i = Math.max(0, S.pages.indexOf(p)), ms = `${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}  ·  Sheet ${i + 1} of ${S.pages.length}`, mpt = pt * 0.66;
+    metaW = textW(ms, mpt, false) + 6 * k;
+    out.push({ t: "text", s: ms, x: tb.x + tb.w - lw - 5 * k, y: base, pt: mpt, bold: false, c: "#555555", align: "right" });
+  }
+  const room = tb.w - lw - 10 * k - metaW, gap = 5 * k, name = projTitle();
   // no name yet: a grey "Project title" in the editor only; the PDF leaves the space (Export asks for a name first)
   const proj = fit(name || (ed ? "Project title" : ""), room * 0.6, pt, true), pw = name || ed ? textW(proj.s, proj.pt, true) : 0;
   if (proj.s) out.push({ t: "text", s: proj.s, x: tb.x, y: base, pt: proj.pt, bold: true, c: name ? "#111111" : "#b8bcc2" });
@@ -15903,9 +19430,16 @@ function setTitle(f, v) { [...new Set([nodeOf(f.node), shown(f)])].filter(Boolea
 function titleParts(f, k, cap) {
   if (!nodeOf(f.node)) return []; // v3.69 (PG-19): an empty frame says only "Drop a picture here" (no "View --")
   const num = NUMS[f.id] ? String(NUMS[f.id]).padStart(2, "0") : "--", y = f.y + f.h - cap * PT * 0.55;
-  const title = titleOf(f), sc = f.drawScale && drawSize(f) ? `1:${f.drawScale}` : "", sw = sc ? textW(sc, cap, false) + 3 * k : 0;
+  // (C2 fixer, loop-08) a picture with no name of its own is titled with its name in the app (V.nodeTitle: "View 1 · Daylight · D"),
+  // after its number like a renamed one, so the sheet agrees with the canvas, Review and the file names
+  const title = titleOf(f) || (shown(f) && picName(shown(f))) || "", sc = f.drawScale && drawSize(f) ? `1:${f.drawScale}` : "", sw = sc ? textW(sc, cap, false) + 3 * k : 0;
   const out = sc ? [{ s: sc, x: f.x + f.w - textW(sc, cap, false), y, pt: cap, bold: false }] : [];
+  // (C2, PR-11) "Picture titles: names only": the name in bold, no number (a picture with no name of its own goes by its
+  // name in the app, V.nodeTitle)
+  if (S && S.capMode === "name") { const nm = title || (shown(f) && picName(shown(f))) || "View " + num, t = fit(nm, f.w - sw, cap, true); return [{ s: t.s, x: f.x, y, pt: t.pt, bold: true }, ...out]; }
   if (!title) return [{ s: "View " + num, x: f.x, y, pt: cap, bold: true }, ...out];
+  // (C2 fixer, materials-sheets-amber) an option's caption carries its own key ("A1 Larch boards"): no frame number before it
+  if (f.caption && title === f.caption && /^[A-H]\d+\s/.test(title)) { const t = fit(title, f.w - sw, cap, true); return [{ s: t.s, x: f.x, y, pt: t.pt, bold: true }, ...out]; }
   const a = { s: num, x: f.x, y, pt: cap, bold: true }, x2 = f.x + textW(num, cap, true) + 2.2 * k, t = fit(title, f.w - (x2 - f.x) - sw, cap, false);
   return [a, { s: t.s, x: x2, y, pt: t.pt, bold: false }, ...out];
 }
@@ -15921,7 +19455,7 @@ const SCALES = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 1250, 2500];
 // a picture at a drawing scale needs its real size: { iw, ih (pixels), mpp (real mm per pixel) } or null
 function drawSize(f) { const n = f && f.kind === "pic" && shown(f), sz = n && sizeOf(n), mpp = n && scaleOf(f); return sz && mpp ? { iw: sz[0], ih: sz[1], mpp } : null; }
 function placePic(f, k, iw, ih) {
-  const cap = f.noTitle ? 0 : CAP_PT * k, capH = cap ? cap * PT * 2.3 : 0;
+  const cap = f.noTitle || noTitles() ? 0 : capPt() * k, capH = cap ? cap * PT * 2.3 : 0;
   const pa = { x: f.x, y: f.y, w: f.w, h: Math.max(1, f.h - capH) };
   const ds = f.drawScale && drawSize(f);
   if (ds) { // to scale: 1 mm of paper = drawScale mm of the real thing; the frame is a window onto it
@@ -16008,7 +19542,7 @@ function setPts(p, m, pts) {
 // it was and kept inside the picture area if it fits. Returns false if it's bigger than the picture area.
 function applyScale(p, f) {
   const d = drawSize(f); if (!d || !f.drawScale) return null;
-  const k = kOf(p), capH = f.noTitle ? 0 : CAP_PT * k * PT * 2.3, w = d.iw * d.mpp / f.drawScale, hh = d.ih * d.mpp / f.drawScale, { C } = areas(p);
+  const k = kOf(p), capH = f.noTitle || noTitles() ? 0 : capPt() * k * PT * 2.3, w = d.iw * d.mpp / f.drawScale, hh = d.ih * d.mpp / f.drawScale, { C } = areas(p);
   const cx = f.x + f.w / 2, cy = f.y + f.h / 2;
   f.w = w; f.h = hh + capH; f.fx = f.fy = 0.5; f.fit = "fill"; f.zoom = 1; p.layout = "free";
   f.x = clamp(cx - w / 2, C.x, Math.max(C.x, C.x + C.w - w)); f.y = clamp(cy - f.h / 2, C.y, Math.max(C.y, C.y + C.h - f.h));
@@ -16019,7 +19553,7 @@ function pinMarks(p, f) { marksOf(p).filter((m) => m.f === f.id && m.rel !== "im
 // the largest standard scale at which the picture fits a box (the frame, or the page's picture area)
 function bestScale(p, f, box) {
   const d = drawSize(f); if (!d) return null;
-  const capH = f.noTitle ? 0 : CAP_PT * kOf(p) * PT * 2.3;
+  const capH = f.noTitle || noTitles() ? 0 : capPt() * kOf(p) * PT * 2.3;
   return SCALES.find((n) => d.iw * d.mpp / n <= box.w + 0.01 && d.ih * d.mpp / n + capH <= box.h + 0.01) || null;
 }
 function scaleAndSay(p, f) {
@@ -16106,10 +19640,10 @@ function pageSvg(p, idx, total, ed) {
     if (P.cap && (n || ed)) titleParts(f, k, P.cap).forEach((t) => (s += `<text x="${t.x}" y="${t.y}" font-size="${t.pt * PT}" font-weight="${t.bold ? "bold" : "normal"}" fill="${t.bold ? "#111" : "#444"}" pointer-events="none">${esc(t.s)}</text>`));
     if (ed) {
       s += `<rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" fill="#fff" fill-opacity="0" stroke="none" data-f="${f.id}"/>`;
-      if (n && P.dpi) { const sk = P.dpi >= 300 ? "#2e9d57" : P.dpi >= 150 ? "#d39a1c" : "#d0453a", bw = 25 * k * Math.min(1, P.pa.w / 90), word = P.dpi >= 300 ? "Sharp" : P.dpi >= 150 ? "Good" : "Soft"; /* v3.69 (PG-19): what the number means */
+      if (n && P.dpi) { const sk = P.dpi >= 300 ? "#2e9d57" : P.dpi >= 150 ? "#d39a1c" : "#d0453a", bw = 36 * k * Math.min(1, P.pa.w / 90), word = P.dpi >= 300 ? "Sharp" : P.dpi >= 150 ? "Good" : "Soft"; /* v3.69 (PG-19): what the number means */
         /* (lfA, B7) the badge says what it means on hover; a click on it still selects the frame (frames are found by position) */
         const tip = P.dpi >= 300 ? `${P.dpi} dpi at this size: sharp in print` : P.dpi >= 150 ? `${P.dpi} dpi at this size: fine for most prints` : `Only ${P.dpi} dpi at this size, so it may print soft. Click the picture, then Upscale ×2 (one click), or make the frame smaller.`;
-        s += `<g class="shdpi" style="cursor:help"><title>${esc(tip)}</title><rect x="${P.pa.x + P.pa.w - bw - 1.2 * k}" y="${P.pa.y + 1.2 * k}" width="${bw}" height="${4.6 * k * Math.min(1, P.pa.w / 90)}" rx="${1 * k}" fill="${sk}"/><text x="${P.pa.x + P.pa.w - 1.2 * k - bw / 2}" y="${P.pa.y + 1.2 * k + 3.3 * k * Math.min(1, P.pa.w / 90)}" font-size="${3 * k * Math.min(1, P.pa.w / 90)}" fill="#fff" text-anchor="middle" font-weight="bold">${word} · ${P.dpi} dpi</text></g>`; }
+        s += `<g class="shdpi" style="cursor:help"><title>${esc(tip)}</title><rect x="${P.pa.x + P.pa.w - bw - 1.2 * k}" y="${P.pa.y + 1.2 * k}" width="${bw}" height="${4.6 * k * Math.min(1, P.pa.w / 90)}" rx="${1 * k}" fill="${sk}"/><text x="${P.pa.x + P.pa.w - 1.2 * k - bw / 2}" y="${P.pa.y + 1.2 * k + 3.3 * k * Math.min(1, P.pa.w / 90)}" font-size="${3 * k * Math.min(1, P.pa.w / 90)}" fill="#fff" text-anchor="middle" font-weight="bold">${word} · ${P.dpi} dpi at ${p.size}</text></g>`; } /* (C2, features F10: "96 dpi at A1") */
     }
   }
   for (const m of marksOf(p)) s += primsSvg(markPrims(p, m), ed);
@@ -16140,7 +19674,7 @@ let soon = 0; function paintSoon() { if (!soon && modal && !modal.hidden) soon =
 
 V.openSheets = (add) => {
   if (!V.G.sheets || !V.G.sheets.pages || !V.G.sheets.pages.length) V.G.sheets = blankDoc();
-  S = V.G.sheets; S.tb = { project: (S.tb && S.tb.project) || "" }; delete S.tbPos; S.dpi = S.dpi || 200;
+  S = V.G.sheets; S.tb = { project: (S.tb && S.tb.project) || "", ...(S.tb && S.tb.meta ? { meta: true } : {}) }; delete S.tbPos; S.dpi = S.dpi || 200; // (C2: meta = date and sheet number)
   // (PG-02) a copy of the project's name, or of an automatic one, follows the project from now on
   if (S.tb.project && (S.tb.project === V.project.name || (V.isAutoName && V.isAutoName(S.tb.project)))) S.tb.project = "";
   S.pages.forEach(fitPage);
@@ -16166,6 +19700,10 @@ function build() {
         h("span", { class: "shgap" }),
         h("button", { class: "mini icon", id: "shUndo", title: "Undo (Ctrl+Z)", onclick: undo, html: '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>' }),
         h("button", { class: "mini icon", id: "shRedo", title: "Redo (Ctrl+Y)", onclick: redo, html: '<svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>' }),
+        // v3.74 B2 (N3, journey-presentation:big:5): Present shows the sheets' pictures full screen, in page and reading order (P)
+        h("button", { class: "mini", id: "shPresent", title: "Present (P): the pictures on these sheets full screen, in order, with no controls. Arrow keys or a click move on, hold C shows the view a render came from, Esc leaves", onclick: () => V.present && V.present({ from: "sheets", title: (S.tb && S.tb.project) || undefined }), html: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M10 8.5v4l3.5-2z" fill="currentColor"/><path d="M8 20h8"/></svg>Present' }),
+        // v3.74 C2 (N12, features:big:1): the Client pack, one offline file with these sheets' pictures and before/after sliders
+        h("button", { class: "mini", id: "shPack", title: "Client pack: one file the client opens on a phone or computer, with no internet needed: the pictures on these sheets in order, a before/after slider for each, your logo and notes", onclick: () => (V.openClientPack ? V.openClientPack({ from: "sheets" }) : V.toast("The Client pack isn't loaded", true)), html: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 7v10M8 11l4-4 4 4"/></svg>Client pack' }),
         // v3.69 (PG-01, J-presentation-P11): the PDF is the point of Sheets, so Export sits here, always in view; ▾ = pages and quality
         h("span", { class: "shexp" },
           h("button", { class: "mini primary", id: "shExport", title: "Make the PDF of every page (Ctrl+P)", onclick: () => exportPdf() }, "Export PDF"),
@@ -16190,11 +19728,12 @@ let scale = 1; // px per mm on screen
 function paint() {
   if (!modal || modal.hidden) return;
   const p = page(), A = areas(p), stage = modal.querySelector(".shstage"), pg = modal.querySelector(".shpage");
-  const sw = stage.clientWidth - 40, sh = stage.clientHeight - 40;
+  // (C2 fixer, C2-1) the presentation stepper docked at the top of the page area keeps a band clear (padding-top)
+  const padT = parseFloat(getComputedStyle(stage).paddingTop) || 0, sw = stage.clientWidth - 40, sh = stage.clientHeight - padT - 40;
   scale = Math.max(0.1, Math.min(sw / A.W, sh / A.H));
   pg.style.width = A.W * scale + "px"; pg.style.height = A.H * scale + "px";
   pg.innerHTML = pageSvg(p, cur, S.pages.length, true);
-  overlay();
+  overlay(); emptyState();
   modal.querySelector("#shUndo").disabled = !hist.length; modal.querySelector("#shRedo").disabled = !fut.length;
   modal.querySelector("#shExport").textContent = `Export PDF (${S.pages.length} page${S.pages.length > 1 ? "s" : ""})`;
   modal.querySelector("#shLeader").classList.toggle("on", tool === "leader"); modal.querySelector("#shDim").classList.toggle("on", tool === "dim");
@@ -16309,7 +19848,7 @@ function paintSide() {
       f.noTitle ? null : field(`Title (shown under the picture as ${NUMS[f.id] ? String(NUMS[f.id]).padStart(2, "0") : "its number"})`, tinput(titleOf(f), (v) => setTitle(f, v), { ph: "e.g. Proposed street view" })),
       h("label", { class: "row shchk" }, (() => { const c = h("input", { type: "checkbox" }); c.checked = !f.noTitle; c.onchange = () => commit(() => (f.noTitle = !c.checked)); return c; })(), "Title under the picture"),
       h("div", { class: "row wrap" },
-        n ? h("button", { class: "mini", title: "Make the frame the picture's shape", onclick: () => commit(() => { const r = ratioOf(n); if (!r) return; const cap = f.noTitle ? 0 : CAP_PT * kOf(p) * PT * 2.3, ph = f.w * r[1] / r[0]; f.h = ph + cap; f.fit = "fill"; f.zoom = 1; }) }, "Frame to picture shape") : null,
+        n ? h("button", { class: "mini", title: "Make the frame the picture's shape", onclick: () => commit(() => { const r = ratioOf(n); if (!r) return; const cap = f.noTitle || noTitles() ? 0 : capPt() * kOf(p) * PT * 2.3, ph = f.w * r[1] / r[0]; f.h = ph + cap; f.fit = "fill"; f.zoom = 1; }) }, "Frame to picture shape") : null,
         n ? h("button", { class: "mini", onclick: () => commit(() => { f.node = null; }) }, "Remove picture") : null,
         h("button", { class: "mini", onclick: () => delSel() }, "Delete frame")));
   } else if (f && f.kind === "text") {
@@ -16334,7 +19873,11 @@ function paintSide() {
   el.append(L);
   sec("Title block (every page)",
     field("Project title", tinput(T.project, (v) => (T.project = v), { ph: liveName() ? `${liveName()} (same as the project)` : "The project's name" })),
-    h("p", { class: "shnote" }, liveName() ? "Type here only to use a different title on the sheets. One line along the bottom: project title and sheet title on the left, Clarman logo on the right." : "Click the grey Project title on the page to name the project: the name goes on every sheet and names the PDF."));
+    h("p", { class: "shnote" }, liveName() ? "Type here only to use a different title on the sheets. One line along the bottom: project title and sheet title on the left, Clarman logo on the right." : "Click the grey Project title on the page to name the project: the name goes on every sheet and names the PDF."),
+    // (C2, PR-11) the date and sheet number, and how the pictures' titles read on every page
+    h("label", { class: "row shchk" }, (() => { const c = h("input", { type: "checkbox" }); c.checked = !!T.meta; c.onchange = () => commit(() => { if (c.checked) T.meta = true; else delete T.meta; }); return c; })(), "Date and sheet number (beside the logo)"),
+    field("Picture titles", seg([["num", "Number and name", "01  Front elevation"], ["name", "Name only", "Front elevation (no number)"], ["none", "None", "No titles under the pictures"]], S.capMode || "num", (v) => commit(() => { if (v === "num") delete S.capMode; else S.capMode = v; }))),
+    h("label", { class: "row shchk" }, (() => { const c = h("input", { type: "checkbox" }); c.checked = !!S.capBig; c.disabled = S.capMode === "none"; c.onchange = () => commit(() => { if (c.checked) S.capBig = true; else delete S.capBig; }); return c; })(), "Larger picture titles (easier to read on a print for a client)"));
   const low = lowNote(); if (low) el.append(h("section", {}, h("h4", {}, "Print quality"), low));
 }
 function layoutSection(p) {
@@ -16342,7 +19885,7 @@ function layoutSection(p) {
   const btn = ([k, name]) => h("button", { class: on === k ? "on" : "", title: name + (k === "free" ? "" : ": pictures already on the page are kept, in order"), "aria-label": name, html: layoutIcon(k), onclick: () => commit(() => applyLayout(p, k)) });
   const plain = LAYOUTS.filter(([k, , t]) => k !== "free" && !(t && (t.fr || t.gr)));
   const groups = [[1, 2, "1-2 pictures"], [3, 3, "3 pictures"], [4, 5, "4-5 pictures"], [6, 99, "6 or more"]].map(([a, b, label]) => ({ fits: have >= a && have <= b, el: h("div", { class: "shlgroup" + (have >= a && have <= b ? " fits" : "") }, h("small", {}, label + (have >= a && have <= b ? ` · fits the ${have} on this page` : "")), h("div", { class: "shlayouts" }, ...plain.filter(([k]) => { const n = rects(p, k).length; return n >= a && n <= b; }).map(btn))) }));
-  groups.sort((x, y) => (y.fits ? 1 : 0) - (x.fits ? 1 : 0));
+  // (C2, PR-06) the groups stay in one order (1-2, 3, 4-5, 6+): the one that fits is outlined, never moved to the top
   const more = LAYOUTS.filter(([, , t]) => t && (t.fr || t.gr)), moreOn = more.some(([k]) => k === on);
   const det = h("details", { class: "shlmore", open: moreOn },
     h("summary", { title: "Staggered grid and collage layouts" }, `More layouts (${more.length})`), // (lfA, V11: one line, the count never on its own)
@@ -16405,7 +19948,8 @@ function fitPage(p) {
   F.forEach((f) => { f.x = nx + (f.x - x0) * sx; f.y = ny + (f.y - y0) * sy; f.w *= sx; f.h *= sy; });
 }
 // a new size or orientation: frames keep their place relative to the picture area
-function resize(p, size, orient) { const before = areas(p).C; p.size = size; p.orient = orient; refit(p, before); }
+// (C2 fixer, present-4) the soft-print offer was for the old size, so it goes
+function resize(p, size, orient) { if (V.closeToastKey) V.closeToastKey("shsoft"); const before = areas(p).C; p.size = size; p.orient = orient; refit(p, before); }
 function refit(p, before) {
   const after = areas(p).C;
   if (p.layout && p.layout !== "free") { const r = rects(p, p.layout), pics = p.frames.filter((f) => f.kind === "pic"); if (r.length === pics.length) { pics.forEach((f, i) => Object.assign(f, r[i])); p.frames.filter((f) => f.kind !== "pic").forEach((f) => map(f)); return; } }
@@ -16414,6 +19958,7 @@ function refit(p, before) {
 }
 // a layout keeps the pictures in reading order; more pictures than frames go onto new pages with the same layout
 function applyLayout(p, key) {
+  if (V.closeToastKey) V.closeToastKey("shsoft");
   p.layout = key; if (key === "free") return;
   const old = p.frames.filter((f) => f.kind === "pic").sort((a, b) => a.y - b.y || a.x - b.x), texts = p.frames.filter((f) => f.kind !== "pic");
   const r = rects(p, key), filled = old.filter((f) => f.node);
@@ -16511,31 +20056,51 @@ function paintTray() {
   const used = {}; S.pages.forEach((p, i) => p.frames.forEach((f) => { if (!f.node) return; const s = shown(f), ids = [f.node, ...(s && s.id !== f.node ? [s.id] : [])]; ids.forEach((id) => (used[id] = used[id] || []).push(i + 1)); })); // (the version a frame shows counts as on the sheet too)
   const all = V.G.nodes.filter((n) => n.status === "done" && n.type === "image" && n.url && !n.rejected), renders = all.filter(isRender);
   const mode = trayMode === "renders" && !renders.length ? "all" : trayMode; // no renders yet: everything
-  let list = mode === "fav" ? all.filter((n) => n.fav) : mode === "renders" ? renders : all;
-  list = list.slice().sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0));
-  const chip = (m, label, title) => h("button", { class: "mini shchip" + (mode === m ? " on" : ""), "aria-pressed": String(mode === m), title, onclick: () => { trayMode = m; paintTray(); } }, label);
+  // (C2, PR-04) Favourites shows the newest version of each starred picture once (an upscale that copied the star and its
+  // original are one entry: the upscale)
+  // (C2 fixer, present-7) picks and the hero (Review's P and H) count as favourites here, so both ways of choosing agree
+  let list = mode === "fav" ? [...new Set(all.filter((n) => n.fav || n.hero || (V.isPick && V.isPick(n))).map((n) => latest(n)))].filter((n) => n && n.url) : mode === "renders" ? renders : all;
+  list = list.slice().sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0));  const chip = (m, label, title) => h("button", { class: "mini shchip" + (mode === m ? " on" : ""), "aria-pressed": String(mode === m), title, onclick: () => { trayMode = m; paintTray(); } }, label);
   const sel = V.selImages(), notOn = sel.filter((n) => !used[n.id]);
   el.append(h("div", { class: "shtrayhead" }, h("b", {}, "Pictures in this project"), h("small", {}, "drag onto the page, or click to fill the next empty frame"),
-    chip("renders", `Renders (${renders.length})`, "Renders, edits and upscales (not the SketchUp views and photos)"), chip("all", `All (${all.length})`, "Every picture, SketchUp views and photos too"), chip("fav", "★ Favourites", "Only favourites"),
+    chip("renders", `Renders (${renders.length})`, "Renders, edits and upscales (not the SketchUp views and photos)"), chip("all", `All (${all.length})`, "Every picture, SketchUp views and photos too"), chip("fav", "★ Favourites", "Only favourites, picks and the hero (the newest version of each)"),
+    // (C2, PR-06, journey-presentation:big:4) fill the sheet in one go: these favourites in strip order, or the picks laid out
+    mode === "fav" && list.length ? h("button", { class: "mini", id: "shAddThese", title: "Put these favourites into the empty frames in this order, adding pages as needed", onclick: () => addPictures(list) }, `Add these ${list.length}`) : null,
+    (() => { const pk = V.currentPicks ? V.currentPicks() : null; return pk && pk.nodes.length ? h("button", { class: "mini", id: "shFromPicks", title: `A new page laid out for ${pk.nodes.length} picture${pk.nodes.length > 1 ? "s" : ""}${pk.nodes.length > 1 ? (pk.nodes.some((n) => n.hero && n.id === pk.hero) ? ", the hero in the big frame" : ", the first pick in the big frame") : ""} (${pk.why})`, onclick: () => V.sheetsFromPicks(pk.nodes, { hero: pk.hero }) }, `Make the sheet from the ${pk.why === "favourites" ? "favourites" : "picks"} (${pk.nodes.length})`) : null; })(),
     h("button", { class: "mini", id: "shFill", disabled: !notOn.length, title: !sel.length ? "Select pictures on the canvas first" : !notOn.length ? "Already on the sheets" : "Put the pictures selected on the canvas into the empty frames, adding pages as needed", onclick: () => addPictures(sel) }, sel.length === 1 ? "Add the selected picture" : sel.length ? `Add the ${sel.length} selected on the canvas` : "Add the selected on the canvas")));
   const row = h("div", { class: "shtrayrow" });
-  if (!list.length) row.append(h("p", { class: "shnote" }, mode === "fav" ? "No favourites yet: ★ a picture on the canvas or in Review." : "No finished pictures in this project yet."));
+  if (!list.length) row.append(h("p", { class: "shnote" }, mode === "fav" ? "No favourites or picks yet: ★ a picture on the canvas, or pick one in Review (P)." : "No finished pictures in this project yet."));
+  // (C2 fixer, C2-6) the Pick / Hero badge goes on the picture the sheet shows: an upscale or touch-up of a pick carries it
+  // too (the frame follows it), so the picture on the page is never the one without a badge
+  const pickOf = (n) => { if (n.hero) return "hero"; if (V.isPick && V.isPick(n)) return "pick"; for (let m = n, i = 0; m && i < 8; i++) { m = (m.touchup && V.node(m.touchup.base)) || (isUpscale(m) ? V.parents(m.id)[0] : null); if (m && m.hero) return "hero"; if (m && V.isPick && V.isPick(m)) return "pick"; } return ""; };
   list.forEach((n) => {
-    const on = used[n.id], up = isUpscale(n), nm = picName(n);
+    const on = used[n.id], up = isUpscale(n), nm = picName(n), pk = pickOf(n);
     const t = h("div", { class: "shthumb", title: nm + (on ? ` · on the sheets (${pagesText([...new Set(on)])})` : "") + " · drag onto a frame, or click to fill the selected or next empty frame" },
-      h("div", { class: "shtimg" }, h("img", { src: n.thumb || n.url, draggable: false, alt: "" }), on ? h("span", { class: "shused", title: `On ${on.length} frame${on.length > 1 ? "s" : ""} (${pagesText([...new Set(on)])})` }, "✓ On sheet") : null, n.fav ? h("span", { class: "shfav" }, "★") : null, up ? h("span", { class: "shup" }, "×2") : null),
-      h("span", { class: "shtname" }, nm));
+      h("div", { class: "shtimg" }, h("img", { src: n.thumb || n.url, draggable: false, alt: "" }), on ? h("span", { class: "shused", title: `On ${on.length} frame${on.length > 1 ? "s" : ""} (${pagesText([...new Set(on)])})` }, "✓ On sheet") : null, n.fav ? h("span", { class: "shfav" }, "★") : null, up ? h("span", { class: "shup" }, "×2") : null,
+        pk === "hero" ? h("span", { class: "shpick shhero", title: "The hero: the big frame on a sheet made from the picks" }, "Hero") : pk === "pick" ? h("span", { class: "shpick", title: "Picked as the best of its view" }, "Pick") : null), // (C2, journey-presentation:big:4)
+      // (C2 fixer, present-13) a long name is cut in the middle so the version's own ending (" · A", " · 2B", " · Upscaled") stays
+      (() => { const k = nm.lastIndexOf(" · "), tail = k > 0 ? nm.slice(k) : ""; return tail && tail.length <= 14 ? h("span", { class: "shtname shtsplit" }, h("span", { class: "shtnhead" }, nm.slice(0, k)), h("span", { class: "shtntail" }, tail)) : h("span", { class: "shtname" }, nm); })());
     t.onpointerdown = (e) => trayDrag(e, n);
     row.append(t);
   });
   el.append(row);
+  trayRoom(el);
+}
+// (C2 fixer, present-4, loop-06) messages on Sheets sit above the strip's header row (its buttons and chips stay clear):
+// --shtray = the room from the strip's top to the bottom of the window, kept as the window or the strip changes size
+let trayRO = null;
+function trayRoom(el) {
+  const set = () => { if (!el.isConnected || !el.offsetHeight) return; document.body.style.setProperty("--shtray", Math.ceil(innerHeight - el.getBoundingClientRect().top) + "px"); };
+  set();
+  if (!trayRO) { try { trayRO = new ResizeObserver(set); trayRO.observe(el); } catch (e) { /* older browser: set on paint */ } addEventListener("resize", set); }
 }
 // (lfA, J-presentation N5) a job that finishes while Sheets is showing (an upscale, a render) appears in the strip at
 // once, not only after the next change to a frame
 const applyJobSh = V.applyJob;
 V.applyJob = (j) => {
   const r = applyJobSh(j);
-  if (j && j.status === "done" && modal && S && !$("#ovSheets").hidden) [200, 2500].forEach((ms) => setTimeout(() => { if (modal && S && !$("#ovSheets").hidden) paintTray(); }, ms));
+  // (C2 fixer, C2-6) the page too: a frame that follows its picture (an upscale, a touch-up) shows the new one and its dpi badge
+  if (j && j.status === "done" && modal && S && !$("#ovSheets").hidden) [200, 2500].forEach((ms) => setTimeout(() => { if (modal && S && !$("#ovSheets").hidden) { paintTray(); paintSoon(); } }, ms));
   return r;
 };
 // (lfA, J-presentation N3) a picture put into a frame when it (or the picture it follows, e.g. its upscale) is already in
@@ -16569,7 +20134,7 @@ function trayDrag(e, n) {
     if (!hit) return overlay();
     if (hit.f && hit.f.kind === "pic") { sel = hit.f.id; return putPic(hit.f, n); }
     // dropped on the page: a new frame the picture's shape, a third of the picture area wide, centred on the drop
-    const { C } = areas(page()), r = ratioOf(n) || [3, 2], w = C.w / 3, hh = w * r[1] / r[0] + CAP_PT * areas(page()).k * PT * 2.3; // picture plus its title
+    const { C } = areas(page()), r = ratioOf(n) || [3, 2], w = C.w / 3, hh = w * r[1] / r[0] + capPt() * areas(page()).k * PT * 2.3; // picture plus its title
     const f = addFrame("pic", { x: clamp(hit.x - w / 2, C.x, C.x + C.w - w), y: clamp(hit.y - hh / 2, C.y, Math.max(C.y, C.y + C.h - hh)), w, h: hh });
     commit(() => (f.node = n.id), true);
   };
@@ -16728,7 +20293,7 @@ function inlineEdit(key) {
     };
   } else if (key.startsWith("cap:")) {
     const f = frameOf(key.slice(4)); if (!f) return;
-    const cap = CAP_PT * k, num = NUMS[f.id] ? String(NUMS[f.id]).padStart(2, "0") : "--", x2 = f.x + textW(num, cap, true) + 2.2 * k;
+    const cap = capPt() * k, num = NUMS[f.id] ? String(NUMS[f.id]).padStart(2, "0") : "--", x2 = f.x + textW(num, cap, true) + 2.2 * k;
     box = { x: x2, base: f.y + f.h - cap * PT * 0.55, pt: cap, bold: false, w: f.x + f.w - x2 };
     val = titleOf(f); save = (v) => setTitle(f, v);
   } else if (key.startsWith("mark:")) {
@@ -16822,20 +20387,32 @@ async function frameJpeg(f, k, n, dpi) {
   return { bytes, x: vx, y: vy, w: vw, h: vh, px: [ow, oh] };
 }
 let exporting = false;
-async function exportPdf(only) {
+async function exportPdf(only, eo = {}) { // eo.skip: the questions were answered already (export after the upscales landed)
   if (exporting || !S) return; closeExp();
   // v3.69 C1: pages with no pictures yet are asked about first (an empty page saved at once was a surprise)
-  const empty = emptyPages(only);
+  const empty = eo.skip ? [] : emptyPages(only);
   if (empty.length && !(await V.confirm(empty.length > 1 ? "Some pages have no pictures yet" : `Page ${empty[0]} has no pictures yet`, empty.length > 1 ? `Pages ${empty.join(", ")} have no pictures on them. Drag pictures from the strip below onto the pages, or export them as they are.` : "Drag pictures from the strip below onto the page, or export it as it is.", "Export anyway", { danger: false, cancel: "Not now" }))) return;
   // (PG-02) no name yet: ask once; it names the project too. "Export without a name" leaves the title space empty.
-  if (!projTitle()) {
+  if (!projTitle() && !eo.skip) {
     const v = await V.ask("What is this project called?", { text: "It goes on every sheet and names the PDF (and the project).", ok: "Name it and export", alt: "Export without a name", cancel: "Cancel", placeholder: "e.g. Riverside House" });
     if (v == null) return;
     if (v !== "alt" && v.trim()) { V.renameProject(v.trim()); paint(); }
   }
-  // (lfA, B7) soft pictures: the main button warns too, as the Export ▾ pop-up does
-  const soft = lowPages(only);
-  if (soft.length && !(await V.confirm("Some pictures may print soft", `Page ${soft.join(", ")} ${soft.length > 1 ? "have" : "has"} pictures under 150 dpi at their size. Upscale them (click the picture, then Upscale ×2) or make their frames smaller. You can export now and do that later.`, "Export anyway", { danger: false, cancel: "Not now" }))) return;
+  // (lfA, B7) soft pictures: the main button warns too, as the Export ▾ pop-up does. v3.74 C2 (PR-05, F10): the message names
+  // the pictures; a frame kept on its old version while an upscale exists is offered the upscale; otherwise one button
+  // upscales the soft ones and makes the PDF when they are ready
+  const softF = softFrames(only), soft = [...new Set(softF.map((x) => x.page))];
+  if (softF.length && !eo.skip) {
+    const names = softF.slice(0, 4).map((x) => `page ${x.page}, ${x.name} (${x.dpi} dpi)`).join("; ") + (softF.length > 4 ? `; and ${softF.length - 4} more` : "");
+    const pinned = softF.filter((x) => x.newer), canUp = softF.filter((x) => !x.newer && V.upscale2x && !isUpscale(x.n));
+    const ok = pinned.length ? `Use the upscale${pinned.length > 1 ? "s" : ""} already made` : canUp.length ? `Upscale ${canUp.length > 1 ? `these ${canUp.length}` : "it"}, then export` : "Export anyway";
+    const why = pinned.length ? `${pinned.length > 1 ? "Some frames are" : "A frame is"} kept on the version first placed, but a sharper upscale of ${pinned.length > 1 ? "them" : "it"} exists already.`
+      : canUp.length ? "VizLab can make a sharper copy of each (Upscale ×2). The frames show the copies when they are ready, and the PDF is made then." : "Make their frames smaller, or use a bigger picture.";
+    const r = await V.confirm(softF.length > 1 ? `${softF.length} pictures may print soft` : "One picture may print soft", `Under 150 dpi at their size: ${names}. ${why}`, ok, { danger: false, cancel: "Not now", alt: ok !== "Export anyway" ? "Export anyway" : undefined });
+    if (!r) return;
+    if (r === true && pinned.length) { commit(() => pinned.forEach((x) => (x.f.pin = false))); return exportPdf(only, { skip: true }); }
+    if (r === true && canUp.length) return upscaleThenExport([...new Set(canUp.map((x) => x.n))], only);
+  }
   exporting = true;
   const busy = modal.querySelector(".shbusy"), bar = busy.querySelector("i"), msg = busy.querySelector("small");
   const idxs = only || S.pages.map((_, i) => i), dpi = S.dpi || 200;
@@ -16875,7 +20452,7 @@ async function exportPdf(only) {
       }
       for (const c of chrome(p, false)) {
         if (c.t === "line") { doc.setDrawColor(c.c); doc.setLineWidth(c.w); doc.line(c.x1, c.y1, c.x2, c.y2); }
-        else if (c.t === "text") { doc.setFont("helvetica", c.bold ? "bold" : "normal"); doc.setFontSize(c.pt); doc.setTextColor(c.c); doc.text(pdfSafe(c.s), c.x, c.y); }
+        else if (c.t === "text") { doc.setFont("helvetica", c.bold ? "bold" : "normal"); doc.setFontSize(c.pt); doc.setTextColor(c.c); doc.text(pdfSafe(c.s), c.x, c.y, c.align === "right" ? { align: "right" } : undefined); }
         else if (c.t === "logo" && logo) doc.addImage(logo, "PNG", c.x, c.y, c.w, c.h, "clarmanlogo", "FAST");
       }
     }
@@ -16889,8 +20466,918 @@ async function exportPdf(only) {
   } catch (e) { V.toast("PDF export failed: " + e.message, true, 0); }
   busy.hidden = true; exporting = false;
 }
+// ---------- v3.74 C2 (N12): soft pictures, sheets that lay themselves out, the options sheet ----------
+// the picture frames under 150 dpi at their size: { page (from 1), f, n (the version shown), dpi, name, newer (an upscale
+// the frame doesn't show because it is pinned) }
+function softFrames(only) {
+  const out = []; numberViews();
+  S.pages.forEach((p, i) => {
+    if (only && !only.includes(i)) return;
+    p.frames.forEach((f) => {
+      const n = f.kind === "pic" && shown(f), r = n && sizeOf(n); if (!r) return;
+      const P = placePic(f, kOf(p), r[0], r[1]); if (!(P.dpi < 150)) return;
+      const o = nodeOf(f.node), nw = o && latest(o);
+      out.push({ page: i + 1, f, n, dpi: P.dpi, name: `"${titleOf(f) || picName(n)}"`, newer: f.pin && nw && nw !== n ? nw : null });
+    });
+  });
+  return out;
+}
+// Upscale ×2 each picture, then make the PDF once every upscale that started has landed (or failed)
+let waitExp = null;
+async function upscaleThenExport(nodes, only) {
+  for (const n of nodes) { try { await V.upscale2x(n); } catch (e) { /* its own message says why */ } }
+  setTimeout(() => {
+    const ids = nodes.filter((n) => V.children(n.id).some((c) => isUpscale(c) && c.status !== "error")).map((n) => n.id);
+    if (!ids.length) return V.toast("No upscale could be started (see the message above). Export anyway, or make the frames smaller.", true, 9000, { action: { label: "Export anyway", run: () => exportPdf(only, { skip: true }) } });
+    waitExp = { ids, only, t: Date.now() };
+    V.toast(`Upscaling ${ids.length} picture${ids.length > 1 ? "s" : ""}: the PDF is made as soon as ${ids.length > 1 ? "they are" : "it is"} ready`, false, 9000, { action: { label: "Export now", run: () => { waitExp = null; exportPdf(only, { skip: true }); } } });
+    checkWait();
+  }, 1200);
+}
+function checkWait() {
+  if (!waitExp) return;
+  if (Date.now() - waitExp.t > 15 * 60000) { waitExp = null; return; }
+  const busy = waitExp.ids.some((id) => { const kids = V.children(id).filter(isUpscale); return !kids.some((c) => c.status === "done" && c.url) && kids.some((c) => c.status === "queued" || c.status === "running"); });
+  if (busy) return;
+  const o = waitExp.only; waitExp = null; setTimeout(() => exportPdf(o, { skip: true }), 500);
+}
+const applyJobW = V.applyJob;
+V.applyJob = (j) => { const r = applyJobW(j); if (j && waitExp && (j.status === "done" || j.status === "error")) setTimeout(checkWait, 700); return r; };
+// an empty set of sheets says how to fill it
+function emptyState() {
+  const stage = modal.querySelector(".shstage"); let el = stage.querySelector(".shempty");
+  const none = !S.pages.some((p) => p.frames.some((f) => (f.kind === "pic" && nodeOf(f.node)) || f.kind === "text"));
+  if (!none) { if (el) el.remove(); return; }
+  const pk = V.currentPicks ? V.currentPicks() : null, key = (pk ? pk.why + pk.nodes.length : "0") + (V.openPresentFlow ? "f" : "");
+  if (el && el.dataset.k === key) return;
+  if (el) el.remove();
+  el = h("div", { class: "shempty", "data-k": key, role: "region", "aria-label": "Fill the sheet", onpointerdown: (e) => e.stopPropagation() }, // (the page under it takes no press from it)
+    h("b", {}, "Nothing on the sheets yet"),
+    h("p", {}, pk && pk.nodes.length ? `Lay a page out from your ${pk.why === "favourites" ? "favourites" : "picks"} in one click, the hero in the big frame, or go through a whole presentation step by step. Dragging pictures from the strip below still works.` : "Go through a whole presentation step by step (views, look, render, pick the best, sheet, share), or drag pictures from the strip below onto the page."),
+    h("div", { class: "row wrap" },
+      pk && pk.nodes.length ? h("button", { class: "mini", id: "shEmptyPicks", onclick: () => V.sheetsFromPicks(pk.nodes, { hero: pk.hero }) }, `Make the sheet from the ${pk.why === "favourites" ? "favourites" : "picks"} (${pk.nodes.length})`) : null,
+      V.openPresentFlow ? h("button", { class: "mini", id: "shEmptyFlow", onclick: () => V.openPresentFlow() }, "Make a presentation…") : null));
+  stage.append(el);
+}
+const HERO_LAY = { 1: "1", 2: "2L", 3: "3t", 4: "4t", 5: "gh5", 6: "gh6" }, REST_LAY = { 1: "1", 2: "2h", 3: "3c", 4: "4", 5: "5t", 6: "6" };
+const tick = (ms) => new Promise((r) => setTimeout(r, ms));
+async function ensureOpen() { if (!S || !modal || $("#ovSheets").hidden) { V.openSheets(); await tick(60); } return !!S; }
+const usable = (ns) => [...new Set((ns || []).filter(Boolean))].filter((n) => n.status === "done" && n.type === "image" && n.url);
+// (journey-presentation:big:4) a sheet that lays itself out: the layout from the number of pictures (1 a full page, 2 hero
+// and one, 3-4 hero and a row, 5-6 a grid with the hero spanning; more go on following pages), the hero (o.hero, else
+// n.hero, else the first) in the big frame. Frames hold the picture and show its newest version (upscale, touch-up: the
+// v3.45 shown() rule), so an upscale made later appears by itself. A hero under 150 dpi at its frame is offered Upscale.
+// o: { hero, size, orient, title, quiet }. Returns { pages (indexes), hero: { dpi, node, frame }, soft }.
+V.sheetsFromPicks = async (nodes, o = {}) => {
+  nodes = usable(nodes);
+  if (!nodes.length) { V.toast("Pick the pictures for the sheet first (a favourite or a pick of each view)", true, 6000); return null; }
+  const hid = o.hero && (o.hero.id || o.hero), hero = nodes.find((n) => n.id === hid) || nodes.find((n) => n.hero) || nodes[0];
+  nodes = [hero, ...nodes.filter((n) => n !== hero)];
+  if (!(await ensureOpen())) return null;
+  const made = [];
+  commit(() => {
+    const last = S.pages[S.pages.length - 1] || {}, size = o.size || last.size || "A3", orient = o.orient || last.orient || "landscape";
+    if (S.pages.length === 1 && !S.pages[0].title && !S.pages[0].frames.some((f) => f.node || f.kind !== "pic")) S.pages = []; // (the blank first page is used)
+    let q = nodes.slice(), first = true;
+    while (q.length) {
+      const take = Math.min(6, q.length), p = newPage(size, orient, (first ? HERO_LAY : REST_LAY)[take]);
+      if (first && o.title) p.title = o.title;
+      p.frames.filter((f) => f.kind === "pic").forEach((f, i) => { if (q[i]) f.node = q[i].id; });
+      q = q.slice(take); S.pages.push(p); made.push(S.pages.length - 1); first = false;
+    }
+    cur = made[0]; sel = null; adjust = false;
+  });
+  const p0 = S.pages[made[0]], hf = p0.frames.find((f) => f.node === hero.id), sh = hf && shown(hf);
+  let info = null;
+  try { const im = await V.loadImg(sh.url); info = { dpi: placePic(hf, kOf(p0), im.naturalWidth, im.naturalHeight).dpi, node: sh, frame: hf.id }; } catch (e) { /* the size shows on the frame when known */ }
+  const where = made.length > 1 ? `pages ${made[0] + 1}-${made[made.length - 1] + 1}` : `page ${made[0] + 1}`, soft = !!(info && info.dpi < 150);
+  if (!o.quiet) {
+    // (C2 fixer, loop-06) "the hero" only when one was chosen; short; the soft-print offer goes when the page or layout changes
+    const isHero = !!hero.hero, who = nodes.length < 2 ? "" : isHero ? ", the hero in the big frame" : ", the first pick in the big frame";
+    const head = `Sheet laid out on ${where}: ${nodes.length} picture${nodes.length > 1 ? "s" : ""}${who}`;
+    V.closeToastKey("shsoft");
+    if (soft && !isUpscale(sh) && V.upscale2x) V.toast(`${head}. ${isHero ? "The hero" : nodes.length > 1 ? "The big one" : "It"} prints soft (${info.dpi} dpi on ${p0.size}).`, false, 8000, { key: "shsoft", actions: [{ label: isHero ? "Upscale the hero" : "Upscale it", run: () => V.upscale2x(sh) }, { label: "Undo", run: () => undo() }] });
+    else V.toast(`${head}${info ? ` (${info.dpi} dpi on ${p0.size})` : ""}.`, false, 6000, { action: { label: "Undo", run: () => undo() } });
+  }
+  paintSoon();
+  return { pages: made, hero: info, soft };
+};
+// (features:big:3) the Options board's results on sheets. Results carry n.option = { id (the option set), name, i (column) }.
+// o.mode "perView" = one page per view with its options side by side; "matrix" = one page, views as rows, options as columns.
+// Each frame is titled with the option's name (its caption), each page with the view's name.
+const OPT_LAY = { 1: "1", 2: "2h", 3: "3c", 4: "4" };
+V.optionsSheet = async (o = {}) => {
+  let res = V.G.nodes.filter((n) => n.option && n.status === "done" && n.type === "image" && n.url);
+  if (!res.length) { V.toast("No options rendered yet: use the Options board first (select views, then Ctrl+K › Options board)", true, 6000); return null; }
+  const board = o.board || res[res.length - 1].option.id; res = res.filter((n) => n.option.id === board);
+  const viewOf = (n) => (V.captureOf && V.captureOf(n)) || V.parents(n.id)[0] || n;
+  const views = [...new Set(res.map(viewOf))], cols = [...new Map(res.map((n) => [n.option.i, n.option.name])).entries()].sort((a, b) => a[0] - b[0]);
+  const cell = (v, i) => res.filter((n) => viewOf(n) === v && n.option.i === i).pop() || null;
+  // (C2 fixer, materials-sheet-title-name) the view as its pictures name it ("View 1", not "SketchUp view"); one view with a title
+  // given (the material options strip passes "View 1 · Daylight · options for A") takes that title
+  const vname = (v) => { const t = ((V.nodeTitle ? V.nodeTitle(v) : v.label) || "View").replace(/^(SketchUp|Revit) view/, "View"); return t === "View" ? "View 1" : t; };
+  if (!(await ensureOpen())) return null;
+  const made = [];
+  commit(() => {
+    const last = S.pages[S.pages.length - 1] || {}, size = o.size || last.size || "A3";
+    if (S.pages.length === 1 && !S.pages[0].title && !S.pages[0].frames.some((f) => f.node || f.kind !== "pic")) S.pages = [];
+    if (o.mode === "matrix") {
+      const p = newPage(size, "landscape", "free"), { C, g } = areas(p), rows = views.length, nc = cols.length;
+      const cw = (C.w - g * (nc - 1)) / nc, rh = (C.h - g * (rows - 1)) / rows;
+      views.forEach((v, r) => cols.forEach(([i, name], c) => { const n = cell(v, i); p.frames.push(Object.assign(picFrame({ x: C.x + c * (cw + g), y: C.y + r * (rh + g), w: cw, h: rh, mat: false }, n ? n.id : null), { caption: `${vname(v)} · ${name}` })); }));
+      p.title = o.title || "Options"; S.pages.push(p); made.push(S.pages.length - 1);
+    } else views.forEach((v) => {
+      const p = newPage(size, "landscape", OPT_LAY[Math.min(4, cols.length)] || "4");
+      p.frames.filter((f) => f.kind === "pic").forEach((f, j) => { const c = cols[j]; if (!c) return; const n = cell(v, c[0]); f.node = n ? n.id : null; f.caption = c[1]; });
+      p.title = views.length === 1 && o.title ? o.title : vname(v); S.pages.push(p); made.push(S.pages.length - 1);
+    });
+    cur = made[0]; sel = null;
+  });
+  if (V.closeToastKey) V.closeToastKey("shopts"); // (one "Options sheet made" message at a time)
+  V.toast(`Options sheet${made.length > 1 ? "s" : ""} made: ${made.length > 1 ? `pages ${made[0] + 1}-${made[made.length - 1] + 1}, one per view` : o.mode === "matrix" && views.length > 1 ? `page ${made[0] + 1}, views as rows and options as columns` : `page ${made[0] + 1}, ${cols.length} options side by side`}`, false, 6000, { key: "shopts", action: { label: "Undo", run: () => undo() } });
+  if (V.closeToastKey) V.closeToastKey("shsoft");
+  return { pages: made, views: views.length, options: cols.length };
+};
+V.newestVersion = (n) => latest(n); // (C2: the newest upscale or touch-up made from a picture, as a sheet frame shows it)
+// v3.74 B2: the pictures on the sheets in page and reading order, each the version the sheet shows (a touched-up follow-up
+// unless pinned), once each: Present shows them (present.js)
+V.sheetPictures = () => {
+  const S0 = V.G.sheets; if (!S0 || !S0.pages) return [];
+  const out = [], seen = new Set();
+  S0.pages.forEach((p) => (p.frames || []).filter((f) => f.kind === "pic" && f.node).sort((a, b) => a.y - b.y || a.x - b.x).forEach((f) => {
+    const n = nodeOf(f.node); if (!n) return;
+    const sh = (!f.pin && latest(n)) || n;
+    if (sh && sh.url && !seen.has(sh.id)) { seen.add(sh.id); out.push(sh); }
+  }));
+  return out;
+};
 V.sheetsExport = () => { if (!$("#ovSheets").hidden && S) return exportPdf(); V.openSheets(); setTimeout(() => exportPdf(), 60); }; // Ctrl+K "Export the sheets as PDF"
 V.sheetsTest = { get S() { return S; }, putPic, select: (id) => { sel = id; paint(); }, areas, rects, placePic, chrome, pageSvg, exportPdf, frameJpeg, addPictures, applyLayout, resize, get cur() { return cur; } };
+})();
+
+;
+
+/* ===== web/presentflow.js ===== */
+/* VizLab "Make a presentation" (v3.74 C2, NEXT-LEVEL N12; journey-presentation:big:1, features:big:3).
+   A slim stepper over the canvas that takes 2+ views to a laid-out sheet and a client pack, using the pieces that exist:
+     1 Views   the selected views (renders selected count as the views they were made from)
+     2 Look    a scene (tiles, or keep / none), the Project look, versions per view (the Batch dialog's Versions control, #numImage)
+     3 Render  every view rendered with the Batch dialog's own per-view render (V.makeEditFor, as look.js Batch render and
+               panel.js Render N views do), grouped "Presentation · date"; live progress from V.jobClock; the versions land
+               in each view's stack on the canvas
+     4 Pick    Review's per-view Pick when review.js offers it (V.reviewPick), else the picker here (favourites + a Hero mark)
+     5 Sheet   sheets.js V.sheetsFromPicks: the layout from the count, the hero in the big frame, Upscale the hero when soft
+     6 Share   Export PDF, Client pack (clientpack.js), Present
+   Every step can be left (the x) and picked up again (Ctrl+K "Carry on the presentation", What next, Sheets' empty state):
+   the state is V.G.ui.presentFlow (a copy per project in this browser, vl_pflow:<id>, so it survives a reload).
+   The Options board (V.openOptionsBoard): a Batch grid, rows = views, columns = options (a scene, words, or a Library material
+   per column, 1-4 columns). Each result is marked n.option = { id (the set), name, i (column) }, so a view's options sit in
+   its stack; V.optionsSheet (sheets.js) lays them out. Ways in: What next with 2+ pictures selected (guide.js V.nextMulti),
+   Ctrl+K (palette.js V.commands), Sheets' empty state. Reduced motion: no animation is used here beyond the shared tokens. */
+(() => {
+const V = window.V, D = V.D, { $, h } = V;
+const STEPS = [["views", "Views"], ["look", "Look"], ["render", "Render"], ["pick", "Pick"], ["sheet", "Sheet"], ["share", "Share"]];
+const MADE = ["render", "new"];
+let bar = null, F = null, liveT = 0;
+const ui = () => V.G.ui || (V.G.ui = {});
+const keyOf = () => "pflow:" + ((V.project && V.project.id) || "new");
+const done = (n) => !!n && n.status === "done" && n.type === "image" && !!n.url && !n.rejected;
+const title = (n) => (n && V.nodeTitle ? V.nodeTitle(n) : n && n.label) || "Picture";
+const kindOf = (n) => (V.pictureKind ? V.pictureKind(n) : "render");
+const plural = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+const stamp = () => new Date().toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+function state() {
+  if (V.G.ui && V.G.ui.presentFlow) return (F = V.G.ui.presentFlow);
+  let s = null; try { s = V.store.get(keyOf(), null); } catch (e) { s = null; }
+  F = s && Array.isArray(s.views) ? s : null; if (F) ui().presentFlow = F;
+  return F;
+}
+function save() { if (!F) return; ui().presentFlow = F; try { V.store.set(keyOf(), F); } catch (e) { /* this browser keeps no copy */ } }
+function forget() { F = null; if (V.G.ui) delete V.G.ui.presentFlow; try { V.store.set(keyOf(), null); } catch (e) { /* nothing kept */ } }
+// the views a set of pictures stands for: a SketchUp / Revit view, photo or drawing is a view; a render goes back to its view
+const viewOfPic = (n) => { const k = kindOf(n); if (k === "view" || k === "photo" || k === "drawing") return n; return (V.captureOf && V.captureOf(n)) || V.parents(n.id).find(done) || n; };
+const viewsFrom = (ns) => [...new Set((ns || []).filter(done).map(viewOfPic))];
+// the versions of a view: renders made from it (straight or through its chain), oldest first; upscales and touch-ups
+// follow their render on the sheet, so they are not separate choices
+function versionsOf(v) {
+  return V.G.nodes.filter((m) => done(m) && m !== v && MADE.includes(kindOf(m)) && ((V.captureOf && V.captureOf(m) === v) || V.parents(m.id).some((p) => p.id === v.id))).sort((a, b) => (a.created || 0) - (b.created || 0));
+}
+const busy = (n) => !!n && (n.status === "queued" || n.status === "running" || n.status === "capturing");
+// ---------- the picks (shared with Sheets, the Client pack and What next) ----------
+// 1 this presentation's picks, 2 C1's per-view Pick (n.pick), 3 the favourites (the newest version of each once)
+V.currentPicks = () => {
+  const f = state();
+  if (f && f.picks) {
+    const ns = f.views.map((id) => V.node(f.picks[id])).filter(done);
+    if (ns.length) return { nodes: ns, hero: V.node(f.hero) && done(V.node(f.hero)) ? f.hero : ns[0].id, why: "picks" };
+  }
+  const vis = V.visibleNodes ? V.visibleNodes() : V.G.nodes;
+  const pk = vis.filter((n) => done(n) && n.pick);
+  if (pk.length) return { nodes: pk, hero: (pk.find((n) => n.hero) || pk[0]).id, why: "picks" };
+  const seen = new Set(), favs = [];
+  vis.filter((n) => done(n) && n.fav).sort((a, b) => (a.created || 0) - (b.created || 0)).forEach((n) => { const t = V.newestVersion ? V.newestVersion(n) : n; if (!seen.has(t.id)) { seen.add(t.id); if (t !== n) seen.add(n.id); favs.push(n); } });
+  // an upscale that copied its original's star is the same picture as its original
+  const ns = favs.filter((n) => !(kindOf(n) === "upscale" && V.parents(n.id).some((p) => favs.includes(p))));
+  return ns.length ? { nodes: ns, hero: (ns.find((n) => n.hero) || ns[0]).id, why: "favourites" } : null;
+};
+V.isPick = (n) => { if (!n) return false; if (n.pick) return true; const f = state(); return !!(f && f.picks && Object.values(f.picks).includes(n.id)); };
+// ---------- one render per view and option (the Batch dialog's per-view render) ----------
+// cols: [{ name, scene (undefined = as it is, null = none, else a scene object), words (added after your words), lib (a
+// Library material id to send with it) }]. o: { option (set id), group (title), onStep }. Results get n.option when o.option.
+async function runGrid(views, cols, o = {}) {
+  const pr = $("#prompt"), keepWords = pr ? pr.value : "", keepScene = V.G.scene, keepPreset = V.activePreset;
+  const made = {}, sentIds = []; let ok = 0, fail = 0;
+  if (V.clearToasts) V.clearToasts(true);
+  if (V.setBatching) V.setBatching(true);
+  try {
+    for (let ci = 0; ci < cols.length; ci++) {
+      const c = cols[ci];
+      for (const v of views) {
+        const before = new Set(V.children(v.id).map((x) => x.id));
+        const lib = c.lib && V.G.library ? V.G.library.items.find((i) => i.id === c.lib) : null, libWas = lib ? lib.use : null;
+        if (c.scene !== undefined) V.G.scene = c.scene;
+        if (c.words && pr) { const base = keepWords.trim() || (keepPreset ? ([...D.imagePresets].find((p) => p.id === keepPreset) || {}).p || "" : ""); pr.value = (base ? base + "\n" : "") + c.words; }
+        if (lib) lib.use = true;
+        let p = null;
+        try { p = V.makeEditFor(v); } finally { if (pr) pr.value = keepWords; V.G.scene = keepScene; V.activePreset = keepPreset; } // (it reads the words and scene at once)
+        let sent = false;
+        try { sent = await p; } catch (e) { V.toast((V.explainError ? [V.explainError(e).title, V.explainError(e).advice].filter(Boolean).join(": ") : e.message) || String(e), true, 8000); }
+        if (lib) lib.use = libWas;
+        const kids = V.children(v.id).filter((x) => !before.has(x.id));
+        kids.forEach((k) => { if (o.option) k.option = { id: o.option, name: c.name, i: ci }; });
+        (made[v.id] = made[v.id] || []).push(...kids.map((k) => k.id)); sentIds.push(...kids.map((k) => k.id));
+        if (sent) ok++; else fail++;
+        if (o.onStep) o.onStep({ ok, fail, total: views.length * cols.length });
+      }
+    }
+  } finally { if (V.setBatching) V.setBatching(false); }
+  if (sentIds.length) {
+    V.G.groups.push({ id: V.uid(), title: `${o.group || "Batch"} · ${stamp()}`, nodeIds: [...views.map((v) => v.id), ...sentIds] });
+    // (B fixer 2, present-5b) the new versions are selected, not the views: the inspector, the selection bar and the
+    // Render button then act on the pictures on show, not on the bare SketchUp captures under them
+    if (V.setSel) V.setSel(sentIds.filter((id) => V.node(id)));
+    V.render(); V.changed(); if (V.fit) V.fit([...views, ...sentIds.map(V.node)].filter(Boolean));
+  }
+  if (ok && V.oneRenderSent) V.oneRenderSent();
+  return { made, ok, fail };
+}
+// ---------- the stepper ----------
+V.openPresentFlow = async (o = {}) => {
+  const want = viewsFrom(o.nodes || V.selNodes());
+  state(); pruneViews();
+  if (F && !F.views.length) forget(); // every view of the old one has gone: start afresh
+  if (F && want.length > 1 && want.map((v) => v.id).join() !== F.views.join()) {
+    const r = await V.confirm("Carry on the presentation you started?", `It has ${plural(F.views.length, "view")} and is at step ${F.step + 1}, ${STEPS[F.step][1]}. Or start a new one with the ${want.length} selected.`, "Carry on", { danger: false, alt: `Start a new one (${want.length} views)`, cancel: "Cancel" });
+    if (!r) return;
+    if (r === "alt") F = null;
+  }
+  if (!F) {
+    const views = want.length ? want : viewsFrom(V.visibleNodes ? V.visibleNodes().filter((n) => V.isCapture && V.isCapture(n)) : []);
+    F = { step: 0, views: views.map((v) => v.id), scene: "keep", versions: Math.max(1, Math.min(4, +(($("#numImage") || {}).value || 2))), made: {}, picks: {}, hero: null, sheet: null, at: Date.now() };
+    if (F.versions < 2 && views.length) F.versions = 2;
+  }
+  save(); show();
+};
+V.presentFlowOpen = () => !!bar && !bar.hidden;
+V.presentFlowState = () => state();
+function show() {
+  if (!bar) build();
+  bar.hidden = false; document.body.classList.add("pflowing"); place(); paint();
+  if (V.closeToastKey) V.closeToastKey("pfkept"); // (C2 fixer, present-3) the "kept at step N" message goes once it is open again
+  if (V.updateMake) V.updateMake(); // (final, picks-make-stale-after-close) Make follows whether the stepper is open
+}
+function hide(keep = true) {
+  if (bar) bar.hidden = true; document.body.classList.remove("pflowing"); clearInterval(liveT); liveT = 0; dockBand(false); document.body.classList.remove("pfpaged");
+  if (keep && F) V.toast(`Presentation kept at step ${F.step + 1}, ${STEPS[F.step][1]}: carry on any time from Ctrl+K › Carry on the presentation`, false, 6000, { key: "pfkept", action: { label: "Carry on", run: () => V.openPresentFlow() } });
+  if (V.updateMake) V.updateMake();
+}
+function build() {
+  bar = h("div", { class: "pflow", role: "region", "aria-label": "Make a presentation", hidden: true },
+    h("div", { class: "pfhead" },
+      h("b", { class: "pftitle" }, "Make a presentation"),
+      h("ol", { class: "pfsteps" }),
+      h("button", { class: "mini icon pffold", type: "button", "aria-expanded": "true", title: "Fold the steps to one line (click again to open them)", "aria-label": "Fold the presentation steps", html: V.ico ? V.ico("chev-up", "md") : "^", onclick: (e) => { const f = bar.classList.toggle("folded"); e.currentTarget.setAttribute("aria-expanded", String(!f)); e.currentTarget.innerHTML = V.ico ? V.ico(f ? "chev" : "chev-up", "md") : f ? "v" : "^"; } }),
+      h("button", { class: "mini icon pfclose", type: "button", title: "Leave for now (it carries on from the same step later)", "aria-label": "Leave the presentation steps for now", html: V.ico ? V.ico("close", "md") : "×", onclick: () => hide(true) })),
+    h("div", { class: "pfbody" }),
+    h("div", { class: "pffoot" }));
+  document.body.append(bar);
+  addEventListener("resize", () => { if (!bar.hidden) place(); });
+  // (C2 fixer, C2-1) the docked band follows the stepper's height (folded, a longer line), and Sheets opening or closing
+  // under it moves the stepper between the canvas and the page
+  try { new ResizeObserver(() => { if (!bar.hidden && bar.classList.contains("dock")) dockBand(true); else if (!bar.hidden && document.body.classList.contains("pfpaged")) document.body.style.setProperty("--pfdock", Math.ceil(bar.offsetHeight + 16) + "px"); }).observe(bar); } catch (e) { /* older browser: placed on paint */ }
+  // (C2 fixer 2, c2v-stale-views) a view taken off the canvas (Undo, Delete) leaves the steps at once
+  // (D final fixer 2, deliver-stepper-covers-history) on a page the stepper doesn't use (History, Projects, Library, Settings...)
+  // it folds to its one line, as Esc does, and opens again on the way back to the canvas or Sheets if it was folded for that
+  let autoFold = false;
+  const fold = (on) => { const fb = bar.querySelector(".pffold"); if (fb && bar.classList.contains("folded") !== on) fb.click(); };
+  try { new MutationObserver(() => {
+    const v = document.body.dataset.view || "canvas", uses = v === "canvas" || v === "sheets";
+    if (!uses && !bar.hidden && !bar.classList.contains("folded")) { fold(true); autoFold = true; }
+    else if (uses && autoFold) { autoFold = false; if (!bar.hidden) fold(false); }
+    if (!bar.hidden) place();
+  }).observe(document.body, { attributes: true, attributeFilter: ["data-view"] }); } catch (e) { /* older browser: Esc or the chevron folds it */ }
+  bar.querySelector(".pffold").addEventListener("click", (e) => { if (e.isTrusted) autoFold = false; });
+  let was = null; setInterval(() => { if (bar.hidden) return; const now = onSheetsNow(); if (now !== was || (F && F.views.some((id) => !V.node(id)))) { was = now; paint(); } }, 600);
+  // (C2 fixer, whole-06) Esc folds the stepper to one line (open again from its chevron); a second Esc does what it did before
+  document.addEventListener("keydown", (e) => {
+    if (!bar || bar.hidden || !F || e.ctrlKey || e.metaKey || e.altKey || (V.reviewOpen && V.reviewOpen()) || document.body.classList.contains("modalup")) return;
+    if (e.target instanceof Element && e.target.matches("input,textarea,select,[contenteditable]")) return;
+    if (e.key === "Escape" && !bar.classList.contains("folded")) {
+      const fb = bar.querySelector(".pffold"); if (!fb) return;
+      e.preventDefault(); e.stopImmediatePropagation(); fb.click(); return;
+    }
+  }, true);
+}
+// (C2 fixer, present-12) on the Pick step P picks the version in focus (or opens Review to pick full screen), never Present.
+// present.js takes P on a window listener registered before this file, so its V.present call is where P is caught.
+const pickKey = () => { const a = document.activeElement; if (a && a.classList && a.classList.contains("pfverpic") && bar.contains(a)) a.click(); else reviewPick(); };
+const present0 = V.present;
+if (present0) V.present = (...a) => {
+  const ev = window.event;
+  if (ev && ev.type === "keydown" && String(ev.key).toLowerCase() === "p" && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && bar && !bar.hidden && F && STEPS[F.step][0] === "pick") return pickKey();
+  return present0(...a);
+};
+// over the canvas (or the page that is showing), never over the right panel
+const onSheetsNow = () => { const sh = $("#ovSheets"); return !!(sh && !sh.hidden && sh.offsetWidth > 0); };
+// (D final fixer 2) another page open (History, Projects, Library, Settings...): the folded line docks at the top of that page,
+// which keeps a band clear for it (body.pfpaged), so it never sits over the page's first row
+const otherPage = () => { const v = document.body.dataset.view || "canvas"; if (v === "canvas" || v === "sheets") return null; const o = V.$$(".overlay").find((s) => !s.hidden && s.id !== "ovSheets" && s.offsetWidth > 0); return o || null; };
+function place() {
+  const pg = otherPage();
+  if (pg) {
+    const rp = pg.getBoundingClientRect(), wp = Math.min(rp.width - 32, 1040);
+    bar.style.left = Math.round(rp.left + (rp.width - wp) / 2) + "px"; bar.style.width = Math.round(wp) + "px"; bar.style.top = Math.round(rp.top + 8) + "px";
+    bar.classList.toggle("narrow", wp < 820); bar.classList.remove("dock"); dockBand(false);
+    document.body.classList.add("pfpaged"); document.body.style.setProperty("--pfdock", Math.ceil(bar.offsetHeight + 16) + "px");
+    return;
+  }
+  if (document.body.classList.contains("pfpaged")) { document.body.classList.remove("pfpaged"); document.body.style.removeProperty("--pfdock"); }
+  const sh = $("#ovSheets"), onSheets = onSheetsNow(), host = (onSheets && sh.querySelector(".shstage")) || $("#canvas") || document.body, r0 = host.getBoundingClientRect();
+  // (C2 fixer, present-6) over the canvas the stepper ends before the canvas tool column (Add, Undo, History, Activity stay clickable)
+  const ct = !onSheets && $(".ctools"), cr = ct && ct.offsetWidth ? ct.getBoundingClientRect() : null;
+  const rgt = cr && cr.height > cr.width && cr.left > r0.left + 320 && cr.left < r0.right ? cr.left - 10 : r0.right;
+  const r = { left: r0.left, top: r0.top, width: rgt - r0.left, height: r0.height };
+  const w = Math.min(r.width - (onSheets ? 16 : rgt < r0.right ? 16 : 32), 1040);
+  // over the canvas: below its selection bar; on Sheets (C2 fixer, C2-1): docked in a band at the top of the page area,
+  // one compact row, and Sheets lays the page out below it (body.pfdocked, --pfdock), so the page and its dpi badges stay in view
+  bar.style.left = Math.round(r.left + (r.width - w) / 2) + "px"; bar.style.width = Math.round(w) + "px"; bar.style.top = Math.round(r.top + (onSheets ? 8 : 60)) + "px";
+  bar.classList.toggle("narrow", w < 820); bar.classList.toggle("dock", !!onSheets);
+  dockBand(onSheets);
+  // (C2 fixer, C2-3) over the canvas the stepper ends above the messages band (they sit 90px up from the bottom)
+  bar.style.maxHeight = Math.round(Math.max(onSheets ? 60 : 160, Math.min(onSheets ? r.height * 0.4 : 560, innerHeight - r.top - (onSheets ? 16 : 230)))) + "px";
+}
+// the band Sheets keeps clear at the top of its page area while the stepper is docked there
+function dockBand(on) {
+  on = !!on && !!bar && !bar.hidden;
+  document.body.classList.toggle("pfdocked", on);
+  if (on) document.body.style.setProperty("--pfdock", Math.ceil(bar.offsetHeight + 16) + "px"); else document.body.style.removeProperty("--pfdock");
+}
+const go = (i) => { F.step = Math.max(0, Math.min(STEPS.length - 1, i)); save(); paint(); };
+// (C2 fixer 2, c2v-stale-views) views no longer on the canvas drop out of the presentation (and their picks with them)
+function pruneViews() {
+  if (!F) return;
+  const keep = F.views.filter((id) => V.node(id));
+  if (keep.length === F.views.length) return;
+  F.views.filter((id) => !keep.includes(id)).forEach((id) => { if (F.hero && F.picks[id] === F.hero) F.hero = null; delete F.picks[id]; });
+  F.views = keep; save();
+}
+function paint() {
+  if (!bar || bar.hidden || !F) return;
+  pruneViews(); place();
+  const steps = bar.querySelector(".pfsteps"); steps.innerHTML = "";
+  STEPS.forEach(([k, name], i) => steps.append(h("li", {}, h("button", { type: "button", class: "pfstep" + (i === F.step ? " on" : i < F.step ? " done" : ""), "aria-current": i === F.step ? "step" : null, title: i < F.step ? `Back to ${name}` : name, onclick: () => go(i) },
+    h("span", { class: "pfnum", html: i < F.step && V.ico ? V.ico("check", "sm") : String(i + 1) }), name))));
+  const body = bar.querySelector(".pfbody"), foot = bar.querySelector(".pffoot");
+  body.innerHTML = ""; foot.innerHTML = "";
+  clearInterval(liveT); liveT = 0;
+  ({ views: pViews, look: pLook, render: pRender, pick: pPick, sheet: pSheet, share: pShare })[STEPS[F.step][0]](body, foot);
+}
+const back = (foot) => foot.append(F.step ? h("button", { class: "mini", type: "button", onclick: () => go(F.step - 1) }, "Back") : h("span", {}));
+const next = (foot, label, fn, dis, why) => foot.append(h("span", { class: "pfwhy" }, why || ""), h("button", { class: "mini primary pfnext", type: "button", disabled: !!dis, onclick: fn || (() => go(F.step + 1)) }, label));
+const thumb = (n, cls = "") => h("span", { class: "pfthumb " + cls }, n && (n.thumb || n.url) ? h("img", { src: n.thumb || n.url, alt: "" }) : null);
+// 1 Views
+function pViews(body, foot) {
+  const views = F.views.map(V.node).filter(done), sel = viewsFrom(V.selNodes());
+  body.append(h("p", { class: "pfintro" }, views.length ? `${plural(views.length, "view")} in this presentation. Each is rendered with the same look, so the set matches.` : "Select the SketchUp views (or pictures) to present on the canvas, then add them here."));
+  const row = h("div", { class: "pfrow" });
+  views.forEach((v) => row.append(h("div", { class: "pfcard" }, thumb(v), h("span", { class: "pfname" }, title(v)),
+    h("button", { class: "mini icon pfx", type: "button", title: "Leave this view out", "aria-label": `Leave ${title(v)} out`, html: V.ico ? V.ico("close", "sm") : "×", onclick: () => { F.views = F.views.filter((id) => id !== v.id); delete F.picks[v.id]; save(); paint(); } }))));
+  body.append(row);
+  const add = sel.filter((v) => !F.views.includes(v.id));
+  if (add.length) body.append(h("button", { class: "mini", type: "button", onclick: () => { F.views.push(...add.map((v) => v.id)); save(); paint(); } }, `Add the ${plural(add.length, "selected view")}`));
+  back(foot); next(foot, "Next: the look", null, !views.length, views.length ? "" : "Add at least one view");
+}
+// 2 Look: a scene, the Project look, versions per view
+let lookMode = null;
+function pLook(body, foot) {
+  const scs = V.scenePresets ? V.scenePresets() : [], cur = V.G.scene, mode = lookMode || (F.scene && F.scene !== "keep" && F.scene !== "none" ? ((scs.find((s) => s.id === F.scene) || {}).mode) : cur && cur.mode) || "ext";
+  body.append(h("p", { class: "pfintro" }, "One look for every view: choose a scene (or keep the one set), check the Project look, and how many versions of each view to make."));
+  const seg = h("div", { class: "pfseg", role: "group", "aria-label": "Kind of scene" }, ...[["ext", "Exterior"], ["int", "Interior"]].map(([m, l]) => h("button", { type: "button", class: "mini" + (mode === m ? " on" : ""), "aria-pressed": String(mode === m), onclick: () => { lookMode = m; paint(); } }, l)));
+  const tiles = h("div", { class: "pftiles" });
+  const tile = (id, name, art, on) => h("button", { type: "button", class: "pftile" + (on ? " on" : ""), "aria-pressed": String(!!on), title: name, onclick: () => { F.scene = id; save(); paint(); } }, h("span", { class: "pfart" }, art || ""), h("span", { class: "pfname" }, name));
+  // (final, deliver-look-tiles) the keep / none tiles show an icon, not an empty grey box
+  const sign = (html) => h("span", { class: "pfsign", html });
+  tiles.append(tile("keep", cur ? `Keep: ${cur.name}` : "As it is (no scene)", sign((D.envIconAny && D.envIconAny("*.*.keep")) || (V.ico ? V.ico("check", "lg") : "")), F.scene === "keep"));
+  if (cur) tiles.append(tile("none", "No scene", sign(V.ico ? V.ico("close", "lg") : ""), F.scene === "none"));
+  scs.filter((s) => s.mode === mode).forEach((s) => tiles.append(tile(s.id, s.name, V.sceneArt ? V.sceneArt(s.id) : null, F.scene === s.id)));
+  const L = V.G.look, lookOn = L && L.on;
+  const e = D.imageEngines.find((x) => x.id === V.engines.image), single = !!(e && e.single);
+  if (!single && F.versions === 3) { F.versions = 2; save(); } // (C2 fixer, present-10: the same 1 | 2 | 4 as the Versions switch by Render)
+  const vers = h("div", { class: "pfseg", role: "group", "aria-label": "Versions of each view" }, ...(single ? [h("span", { class: "hint" }, `1 (${e.name} makes one at a time)`)] : ["1", "2", "4"].map((k) => h("button", { type: "button", class: "mini" + (String(F.versions) === k ? " on" : ""), "aria-pressed": String(String(F.versions) === k), onclick: () => { F.versions = +k; save(); paint(); } }, k))));
+  body.append(
+    h("div", { class: "pflookrow" }, h("b", {}, "Project look"), h("span", {}, lookOn ? (L.name || "on") + (L.ref || L.refUrl ? " (matches a reference picture)" : "") : "off"), h("button", { class: "mini", type: "button", onclick: () => V.openLook && V.openLook() }, lookOn ? "Change…" : "Set it up…")),
+    h("div", { class: "pflookrow" }, h("b", {}, "Versions"), vers, h("span", { class: "hint" }, costLine())),
+    h("div", { class: "pflookrow" }, h("b", {}, "Scene"), seg), tiles);
+  back(foot); next(foot, `Next: render ${plural(F.views.length, "view")}`);
+}
+function costLine() {
+  const n = F.views.length, v = F.versions || 1;
+  let c = 0; try { c = V.costEach ? V.costEach() / Math.max(1, +(($("#numImage") || {}).value || 1)) * v * n : 0; } catch (e) { c = 0; }
+  return `${plural(n * v, "picture")} in all${c > 0 && V.showCosts && V.showCosts() ? ` · about ${V.money(c)}` : ""}`;
+}
+// 3 Render: one render per view with the versions chosen; live progress
+async function startRender() {
+  const views = F.views.map(V.node).filter(done); if (!views.length) return;
+  // (C2 fixer, C2-2) the stepper's versions count is used for these renders only: the Render panel's own setting comes back after
+  const num = $("#numImage"), numWas = num ? num.value : null, setNum = (v) => { if (num && String(num.value) !== String(v)) { num.value = String(v); num.dispatchEvent(new Event("change")); } };
+  // (C2 fixer, C2-3) while the stepper is open its own lines say what happened, so the scene and "sent" messages don't sit over its buttons
+  const quiet = () => { if (V.dropToasts && !bar.hidden) V.dropToasts((m) => /^Scene ".*" set/.test(m)); };
+  let sceneSet = "";
+  if (F.scene === "none" && V.G.scene && V.clearScene) { V.clearScene(); sceneSet = "No scene"; }
+  else if (F.scene && F.scene !== "keep" && F.scene !== "none" && (!V.G.scene || V.G.scene.id !== F.scene) && V.applyScene) {
+    V.applyScene(F.scene);
+    for (let i = 0; i < 40 && !(V.G.scene && V.G.scene.id === F.scene); i++) await new Promise((r) => setTimeout(r, 100)); // (the scene's furniture loads first)
+    sceneSet = V.G.scene ? `Scene "${V.G.scene.name}" set (Ctrl+Z takes it off)` : "";
+  }
+  quiet(); setTimeout(quiet, 400);
+  F.rendering = true; F.note = sceneSet; save(); paint();
+  let r;
+  setNum(F.versions);
+  try { r = await runGrid(views, [{ name: "" }], { group: "Presentation", onStep: () => paint() }); }
+  finally { if (numWas != null) setNum(numWas); }
+  Object.keys(r.made).forEach((id) => { F.made[id] = [...new Set([...(F.made[id] || []), ...r.made[id]])]; });
+  F.rendering = false; F.sent = (F.sent || 0) + r.ok;
+  F.note = (sceneSet ? sceneSet + ". " : "") + (r.ok ? `${plural(r.ok, "view")} sent, ${plural(F.versions, "version")} each: they gather in each view's stack on the canvas.` : "None of the renders were sent (see the message).");
+  save(); paint();
+  if (bar.hidden) V.toast(r.ok ? `${plural(r.ok, "view")} sent, ${plural(F.versions, "version")} each. The versions gather in each view's stack on the canvas.` : "None of the renders were sent (see the message)", !r.ok, 6000);
+}
+function pRender(body, foot) {
+  const views = F.views.map(V.node).filter(done), made = views.flatMap((v) => (F.made[v.id] || []).map(V.node).filter(Boolean));
+  const running = made.filter(busy), ready = made.filter(done), have = views.filter((v) => versionsOf(v).length);
+  body.append(h("p", { class: "pfintro" }, F.rendering ? "Sending the views…" : made.length ? (running.length ? `${ready.length} of ${made.length} ready${(() => { const L = running.map((n) => (V.jobClock ? V.jobClock.state(n).left : null)).filter((x) => x != null); return L.length ? ` · about ${V.jobClock.leftText(Math.max(...L))} left` : ""; })()}` : `All ${made.length} in. Next, pick the best of each view.`) : `Render ${plural(views.length, "view")}, ${plural(F.versions, "version")} each${F.scene !== "keep" && F.scene !== "none" && V.scenePresets ? ` with "${(V.scenePresets().find((s) => s.id === F.scene) || {}).name || "the scene"}"` : ""}. ${costLine()}.`));
+  const grid = h("div", { class: "pfvrows" });
+  views.forEach((v) => {
+    const mine = (F.made[v.id] || []).map(V.node).filter(Boolean);
+    const cells = mine.map((n) => {
+      if (done(n)) return h("span", { class: "pfcell ok", title: title(n) }, thumb(n));
+      if (n.status === "error") return h("span", { class: "pfcell bad", title: n.error || "Failed" }, h("small", {}, "Failed"));
+      const st = V.jobClock ? V.jobClock.state(n) : { p: 0.2 };
+      return h("span", { class: "pfcell run", title: V.makingText ? V.makingText(n) : "Rendering…" }, h("i", { class: "pfbar", style: `--p:${Math.round((st.p || 0) * 100)}%` }), h("small", {}, V.makingText ? V.makingText(n) : "Rendering…"));
+    });
+    grid.append(h("div", { class: "pfvrow" }, h("div", { class: "pfvhead" }, thumb(v), h("span", { class: "pfname" }, title(v))), h("div", { class: "pfcells" }, ...cells)));
+  });
+  if (F.note) body.append(h("p", { class: "hint pfnote", role: "status" }, F.note));
+  body.append(grid);
+  if (running.length || F.rendering) liveT = setInterval(() => { if (!bar.hidden && STEPS[F.step][0] === "render") paint(); }, 900);
+  back(foot);
+  if (!made.length) {
+    if (have.length === views.length) foot.append(h("button", { class: "mini", type: "button", onclick: () => go(3) }, "Use the renders I already have"));
+    next(foot, `Render ${plural(views.length, "view")}`, () => startRender(), F.rendering);
+  } else {
+    foot.append(h("button", { class: "mini", type: "button", disabled: !!F.rendering, onclick: () => startRender() }, "Render another round"));
+    next(foot, "Next: pick the best", null, !ready.length, running.length ? "You can pick while the rest arrive" : "");
+  }
+}
+// 4 Pick: one per view, and the hero
+// (C2 fixer, C2-4) one pick per view: the version picked before loses its pick mark, its star (when the stepper gave it)
+// and the hero mark; n.pick stays on the chosen one, so the picks outlive Done
+function pick(v, n) {
+  const was = V.node(F.picks[v.id]);
+  if (was && was !== n) {
+    delete was.pick; if ((F.starred || []).includes(was.id)) { delete was.fav; F.starred = F.starred.filter((id) => id !== was.id); }
+    if (was.hero || F.hero === was.id) { delete was.hero; F.hero = n.id; n.hero = true; }
+  }
+  // (the same view's other versions picked earlier in this stack, e.g. through Review, lose the mark too)
+  versionsOf(v).forEach((m) => { if (m !== n && m.pick) delete m.pick; });
+  F.picks[v.id] = n.id; n.pick = true; if (!F.hero || !F.views.some((id) => F.picks[id] === F.hero)) F.hero = n.id;
+  if (!n.fav) { n.fav = true; F.starred = [...new Set([...(F.starred || []), n.id])]; }
+  save(); selPicks(); V.render(); V.changed(); paint();
+}
+function setHero(n) {
+  F.hero = n.id; V.G.nodes.forEach((m) => { if (m.hero && m !== n) delete m.hero; }); n.hero = true; save(); selPicks(); V.render(); V.changed(); paint();
+}
+// (B fixer 2, present-5b) the picks are the selection: the stacks show them on top, and Download / Upscale / Render in
+// the inspector and the selection bar work on them, not on the views or the other versions
+function selPicks() {
+  if (!F || !V.setSel) return;
+  const ids = F.views.map((id) => F.picks[id]).filter((id) => id && V.node(id));
+  if (ids.length) V.setSel(ids);
+}
+// (C2 fixer, present-1) the picks made anywhere (Review's Pick, Pick the best, Hero; the canvas) are this presentation's
+// picks too: each view takes the version marked n.pick (the newest when several), and a picked n.hero is the hero
+function syncPicks() {
+  let ch = false;
+  F.views.map(V.node).filter(done).forEach((v) => {
+    const pk = versionsOf(v).filter((m) => m.pick).pop();
+    if (pk && F.picks[v.id] !== pk.id) { F.picks[v.id] = pk.id; ch = true; }
+  });
+  const hn = F.views.map((id) => V.node(F.picks[id])).find((n) => n && n.hero);
+  if (hn && F.hero !== hn.id) { F.hero = hn.id; ch = true; }
+  if (ch) save();
+}
+// Pick full screen: Review on these views' versions (↑ ↓ next view, ← → versions, P pick, H hero, A pick the best); the
+// stepper steps aside while it is open and reads the picks back when it closes
+function reviewPick() {
+  const views = F.views.map(V.node).filter(done).filter((v) => versionsOf(v).length);
+  if (!views.length || !V.openReview) return;
+  const selWas = (V.sel || []).slice();
+  if (V.setSel) V.setSel(views.map((v) => v.id)); else V.sel = views.map((v) => v.id);
+  V.openReview();
+  if (!(V.reviewOpen && V.reviewOpen())) { if (V.setSel) V.setSel(selWas); return; }
+  bar.hidden = true; dockBand(false);
+  const t = setInterval(() => {
+    if (V.reviewOpen()) return;
+    clearInterval(t);
+    if (!F) return;
+    syncPicks(); selPicks(); show();
+  }, 300);
+}
+function pPick(body, foot) {
+  const views = F.views.map(V.node).filter(done);
+  views.forEach((v) => { if (F.picks[v.id] && !done(V.node(F.picks[v.id]))) delete F.picks[v.id]; });
+  syncPicks();
+  const left = views.filter((v) => !F.picks[v.id]).length;
+  body.append(h("p", { class: "pfintro" }, (left ? `Click the best version of each view (${views.length - left} of ${views.length} picked). Then mark the hero: it gets the big frame on the sheet.` : `${plural(views.length, "pick")}, hero ${title(V.node(F.hero))}. Change any by clicking another version.`) + " Keys: P picks the version in focus (Tab to it), or opens Review."));
+  if (V.openReview && views.some((v) => versionsOf(v).length)) body.append(h("button", { class: "mini pfreview", type: "button", title: "Review full screen: ↑ ↓ next view, ← → versions, P pick, H hero, A pick the best two at a time", onclick: () => reviewPick() }, "Pick full screen in Review"));
+  const rows = h("div", { class: "pfpick" });
+  views.forEach((v) => {
+    const vs = versionsOf(v);
+    rows.append(h("div", { class: "pfvrow pfprow" }, h("div", { class: "pfvhead" }, thumb(v), h("span", { class: "pfname" }, title(v))),
+      h("div", { class: "pfcells" }, ...(vs.length ? vs.map((n) => {
+        const on = F.picks[v.id] === n.id, hero = F.hero === n.id && on;
+        return h("div", { class: "pfver" + (on ? " on" : "") },
+          h("button", { type: "button", class: "pfverpic", "aria-pressed": String(on), title: `${title(n)}: pick this one for ${title(v)}`, onclick: () => pick(v, n) }, thumb(n), on ? h("span", { class: "pfbadge" }, hero ? "Hero" : "Pick") : null),
+          on && !hero ? h("button", { type: "button", class: "mini pfhero", title: "The hero gets the big frame on the sheet", onclick: () => setHero(n) }, "Make it the hero") : null);
+      }) : [h("small", { class: "hint" }, "No renders of this view yet")]))));
+  });
+  body.append(rows);
+  back(foot); next(foot, "Next: the sheet", null, left === views.length, left === views.length ? "Pick at least one" : left ? `${left} view${left > 1 ? "s" : ""} without a pick will be left off` : "");
+}
+// 5 Sheet: laid out by itself; Upscale the hero when it would print soft
+function pSheet(body, foot) {
+  const pk = V.currentPicks(), sz = F.size || "A3";
+  body.append(h("p", { class: "pfintro" }, pk ? `A page laid out for ${plural(pk.nodes.length, "picture")}: the hero in the big frame, the newest version of each (upscales and touch-ups follow by themselves).` : "Pick at least one picture first."));
+  body.append(h("div", { class: "pflookrow" }, h("b", {}, "Paper"), h("div", { class: "pfseg", role: "group", "aria-label": "Paper size" }, ...["A3", "A2", "A1"].map((s) => h("button", { type: "button", class: "mini" + (sz === s ? " on" : ""), "aria-pressed": String(sz === s), onclick: () => { F.size = s; save(); paint(); } }, s)))));
+  const S = F.sheet, hero = V.node(F.hero), up = hero && V.newestVersion ? V.newestVersion(hero) : hero, upBusy = hero && V.children(hero.id).some((c) => busy(c) && kindOf(c) === "upscale");
+  if (S) {
+    body.append(h("p", { class: "pfres" + (S.soft && up === hero ? " warn" : "") }, `Laid out on page ${S.pages.map((i) => i + 1).join(", ")}.` + (S.hero ? (up !== hero ? ` The hero's frame shows its upscale now.` : S.soft ? ` The hero would print at only ${S.hero.dpi} dpi on ${sz}: upscale it and the frame shows the sharper copy when it is ready.` : ` The hero prints at ${S.hero.dpi} dpi on ${sz}.`) : "")));
+    if (upBusy) { body.append(h("p", { class: "hint" }, "Upscaling the hero…")); liveT = setInterval(() => { if (!bar.hidden && STEPS[F.step][0] === "sheet") paint(); }, 1500); }
+    const row = h("div", { class: "row wrap" });
+    if (S.soft && up === hero && !upBusy && V.upscale2x) row.append(h("button", { class: "mini", type: "button", onclick: () => { V.upscale2x(hero); setTimeout(paint, 1500); } }, "Upscale the hero"));
+    if (!onSheetsNow()) row.append(h("button", { class: "mini", type: "button", onclick: () => V.openSheets() }, "Open the sheet")); // (C2-1: not while it is open behind)
+    body.append(row);
+  }
+  back(foot);
+  if (!S) next(foot, "Make the sheet", async () => { const r = await V.sheetsFromPicks(pk.nodes, { hero: pk.hero, size: sz, quiet: true }); if (r) { F.sheet = r; save(); paint(); } }, !pk);
+  else { foot.append(h("button", { class: "mini", type: "button", onclick: async () => { const r = await V.sheetsFromPicks(pk.nodes, { hero: pk.hero, size: sz, quiet: true }); if (r) { F.sheet = r; save(); paint(); } } }, "Lay it out again")); next(foot, "Next: share"); }
+}
+// 6 Share
+function pShare(body, foot) {
+  const pk = V.currentPicks();
+  body.append(h("p", { class: "pfintro" }, "Send it on: the PDF of the sheets, a Client pack (one file the client opens on a phone, with before/after sliders), or present it full screen now."));
+  body.append(h("div", { class: "row wrap pfshare" },
+    h("button", { class: "mini", type: "button", onclick: () => V.sheetsExport && V.sheetsExport() }, "Export PDF"),
+    h("button", { class: "mini", type: "button", disabled: !pk, onclick: () => V.openClientPack && V.openClientPack({ nodes: pk ? pk.nodes : null, hero: pk && pk.hero }) }, "Client pack…"),
+    h("button", { class: "mini", type: "button", onclick: () => V.present && V.present(F.sheet ? { from: "sheets" } : { list: pk ? pk.nodes.map((n) => (V.newestVersion ? V.newestVersion(n) : n)) : [] }) }, "Present")));
+  back(foot); next(foot, "Done", () => { selPicks(); forget(); hide(false); V.toast("Presentation done. The picks stay starred, and the sheet is in Sheets.", false, 5000); });
+}
+// ---------- the Options board ----------
+const LETTERS = "ABCD";
+// (C2 fixer, C2-5) the newest set of options that still has pictures on the canvas, so a board can be reopened on its results
+const lastBoard = () => { const B = ui().optionBoards || {}; return Object.keys(B).filter((id) => V.G.nodes.some((n) => n.option && n.option.id === id)).sort((a, b) => (B[b].at || 0) - (B[a].at || 0))[0] || null; };
+V.openOptionsBoard = (o = {}) => {
+  let views = viewsFrom(o.nodes || V.selNodes());
+  let m = $("#optModal"); if (m) m.remove();
+  const scs = V.scenePresets ? V.scenePresets() : [], mats = ((V.G.library && V.G.library.items) || []).filter((i) => i.kind === "material");
+  // reopened on a set made before (o.board, or nothing selected and a set exists): its views, options and results
+  const B = ui().optionBoards || {}, reopen = o.fresh ? null : o.board && B[o.board] ? o.board : !views.length ? lastBoard() : null, RB = reopen && B[reopen];
+  if (RB) views = (RB.views || []).map(V.node).filter(Boolean);
+  const cols = RB ? RB.cols.map((c) => ({ ...c, named: true })) : [{ name: "Option A", kind: "scene", value: (V.G.scene && V.G.scene.id) || (scs[0] && scs[0].id) || "" }, { name: "Option B", kind: "scene", value: (scs[1] && scs[1].id) || "" }];
+  const stat = h("p", { class: "hint", id: "optStat", "aria-live": "polite" }), grid = h("div", { class: "optgrid" });
+  const goBtn = h("button", { class: "mini primary", id: "optGo", type: "button" }, "Render");
+  const addBtn = h("button", { class: "mini optadd", type: "button", onclick: () => { cols.push({ name: `Option ${LETTERS[cols.length]}`, kind: "words", value: "" }); paintGrid(); const f = grid.querySelectorAll(".optcol"); const last = f[f.length - 1]; if (last) { last.scrollIntoView({ block: "nearest", inline: "nearest" }); const i = last.querySelector("input:not(.optname), select"); if (i) i.focus(); } } }, "+ Add an option");
+  const nameIn = h("input", { value: RB ? RB.name || "Options" : `Options · ${stamp()}`, "aria-label": "Name of this set of options" });
+  let boardId = reopen || null;
+  const autoName = (c, i) => { const t = c.kind === "scene" ? (scs.find((x) => x.id === c.value) || {}).name : c.kind === "lib" ? (mats.find((x) => x.id === c.value) || {}).name : String(c.value || "").slice(0, 28); return `Option ${LETTERS[i]}${t ? " – " + t : ""}`; };
+  const paintGrid = () => {
+    grid.innerHTML = ""; grid.style.setProperty("--cols", cols.length);
+    grid.append(h("div", { class: "optcorner" }, h("b", {}, plural(views.length, "view")), h("small", {}, "rows")));
+    cols.forEach((c, i) => {
+      const val = c.kind === "scene" ? h("select", { "aria-label": `${c.name}: scene` }, h("option", { value: "" }, "No scene"), ...["ext", "int", "prod"].map((md) => h("optgroup", { label: { ext: "Exterior", int: "Interior", prod: "Product" }[md] }, ...scs.filter((s) => s.mode === md).map((s) => h("option", { value: s.id }, s.name)))))
+        : c.kind === "lib" ? h("select", { "aria-label": `${c.name}: Library material` }, ...(mats.length ? mats.map((x) => h("option", { value: x.id }, x.name || "Material")) : [h("option", { value: "" }, "No materials in this project's Library")]))
+        : h("input", { value: c.value || "", placeholder: "e.g. Larch cladding, silver-grey", "aria-label": `${c.name}: words` });
+      val.value = c.value || ""; val.onchange = val.oninput = () => { c.value = val.value; if (!c.named) { c.name = autoName(c, i); nm.value = c.name; grid.querySelectorAll(`.optcell[data-col="${i}"]:not(.ok) small.optlab`).forEach((s) => (s.textContent = c.name)); } count(); };
+      // (C2 fixer, present-11) the empty cells under the column say its new name at once
+      const nm = h("input", { class: "optname", value: c.name, "aria-label": `Name of option ${LETTERS[i]}` }); nm.oninput = () => { c.name = nm.value || `Option ${LETTERS[i]}`; c.named = true; grid.querySelectorAll(`.optcell[data-col="${i}"]:not(.ok) small.optlab`).forEach((s) => (s.textContent = c.name)); };
+      const kinds = h("div", { class: "pfseg", role: "group", "aria-label": `What option ${LETTERS[i]} changes` }, ...[["scene", "Scene"], ["words", "Words"], ["lib", "Material"]].map(([k, l]) => h("button", { type: "button", class: "mini" + (c.kind === k ? " on" : ""), "aria-pressed": String(c.kind === k), disabled: k === "lib" && !mats.length, title: k === "lib" && !mats.length ? "Add materials to this project's Library first" : "", onclick: () => { c.kind = k; c.value = k === "lib" ? (mats[0] && mats[0].id) || "" : k === "scene" ? (scs[0] && scs[0].id) || "" : ""; c.named = false; c.name = autoName(c, i); paintGrid(); } }, l)));
+      if (boardId) { val.disabled = true; nm.disabled = true; kinds.querySelectorAll("button").forEach((b) => (b.disabled = true)); } // (a set already sent: its options are fixed)
+      grid.append(h("div", { class: "optcol" }, nm, kinds, val, cols.length > 1 && !boardId ? h("button", { class: "linkbtn", type: "button", onclick: () => { cols.splice(i, 1); cols.forEach((x, j) => { if (!x.named) x.name = autoName(x, j); }); paintGrid(); } }, "Remove") : null));
+    });
+    views.forEach((v) => {
+      grid.append(h("div", { class: "optview" }, thumb(v), h("span", { class: "pfname" }, title(v))));
+      cols.forEach((c, i) => {
+        const res = boardId ? V.G.nodes.filter((n) => n.option && n.option.id === boardId && n.option.i === i && viewOfPic(n) === v) : [];
+        const n = res[res.length - 1];
+        grid.append(h("div", { class: "optcell" + (n && done(n) ? " ok" : ""), "data-col": String(i) }, n ? (done(n) ? thumb(n) : h("small", {}, n.status === "error" ? "Failed" : V.makingText ? V.makingText(n) : "Rendering…")) : h("small", { class: "optlab" }, `${c.name}`)));
+      });
+    });
+    // (final, deliver-optboard-add-hidden) + Add an option lives in the footer beside Render, so it is always in sight
+    addBtn.hidden = !(cols.length < 4 && !boardId);
+    count();
+  };
+  const count = () => {
+    const n = views.length * cols.length; let c = 0; try { c = V.costEach ? V.costEach() / Math.max(1, +(($("#numImage") || {}).value || 1)) * n : 0; } catch (e) { c = 0; }
+    goBtn.textContent = `Render ${plural(n, "picture")}${c > 0 && V.showCosts && V.showCosts() ? ` · about ${V.money(c)}` : ""}`;
+    const bad = cols.some((x) => x.kind === "words" ? !String(x.value || "").trim() : x.kind === "lib" ? !x.value : false);
+    goBtn.disabled = !views.length || bad || !!boardId;
+    if (!boardId) stat.textContent = !views.length ? "Select the views on the canvas first, then open the Options board." : bad ? "Each option needs its words or a material." : "One version of each view per option, all with the same AI model, shape and Project look, so the results line up.";
+  };
+  const sheetRow = h("div", { class: "row wrap optsheets", hidden: !boardId },
+    boardId ? h("button", { class: "linkbtn", type: "button", title: "A new set of options for these views (this set stays on the canvas)", onclick: () => V.openOptionsBoard({ nodes: views, fresh: true }) }, "Start a new set") : null,
+    h("button", { class: "mini optpage" + (RB ? " primary" : ""), type: "button", onclick: () => { m.hidden = true; V.optionsSheet({ board: boardId, mode: "perView" }); } }, "Options sheet: a page per view"),
+    h("button", { class: "mini", type: "button", onclick: () => { m.hidden = true; V.optionsSheet({ board: boardId, mode: "matrix", title: nameIn.value }); } }, "All on one page (views as rows)"));
+  m = h("div", { class: "modal", id: "optModal" },
+    h("div", { class: "mbox optbox" },
+      h("button", { class: "mclose", type: "button", "aria-label": "Close", onclick: () => (m.hidden = true) }, "×"),
+      h("h3", {}, "Options board"),
+      h("p", { class: "hint" }, "Rows are the views, columns are the design options: a scene, words (a cladding, a colour) or a material from this project's Library. Every view is rendered once for each option, and the results come back matched: one stack per view, each marked with its option's name."),
+      h("label", { class: "fl" }, "Name of this set", nameIn),
+      grid, stat,
+      h("div", { class: "row end mt" }, sheetRow, addBtn, goBtn)));
+  document.body.append(m); if (V.modal) V.modal(m, { label: "Options board" });
+  goBtn.onclick = async () => {
+    goBtn.disabled = true; boardId = V.uid();
+    const cdefs = cols.map((c) => c.kind === "scene" ? { name: c.name, scene: c.value ? sceneObj(c.value) : null } : c.kind === "lib" ? { name: c.name, lib: c.value } : { name: c.name, words: c.value });
+    (ui().optionBoards = ui().optionBoards || {})[boardId] = { name: nameIn.value, cols: cols.map((c) => ({ name: c.name, kind: c.kind, value: c.value })), views: views.map((v) => v.id), at: Date.now() };
+    stat.textContent = "Sending…";
+    // (final, deliver-options-versions) one picture per view and option, as the board says: Versions is 1 for the run
+    const num = $("#numImage"), numWas = num ? num.value : null, setNum = (v) => { if (num && String(num.value) !== String(v)) { num.value = String(v); num.dispatchEvent(new Event("change")); } };
+    setNum(1);
+    let r;
+    try { r = await runGrid(views, cdefs, { option: boardId, group: nameIn.value.replace(/ · .*$/, "") || "Options", onStep: (s) => { stat.textContent = `${s.ok} of ${s.total} sent`; paintGrid(); } }); }
+    finally { if (numWas != null) setNum(numWas); }
+    stat.textContent = r.ok ? `${r.ok} of ${views.length * cols.length} sent. The results come back into each view's stack; lay them out on a sheet when they are in.` : "None were sent (see the message).";
+    sheetRow.hidden = !r.ok; paintGrid();
+    // (C2 fixer, present-11) a set that was sent is not sent again: the Render button goes, and the sheet buttons lead
+    if (r.ok) { goBtn.hidden = true; const pb = sheetRow.querySelector(".optpage"); if (pb) pb.classList.add("primary"); }
+    const live = setInterval(() => { if (m.hidden || !m.isConnected) return clearInterval(live); paintGrid(); if (!V.G.nodes.some((n) => n.option && n.option.id === boardId && busy(n))) { clearInterval(live); stat.textContent = `All in: ${V.G.nodes.filter((n) => n.option && n.option.id === boardId && done(n)).length} pictures. Lay them out on a sheet:`; } }, 1200);
+    if (r.ok) V.toast(`Options board: ${r.ok} sent. One stack per view, each picture named by its option.`, false, 7000, { actions: [{ label: "A page per view", run: () => V.optionsSheet({ board: boardId, mode: "perView" }) }, { label: "All on one page", run: () => V.optionsSheet({ board: boardId, mode: "matrix", title: nameIn.value }) }] }); // (C2-5)
+  };
+  goBtn.hidden = !!RB; // (a set made before is not sent again: "Start a new set" makes another)
+  if (!RB) cols.forEach((c, i) => (c.name = autoName(c, i)));
+  else { stat.textContent = `"${RB.name || "Options"}": the set made before. Lay it out on a sheet, or start a new set.`; const live = setInterval(() => { if (m.hidden || !m.isConnected) return clearInterval(live); paintGrid(); if (!V.G.nodes.some((n) => n.option && n.option.id === boardId && busy(n))) clearInterval(live); }, 1500); }
+  paintGrid();
+  setTimeout(() => { const f = grid.querySelector("select, input"); if (f) f.focus(); }, 40);
+  return m;
+};
+function sceneObj(id) {
+  const sc = (V.scenePresets ? V.scenePresets() : []).find((s) => s.id === id); if (!sc) return null;
+  const o = V.sceneByName ? V.sceneByName(sc.name) : null;
+  return o ? { ...o, env: V.envPrompt && o.build ? V.envPrompt(o.build) : "" } : null;
+}
+// Esc closes the Options board
+document.addEventListener("keydown", (e) => { const m = $("#optModal"); if (e.key !== "Escape" || !m || m.hidden || !$("#confirmModal").hidden) return; e.preventDefault(); e.stopImmediatePropagation(); m.hidden = true; }, true);
+// ---------- ways in ----------
+// What next with 2+ pictures selected (guide.js paintNext asks V.nextMulti): [label, sub, run]
+V.nextMulti = (ns) => {
+  const pics = (ns || []).filter(done); if (pics.length < 2) return [];
+  const vs = viewsFrom(pics), out = [["Make a presentation…", "", () => V.openPresentFlow({ nodes: pics })], ["Options board…", "", () => V.openOptionsBoard({ nodes: pics })]];
+  if (pics.filter((n) => !["view", "photo", "drawing"].includes(kindOf(n))).length > 1) out.push(["Client pack…", "", () => V.openClientPack && V.openClientPack({ nodes: pics })]);
+  if (vs.length < 2) out.shift();
+  // (v3.74 D2, loop-20) exactly two renders: take the good part of one into the other (panel.js V.combineTwo, an edit with a reference)
+  const rs = pics.filter((n) => ["render", "new", "upscale", "touchup"].includes(kindOf(n)));
+  if (rs.length === 2 && pics.length === 2 && V.combineTwo) out.unshift(["Combine the two…", "", () => V.combineTwo(rs[0], rs[1])]);
+  return out;
+};
+// What next on one picture (guide.js NEXT asks V.nextExtra): after the picks, the sheet and the client pack
+V.nextExtra = (n) => {
+  if (!done(n) || !(V.isPick(n) || n.hero)) return [];
+  const pk = V.currentPicks(); if (!pk || pk.why !== "picks") return [];
+  return [["Make the sheet from the picks", "", () => V.sheetsFromPicks(pk.nodes, { hero: pk.hero })], ["Client pack…", "", () => V.openClientPack && V.openClientPack({ nodes: pk.nodes, hero: pk.hero })]];
+};
+// Ctrl+K (palette.js reads V.commands)
+const cmds0 = V.commands;
+V.commands = () => {
+  const f = state(), sel = V.selNodes().filter(done), opt = V.G.nodes.some((n) => n.option && done(n)), out = [];
+  // (C2 fixer, present-2) Carry on from Sheets stays on Sheets: the stepper docks there again
+  const A = (id, label, run, hint) => out.push({ id: "c2:" + id, label, kind: "Action", hint, run: () => { const vw = document.body.dataset.view; if (V.setView && vw && vw !== "canvas" && id !== "pack" && !(id === "carry" && vw === "sheets")) V.setView("canvas"); run(); } });
+  if (f) A("carry", `Carry on the presentation (step ${f.step + 1}, ${STEPS[f.step][1]})`, () => V.openPresentFlow(), "Presentation stepper, resume");
+  A("flow", "Make a presentation…", () => V.openPresentFlow(), "Presentation in one flow: views, look, render, pick the best, sheet, PDF, client pack");
+  A("opts", "Options board…", () => V.openOptionsBoard(), "Design options across several views, columns of options, batch render options, cladding choices, matched set");
+  if (opt) A("optsheet", "Options sheet: a page per view", () => V.optionsSheet({ mode: "perView" }), "Options side by side on a sheet, one page per view, lay the options out on Sheets");
+  // (C2 fixer, C2-5) the matrix is not only offered inside the board right after it renders
+  if (opt) A("optmatrix", "Options sheet: all on one page (views as rows)", () => { const b = lastBoard(), B = ui().optionBoards || {}; V.optionsSheet({ board: b || undefined, mode: "matrix", title: (b && B[b] && B[b].name) || undefined }); }, "Options matrix on one sheet, views as rows and options as columns");
+  if (opt && lastBoard()) A("optlast", "Options board: the last set", () => V.openOptionsBoard({ board: lastBoard() }), "Reopen the Options board on its results, lay them out again");
+  A("pack", "Client pack…", () => V.openClientPack && V.openClientPack(sel.length > 1 ? { nodes: sel } : {}), "Offline HTML file for the client, before and after sliders, share via Google Drive, phone");
+  return [...(cmds0 ? cmds0() : []), ...out];
+};
+// a different project opened: its own presentation, if one was started there
+const load0 = V.loadProject;
+if (load0) V.loadProject = async (...a) => { const r = await load0(...a); F = null; if (bar && !bar.hidden) { if (state()) paint(); else hide(false); } return r; };
+V.presentFlowTest = { runGrid, versionsOf, viewsFrom, get F() { return F; }, go, paint };
+})();
+
+;
+
+/* ===== web/clientpack.js ===== */
+/* VizLab Client pack (v3.74 C2, NEXT-LEVEL N12, features:big:1, features F1/F8).
+   One HTML file for the client: it opens in any browser, on a phone too, with no internet and no account. Inside: a cover
+   with the Clarman logo, the project title and the date; the picks in order, each full width on a dark background, with a
+   before/after slider (the SketchUp view or photo it came from against the render) when that picture exists, the
+   picture's name and optional notes. Pictures are JPEG data inside the file at a chosen size (1600 or 2560 px on the long
+   side); system fonts only; a Content-Security-Policy that allows nothing from outside, so it never asks the internet.
+   Saved with V.download (VizLab.exe: its save folder), or "Share via Drive": uploaded to VizLab/<project>/Client packs/
+   with drive.js (V.drive.put) and the link shown with Copy. The file is private to the user's Drive: they share it from
+   Drive (Share › Anyone with the link) - VizLab does not change who can open it.
+   Ways in: Sheets' top bar (beside Export PDF), the picture menu under Save & share, What next after the picks and with
+   2+ renders selected, Ctrl+K, the presentation stepper's Share step. V.clientPack.html(items, o) builds the file. */
+(() => {
+const V = window.V, { $, h } = V;
+const done = (n) => !!n && n.status === "done" && n.type === "image" && !!n.url;
+const kindOf = (n) => (V.pictureKind ? V.pictureKind(n) : "render");
+const title = (n) => (V.nodeTitle ? V.nodeTitle(n) : n.label) || "Picture";
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const newest = (n) => (V.newestVersion ? V.newestVersion(n) : n) || n;
+const projName = () => (V.G.sheets && V.G.sheets.tb && V.G.sheets.tb.project) || (V.realProjectName ? V.realProjectName() : "") || "";
+const today = () => new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+// the picture the render was made from: its SketchUp / Revit view, else the photo or picture it was an edit of
+function sourceOf(n) {
+  const c = V.captureOf && V.captureOf(n); if (done(c) && c !== n) return c;
+  let p = V.parents(n.id).find(done); for (let i = 0; p && i < 6 && !["view", "photo", "drawing"].includes(kindOf(p)); i++) p = V.parents(p.id).find(done) || null;
+  return p && p !== n ? p : null;
+}
+const LABELS = { view: ["Model", "Visualisation"], photo: ["Existing", "Proposed"], drawing: ["Drawing", "Visualisation"] };
+// which pictures: given, else the sheets' pictures (from Sheets), else the picks / favourites, else the selected renders
+function pickSet(o) {
+  if (o.nodes && o.nodes.length) return [...new Set(o.nodes.filter(done).map(o.exact ? (n) => n : newest))];
+  if (o.from === "sheets" && V.sheetPictures) { const s = V.sheetPictures().filter(done); if (s.length) return s; }
+  const pk = V.currentPicks ? V.currentPicks() : null;
+  if (pk && pk.nodes.length) { const hero = pk.nodes.find((n) => n.id === pk.hero); return [...(hero ? [hero] : []), ...pk.nodes.filter((n) => n !== hero)].map(newest); }
+  const sel = V.selImages ? V.selImages().filter((n) => !["view", "photo", "drawing"].includes(kindOf(n))) : [];
+  return sel.map(newest);
+}
+// ---------- the file ----------
+async function jpeg(src, long, fitTo) {
+  const im = await V.loadImg(src), W0 = im.naturalWidth, H0 = im.naturalHeight;
+  let w, hh;
+  if (fitTo) { [w, hh] = fitTo; } else { const s = Math.min(1, long / Math.max(W0, H0)); w = Math.max(1, Math.round(W0 * s)); hh = Math.max(1, Math.round(H0 * s)); }
+  const c = document.createElement("canvas"); c.width = w; c.height = hh;
+  const x = c.getContext("2d"); x.imageSmoothingQuality = "high"; x.fillStyle = "#111"; x.fillRect(0, 0, w, hh);
+  if (fitTo) { const s = Math.max(w / W0, hh / H0), dw = W0 * s, dh = H0 * s; x.drawImage(im, (w - dw) / 2, (hh - dh) / 2, dw, dh); } // (the view, cover-fitted to the render's frame)
+  else x.drawImage(im, 0, 0, w, hh);
+  const url = c.toDataURL("image/jpeg", 0.86); c.width = c.height = 1;
+  return { url, w, h: hh };
+}
+const picSrc = async (n) => (V.hasPixelLayers && V.hasPixelLayers(n) && V.compositeDataUrl ? V.compositeDataUrl(n) : n.url);
+// items: [{ node, name, note, slider }]; o: { title, date, size, progress(i, n) }
+async function buildHtml(items, o = {}) {
+  const size = o.size || 1600, slides = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]; if (o.progress) o.progress(i, items.length);
+    const a = await jpeg(await picSrc(it.node), size), src = it.slider ? sourceOf(it.node) : null;
+    const b = src ? await jpeg(await picSrc(src), size, [a.w, a.h]).catch(() => null) : null;
+    slides.push({ ...it, a, b, labels: LABELS[src ? kindOf(src) : ""] || ["Before", "After"] });
+  }
+  const logo = V.logoSrc ? V.logoSrc("white") : "", t = o.title || "Presentation", date = o.date || today();
+  const css = `:root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;background:#0a0a0a;color:#f4f4f2;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+.cover{min-height:92vh;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:8vh max(20px,6vw)}
+.cover .logo{width:min(260px,60vw);height:auto}.cover h1{margin:18px 0 0;font-weight:500;font-size:clamp(30px,6vw,60px);line-height:1.08;letter-spacing:.01em}
+.cover .rule{width:56px;height:2px;background:#faaf29}.cover p{margin:0;color:#c9cacd;font-size:18px}.cover .how{color:#9a9ba0;font-size:15px;max-width:40em}
+.slide{padding:28px max(12px,4vw) 44px;max-width:1800px;margin:0 auto;scroll-margin-top:0}
+.frame{position:relative;width:100%;border-radius:10px;overflow:hidden;background:#161617;box-shadow:0 24px 64px -16px #000}
+.frame img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:cover;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+.ba{touch-action:pan-y;cursor:ew-resize}.ba .before{clip-path:inset(0 calc(100% - var(--p,50%)) 0 0)}
+.ba .line{position:absolute;top:0;bottom:0;left:var(--p,50%);width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 8px #0008;pointer-events:none}
+.ba .knob{position:absolute;top:50%;left:var(--p,50%);width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:#fff;color:#0a0a0a;display:grid;place-items:center;font-size:20px;font-weight:700;box-shadow:0 4px 16px #0009;outline:none}
+.ba .knob:focus-visible{box-shadow:0 0 0 3px #faaf29,0 4px 16px #0009}
+.lab{position:absolute;top:12px;padding:4px 10px;border-radius:999px;background:#0a0a0acc;color:#fff;font-size:13px;letter-spacing:.04em;pointer-events:none}.lab.l{left:12px}.lab.r{right:12px}
+.cap{display:flex;gap:14px;align-items:baseline;margin:14px 2px 0}.cap b{color:#faaf29;font-weight:600;font-size:15px;font-variant-numeric:tabular-nums}.cap h2{margin:0;font-weight:500;font-size:clamp(19px,2.4vw,26px)}
+.note{margin:8px 2px 0;color:#d5d7da;max-width:60em;white-space:pre-wrap}.tip{margin:6px 2px 0;color:#9a9ba0;font-size:14px}
+footer{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;padding:40px max(20px,6vw) 56px;color:#9a9ba0;font-size:14px;border-top:1px solid #ffffff17;margin-top:20px}footer img{width:150px;height:auto}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}`;
+  const js = `(function(){var bas=document.querySelectorAll('.ba');Array.prototype.forEach.call(bas,function(f){var k=f.querySelector('.knob');function set(p){p=Math.max(0,Math.min(100,p));f.style.setProperty('--p',p+'%');k.setAttribute('aria-valuenow',Math.round(p));}
+var down=false;function at(e){var r=f.getBoundingClientRect();set((e.clientX-r.left)/r.width*100);}
+f.addEventListener('pointerdown',function(e){down=true;at(e);try{f.setPointerCapture(e.pointerId);}catch(x){}});f.addEventListener('pointermove',function(e){if(down)at(e);});
+f.addEventListener('pointerup',function(){down=false;});f.addEventListener('pointercancel',function(){down=false;});
+k.addEventListener('keydown',function(e){var v=+k.getAttribute('aria-valuenow');if(e.key==='ArrowLeft'){set(v-5);e.preventDefault();e.stopPropagation();}else if(e.key==='ArrowRight'){set(v+5);e.preventDefault();e.stopPropagation();}else if(e.key==='Home'){set(0);e.preventDefault();}else if(e.key==='End'){set(100);e.preventDefault();}});set(50);});
+var sl=[].slice.call(document.querySelectorAll('.cover,.slide'));function cur(){var y=window.scrollY+innerHeight*0.35,i=0;sl.forEach(function(s,j){if(s.offsetTop<=y)i=j;});return i;}
+document.addEventListener('keydown',function(e){if(e.target&&e.target.classList&&e.target.classList.contains('knob')&&(e.key==='ArrowLeft'||e.key==='ArrowRight'))return;var i=cur();
+if(e.key==='ArrowDown'||e.key==='PageDown'||e.key==='ArrowRight'||(e.key===' '&&!e.shiftKey)){if(sl[i+1]){sl[i+1].scrollIntoView();e.preventDefault();}}
+else if(e.key==='ArrowUp'||e.key==='PageUp'||e.key==='ArrowLeft'){if(sl[i-1]){sl[i-1].scrollIntoView();e.preventDefault();}}});})();`;
+  const body = slides.map((s, i) => {
+    const num = String(i + 1).padStart(2, "0"), ar = `aspect-ratio:${s.a.w}/${s.a.h}`;
+    const frame = s.b
+      ? `<div class="frame ba" style="${ar}"><img src="${s.a.url}" alt="${esc(s.name)}"><img class="before" src="${s.b.url}" alt="${esc(s.labels[0])}"><span class="line"></span><span class="knob" role="slider" tabindex="0" aria-label="Compare ${esc(s.labels[0].toLowerCase())} and ${esc(s.labels[1].toLowerCase())}: ${esc(s.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">&#8596;</span><span class="lab l">${esc(s.labels[0])}</span><span class="lab r">${esc(s.labels[1])}</span></div>`
+      : `<div class="frame" style="${ar}"><img src="${s.a.url}" alt="${esc(s.name)}"></div>`;
+    return `<section class="slide" id="p${i + 1}">${frame}<div class="cap"><b>${num}</b><h2>${esc(s.name)}</h2></div>${s.note ? `<p class="note">${esc(s.note)}</p>` : ""}${s.b && i === slides.findIndex((x) => x.b) ? `<p class="tip">Drag across the picture (or use the arrow keys on the round handle) to compare.</p>` : ""}</section>`;
+  }).join("\n");
+  return `<!doctype html>
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="generator" content="Clarman VizLab"><title>${esc(t)} · Clarman Architects</title><style>${css}</style></head>
+<body><header class="cover" id="p0">${logo ? `<img class="logo" src="${logo}" alt="Clarman Architects">` : ""}<h1>${esc(t)}</h1><div class="rule"></div><p>${esc(date)} · ${slides.length} picture${slides.length === 1 ? "" : "s"}</p>${slides.some((s) => s.b) ? `<p class="how">Scroll down, or use the arrow keys. On a picture with a round handle, drag across it to compare the ${esc((slides.find((s) => s.b).labels[0]).toLowerCase())} with the ${esc((slides.find((s) => s.b).labels[1]).toLowerCase())}.</p>` : `<p class="how">Scroll down, or use the arrow keys.</p>`}</header>
+<main>
+${body}
+</main><footer>${logo ? `<img src="${logo}" alt="Clarman Architects">` : ""}<span>${esc(t)} · ${esc(date)}</span></footer><script>${js}</script></body></html>`;
+}
+const fileName = (t) => `${(t || "VizLab").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "VizLab"}_client-pack.html`;
+// ---------- the dialog ----------
+V.openClientPack = (o = {}) => {
+  const nodes = pickSet(o);
+  let m = $("#packModal"); if (m) m.remove();
+  if (!nodes.length) { // (final, deliver-clientpack-red-hint) guidance, not a failure: a plain message with a way on
+    const rs = V.G.nodes.filter((n) => done(n) && !n.rejected && !(V.isHidden && V.isHidden(n.id)) && !["view", "photo", "drawing"].includes(kindOf(n)));
+    const acts = [{ label: "Pick the best", run: () => {
+      if (V.setView) V.setView("canvas");
+      // nothing selected: Review the views that have renders (each with its versions)
+      if (!(V.selNodes && V.selNodes().length) && V.setSel) { const vs = [...new Set(rs.map((n) => (V.captureOf && V.captureOf(n)) || null).filter(done))]; V.setSel((vs.length ? vs : rs).map((n) => n.id)); if (V.render) V.render(); if (V.selectionChanged) V.selectionChanged(); }
+      if (V.openReview) V.openReview();
+    } }];
+    if (rs.length) acts.push({ label: `Use the ${rs.length} render${rs.length === 1 ? "" : "s"}`, run: () => V.openClientPack({ nodes: rs, exact: true }) });
+    return V.toast("Choose the pictures for the pack first: pick the best of each view, put them on a sheet, or select some renders.", false, 9000, { actions: acts });
+  }
+  const items = nodes.map((n) => ({ node: n, name: title(n), note: "", slider: !!sourceOf(n) }));
+  let size = V.store.get("packSize", 1600);
+  const tIn = h("input", { value: projName(), placeholder: "e.g. Riverside House", "aria-label": "Project title" });
+  const dIn = h("input", { value: today(), "aria-label": "Date" });
+  const list = h("div", { class: "packlist" }), stat = h("p", { class: "hint", "aria-live": "polite" }), linkRow = h("div", { class: "packlink", hidden: true });
+  const save = h("button", { class: "mini primary", type: "button", id: "packSave" }, "Save the pack");
+  const drive = V.drive && V.drive.put && V.drive.on && V.drive.on() ? h("button", { class: "mini", type: "button", id: "packDrive" }, "Share via Drive") : null;
+  const est = () => { const per = size >= 2560 ? 0.75 : 0.32, n = items.reduce((s, it) => s + (it.slider ? 2 : 1), 0); return `About ${Math.max(1, Math.round(n * per))} MB`; };
+  const paintList = () => {
+    list.innerHTML = "";
+    items.forEach((it, i) => {
+      const src = sourceOf(it.node), nm = h("input", { value: it.name, "aria-label": `Name of picture ${i + 1}` }); nm.oninput = () => (it.name = nm.value);
+      const nt = h("textarea", { rows: 2, placeholder: "Notes for the client (optional)", "aria-label": `Notes for picture ${i + 1}` }); nt.value = it.note; nt.oninput = () => (it.note = nt.value);
+      const sl = h("input", { type: "checkbox", disabled: !src }); sl.checked = !!it.slider && !!src; sl.onchange = () => { it.slider = sl.checked; sizeLine.textContent = est(); };
+      const mv = (d) => { const j = i + d; if (j < 0 || j >= items.length) return; [items[i], items[j]] = [items[j], items[i]]; paintList(); };
+      list.append(h("div", { class: "packrow" },
+        h("span", { class: "packthumb" }, h("img", { src: it.node.thumb || it.node.url, alt: "" })),
+        h("div", { class: "packfields" }, h("div", { class: "row" }, h("b", { class: "packnum" }, String(i + 1).padStart(2, "0")), nm), nt,
+          h("label", { class: "packchk", title: src ? `Against ${title(src)}` : "No view or photo to compare with" }, sl, src ? `Before/after slider (with ${title(src)})` : "No before/after: nothing it was made from")),
+        h("div", { class: "packmove" },
+          h("button", { class: "mini icon", type: "button", disabled: !i, "aria-label": `Move picture ${i + 1} up`, html: V.ico ? V.ico("chev-up", "sm") : "↑", onclick: () => mv(-1) }),
+          h("button", { class: "mini icon", type: "button", disabled: i === items.length - 1, "aria-label": `Move picture ${i + 1} down`, html: V.ico ? V.ico("chev", "sm") : "↓", onclick: () => mv(1) }),
+          h("button", { class: "mini icon", type: "button", disabled: items.length < 2, "aria-label": `Leave picture ${i + 1} out`, html: V.ico ? V.ico("close", "sm") : "×", onclick: () => { items.splice(i, 1); paintList(); } }))));
+    });
+    sizeLine.textContent = est();
+  };
+  const sizeLine = h("span", { class: "hint" });
+  const sizes = h("div", { class: "pfseg", role: "group", "aria-label": "Picture size" }, ...[[1600, "1600 px", "Smaller file, fine on a phone or laptop"], [2560, "2560 px", "Sharper on a big screen, a bigger file"]].map(([v, l, t]) => h("button", { type: "button", class: "mini" + (size === v ? " on" : ""), "aria-pressed": String(size === v), title: t, onclick: (e) => { size = v; V.store.set("packSize", v); sizes.querySelectorAll("button").forEach((b) => { const on = b === e.currentTarget; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); }); sizeLine.textContent = est(); } }, l)));
+  m = h("div", { class: "modal", id: "packModal" },
+    h("div", { class: "mbox packbox" },
+      h("button", { class: "mclose", type: "button", "aria-label": "Close", onclick: () => (m.hidden = true) }, "×"),
+      h("h3", {}, "Client pack"),
+      h("p", { class: "hint" }, "One file for the client: it opens on a phone or computer with no internet and no account. The pictures in this order, a before/after slider where the view or photo it came from exists, the Clarman logo, the title and your notes."),
+      h("div", { class: "packtop" }, h("label", { class: "fl" }, "Title", tIn), h("label", { class: "fl" }, "Date", dIn), h("div", { class: "fl" }, h("span", {}, "Picture size"), h("div", { class: "row" }, sizes, sizeLine))),
+      list, stat, linkRow,
+      h("div", { class: "row end mt" }, drive, save)));
+  document.body.append(m); if (V.modal) V.modal(m, { label: "Client pack" });
+  paintList();
+  const make = async () => {
+    save.disabled = true; if (drive) drive.disabled = true;
+    try { return await buildHtml(items, { title: tIn.value.trim() || "Presentation", date: dIn.value.trim(), size, progress: (i, n) => (stat.textContent = `Preparing picture ${i + 1} of ${n}…`) }); }
+    finally { save.disabled = false; if (drive) drive.disabled = false; }
+  };
+  save.onclick = async () => {
+    let html; try { html = await make(); } catch (e) { stat.textContent = "Couldn't make the pack: " + e.message; return; }
+    const blob = new Blob([html], { type: "text/html" }), url = URL.createObjectURL(blob), name = fileName(tIn.value.trim() || projName());
+    stat.textContent = `Ready: ${(blob.size / 1048576).toFixed(1)} MB.`;
+    await V.download(url, name, { msg: (nm) => `Client pack saved: "${nm}" (${(blob.size / 1048576).toFixed(1)} MB, ${items.length} picture${items.length > 1 ? "s" : ""}). Send it to the client or put it on a USB stick: it opens in any browser, with no internet.` });
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  };
+  if (drive) drive.onclick = async () => {
+    let html; try { html = await make(); } catch (e) { stat.textContent = "Couldn't make the pack: " + e.message; return; }
+    const blob = new Blob([html], { type: "text/html" }), name = fileName(tIn.value.trim() || projName());
+    stat.textContent = "Uploading to Google Drive…";
+    try {
+      const r = await V.drive.put(blob, name, "Client packs");
+      stat.textContent = `In your Google Drive: VizLab › ${r.folder ? r.folder + " › " : ""}Client packs › ${name}. Only you can open it until you share it: in Drive, Share › Anyone with the link.`;
+      const inp = h("input", { value: r.link, readonly: true, "aria-label": "Link to the pack in Google Drive" });
+      linkRow.innerHTML = ""; linkRow.hidden = false;
+      linkRow.append(inp, h("button", { class: "mini", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(r.link); V.toast("Link copied", false, 2500); } catch (e) { inp.select(); document.execCommand && document.execCommand("copy"); } } }, "Copy link"), h("a", { class: "linkbtn", href: r.link, target: "_blank", rel: "noopener" }, "Open in Drive"));
+    } catch (e) { stat.textContent = "Couldn't upload to Google Drive: " + ((V.explainError && V.explainError(e).title) || e.message) + ". Save the pack instead."; }
+  };
+  setTimeout(() => save.focus(), 40);
+  return m;
+};
+document.addEventListener("keydown", (e) => { const m = $("#packModal"); if (e.key !== "Escape" || !m || m.hidden || !$("#confirmModal").hidden) return; e.preventDefault(); e.stopImmediatePropagation(); m.hidden = true; }, true);
+// the picture menu, under Save & share (canvas.js asks V.clientPackItem)
+V.clientPackItem = (n, sel) => {
+  const s = (sel || []).filter(done), set = s.length > 1 ? s : done(n) ? [n] : [];
+  return set.length ? [[`Client pack${set.length > 1 ? ` (${set.length})` : ""}…`, () => V.openClientPack({ nodes: set })]] : [];
+};
+V.clientPack = { html: buildHtml, sourceOf, pickSet };
 })();
 
 ;
@@ -16908,18 +21395,21 @@ const V = window.V, { $, $$, h } = V;
 // v3.69 B5 (FR6, D11): six steps in Quick start order; the rest are "More tips" (V.startTour("more")), offered on the last
 // card. A step names one or more selectors: the first one on screen is used, and it is scrolled into view first.
 const TOUR = [
-  [["#tCapture", "#tUpload"], "Bring in your view", "With SketchUp open and the VizLab plugin installed, this amber button brings in the view you see there, ready to render. Or drop a screenshot, photo or PDF on the canvas."],
+  [["#tCapture", "#tUpload"], "Bring in your view", "With SketchUp open and the VizLab plugin installed, this button (or V) brings in the view you see there, ready to render. Or drop a screenshot, photo or PDF on the canvas."],
   [["#sceneRow", "#btnEnv", "#erSum"], "Choose a scene (optional)", "One click sets the surroundings, sky, light, weather and people around your model. It goes with every render until you change it."],
   ["#btnMake", "Render: your building and camera are kept", "Select the picture and press this (Ctrl+Enter). The line under it says what it will do. The result appears as a new picture joined to it."],
-  [[".nextbar", "#pvActions", "#viewer"], "Check and finish", "With a render selected: Compare it with your view, Upscale ×2 for a bigger copy, then Download. What next? suggests the likely next step."],
+  [["#pvActions", ".nextbar", "#viewer"], "Check and finish", "With a render selected, this row has Open big (Picture view), Compare with your view, the favourite star, Download, and ⋯ for Upscale ×2. What next? under it suggests the likely next step. The Tweak and Relight chips change this picture in one click: on a smaller screen, choose Tweak or Relight from the What next? ▾ menu and that row shows them."],
   ["#btnCmd", "Find anything", "Ctrl+K searches every preset, tool, page, picture and help topic. Right-click a picture for its menu, and press ? for all the shortcuts."],
   [["#btnHelp", '.sbtn[data-view="help"]'], "Help any time", "The ? button opens the Quick start, help search, shortcuts and this tour. The Tutorial in the sidebar has every topic."],
 ];
 const MORE_TOUR = [
   ["#presetSearch", "Presets", "Over 250 presets in Exterior, Interior, Product, Landscape and Montage. Search them here, star your favourites (they join the Yours row at the top of each tab), tick several to mix a combo. Your own saved presets are under My presets."],
   ["#prompt", "Your own words", "Presets land here. Add your own words, or right-click for RAL colours. The sparkle button improves your words with AI; the curved arrow puts the old prompt back."],
-  ["#imgSum", "AI model and size", "This line sums up how each picture is made: the AI model, resolution, picture shape and how many versions. Press Settings ▾ on that line to change them."],
-  [["#aReview", "#btnMake"], "Review and choose", "With several versions, press R to flick through them full screen, favourite the best (F) and set aside the weak ones (X)."],
+  ["#imgSum", "AI model and size", "This line sums up how each picture is made: the AI model, resolution, picture shape and how many versions. Click that line to change them."],
+  ["#verSeg", "Versions", "1, 2 or 4 pictures each time you press Render. The versions of one press are a round, lettered A, B, C, D."],
+  [["#aReview", "#btnMake"], "Review and choose", "With several versions, press R to see them full screen: A picks the best two at a time, P picks one for each view, H marks the hero, F favourites and X sets aside."],
+  ["#viewSeg", "Canvas or Picture", "Picture shows the selected picture big with its versions along the bottom (E, Enter or a double-click; E or Esc comes back). P presents full screen."],
+  ["#statusPill", "Is everything working?", "This pill says how things stand (All good, Offline, Not saved…). Click it to check the internet, key, SketchUp, Google Drive and storage, and to put a problem right."],
   ['.sbtn[data-view="settings"]', "Settings", "The office Google key is under Start here, then SketchUp & Revit, Downloads & Clarman logo and Preferences. At a glance shows how it all stands."],
 ];
 const firstOn = (sel) => [].concat(sel).map((s) => $(s)).find((el) => el && el.offsetParent && !el.hidden);
@@ -17013,7 +21503,7 @@ V.openWelcome = () => {
     check.disabled = true; stat.className = "hint wstat"; stat.textContent = "Checking…";
     const msg = await V.welcomeSave(v); check.disabled = false;
     const bad = /✗/.test(msg || "") || !V.aiReady(); keyOk = !bad; // (Start rendering waits for a key that passed)
-    stat.className = "hint wstat " + (bad ? "bad" : "ok"); stat.textContent = bad ? msg || "That didn't work." : cloud ? "✓ Connected. You're ready to render." : "✓ The key works. You're ready to render.";
+    stat.className = "hint wstat " + (bad ? "bad" : "ok"); stat.textContent = bad ? msg || "That didn't work." : cloud ? "✓ Connected. You're ready to render." : "✓ Key accepted by Google. You're ready to render."; // (v3.74 robust-15)
     paint(); if (!bad) start.focus();
   } }, "Check and save");
   inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); check.click(); } });
@@ -17078,6 +21568,7 @@ document.body.append(frRing, frCard);
 const connected = () => V.canCapture();
 
 const isJob = (n) => n.status === "queued" || n.status === "running";
+const frJobState = () => { const j = (fr.job || []).map(V.node).find((n) => n && isJob(n)); return j && V.jobClock ? V.jobClock.state(j) : null; };
 const FIRST = [
   { sel: () => (connected() ? ["#ehCapture", "#tCapture"] : ["#ehUpload", "#tUpload"]), title: "1 of 3 · Bring in your view", // (C1, N5: the big canvas button first)
 
@@ -17089,18 +21580,26 @@ const FIRST = [
   // model view becomes a view (Render, View to render, the building kept); a photo gets no 3D-render brief, the card says
   // to type the change or use Change part of it
   { sel: () => (frPhoto() ? "#prompt" : frNeedsWords() ? ["#presetSearch", "#prompt"] : "#btnMake"), title: "2 of 3 · Render", place: "aboveleft",
-    text: () => { const b = frBtn(); if (frPhoto()) return "Is this a screenshot of your model, or a photo? A model view is rendered photoreal with the building kept. For a photo, type the change you want (or use Change part of it under What next), then press " + b + "."; if (frNeedsWords()) return fr.photo ? "Type the change you want (for example: paint the front door dark grey), then press " + b + "." : "Pick a preset such as View to render (or type what you want), then press " + b + "."; return b === "Render" ? "Press Render for a photoreal daylight picture of your view." : "Press " + b + "."; },
+    text: () => { const b = frBtn(); if (!V.sel.length && V.G.nodes.some((n) => n.type === "image" && n.status === "done")) return "Select a picture first: click your view on the canvas, then press Render."; if (frPhoto()) return "Is this a screenshot of your model, or a photo? A model view is rendered photoreal with the building kept. For a photo, type the change you want (or use Change part of it under What next), then press " + b + "."; if (frNeedsWords()) return fr.photo ? "Type the change you want (for example: paint the front door dark grey), then press " + b + "." : "Pick a preset such as View to render (or type what you want), then press " + b + "."; return b === "Render" ? "Press Render for a photoreal daylight picture of your view." : "Press " + b + "."; },
     buttons: () => (frPhoto() ? [["It's a model view", () => { const m = V.selImages()[0]; if (m) V.markModelView(m); }, true], ["It's a photo", () => { fr.photo = true; frCard._k = ""; }]] : []),
     start: () => {
       const n = V.G.nodes.filter((x) => x.type === "image" && !fr.had.has(x.id)).pop(); if (n && !V.sel.length) { V.sel = [n.id]; V.render(); V.selectionChanged(); }
     },
     done: () => { const j = V.G.nodes.filter((n) => !fr.had.has(n.id) && (isJob(n) || (n.jobId && n.status === "done"))); if (j.length) fr.job = j.map((n) => n.id); return j.length > 0; } },
-  { sel: () => null, title: "Rendering…", text: () => "This takes about a minute. The result appears on the canvas.",
+  // (v3.74 B3 fixer, IB-5) the card points at Activity (or the title-bar chip), off the placeholder card and its ring, and
+  // says V.jobClock's own usual time, so it agrees with "Rendering… 0:04 · about 40 s" on the placeholder
+  // (v3.74 B3 fixer-2, NB3-2) the words follow the job's stage, as the placeholder does: Sending… / Waiting in line, and the
+  // time left only once it is rendering. The time left is live() (a quiet line updated in place), so the card, its Skip
+  // button and its role=status words are not rebuilt or read out again every 5 s
+  { sel: () => ["#tQueue", "#jobChip"], side: true, title: "Rendering…", text: () => { const st = frJobState(); return (!st ? "" : st.stage === "sending" ? "Sending… " : st.stage === "queued" ? "Waiting in line. " : st.stage === "waiting" ? "Waiting for the connection. " : st.over ? "It's taking longer than usual. " : "") + "Its card on the canvas shows the time left, and Activity lists it. The result appears on the canvas."; },
+    live: () => { const st = frJobState(); return st && st.stage === "running" && !st.over && st.left != null ? (st.left > 3 ? "About " + V.jobClock.leftText(st.left) + " to go." : "Nearly done.") : ""; },
     // (C1, J-materials N1: Draw open, e.g. a material option made from the view, keeps its own selection)
-    done: () => { const ns = (fr.job || []).map(V.node).filter(Boolean); if (ns.some((n) => n.status === "error")) { fr.i = 1; fr.job = null; frToast(); return false; } const d = ns.find((n) => n.status === "done"); if (d && V.viewerMode === "preview") { V.sel = [d.id]; V.render(); V.selectionChanged(); } return !!d; } },
-  // C1 (B9, V5, N1): the card sits under Download in the side panel, never over the new picture; any other job started
-  // from here (a video, a 3D model, another render) counts as moving on
-  { sel: () => "#aDownload", place: "below", title: "3 of 3 · Download", text: () => { const d = (fr.job || []).map(V.node).find((n) => n && n.status === "done"), k = d && V.parents(d.id)[0] && V.pictureKind(V.parents(d.id)[0]); return (k === "photo" || k === "drawing" ? "Your edited picture is ready." : "Your render is ready.") + " Download saves it to your PC."; },
+    done: () => { const ns = (fr.job || []).map(V.node).filter(Boolean); if (ns.some((n) => n.status === "error")) { fr.i = 1; fr.job = null; return false; } /* (v3.74 robust-06: no extra message; the failed card speaks) */ const d = ns.find((n) => n.status === "done"); if (d && V.viewerMode === "preview") { V.sel = [d.id]; V.render(); V.selectionChanged(); } return !!d; } },
+  // C1 (B9, V5, N1): the card never sits over the new picture; any other job started from here (a video, a 3D model, another
+  // render) counts as moving on. v3.74 B3 (N4; fixer-2 P1): Download is in the action row at the top of the panel, so the
+  // card sits BESIDE that row on the canvas side (at: the row, side: true; the A2-06 keep-clear logic below moves it off the
+  // canvas tools, the Capture pill and the new picture). Under the row it covered What next, the tabs and the Tools button.
+  { sel: () => "#aDownload", at: "#pvActions", side: true, title: "3 of 3 · Download", text: () => { const d = (fr.job || []).map(V.node).find((n) => n && n.status === "done"), k = d && V.parents(d.id)[0] && V.pictureKind(V.parents(d.id)[0]); return (k === "photo" || k === "drawing" ? "Your edited picture is ready." : "Your render is ready.") + " Download saves it to your PC."; },
     done: () => fr.downloaded || V.G.nodes.some((n) => !fr.had.has(n.id) && !(fr.job || []).includes(n.id) && (isJob(n) || n.jobId)) },
 ];
 const frPhoto = () => { if (!fr || fr.photo) return false; const m = V.selImages ? V.selImages()[0] : null, pk = m && V.pictureKind ? V.pictureKind(m) : null; return (pk === "photo" || pk === "drawing") && !($("#prompt").value.trim()); };
@@ -17114,10 +21613,9 @@ V.markModelView = (n, render) => {
 };
 const frBtn = () => { const b = $("#btnMake"); return ((b && b.textContent) || "Render").trim().replace(/\s+/g, " ") || "Render"; };
 const frNeedsWords = () => { const p = $("#prompt"); return !!p && !p.value.trim() && !V.G.scene && frBtn() !== "Render"; }; // (Render on a capture works with nothing typed)
-const frToast = () => V.toast("That render didn't work: see the message. Press Render to try again.", true, 6000);
 V.startFirstRender = () => {
   if (fr) clearInterval(fr.t); // (C1b fixer: starting again never leaves the old timer running)
-  fr = { i: 0, had: new Set(V.G.nodes.map((n) => n.id)), job: null, downloaded: false, shown: -1 };
+  fr = { i: 0, had: new Set(V.G.nodes.map((n) => n.id)), job: null, downloaded: false, shown: -1, t0: Date.now() };
   if (V.G.nodes.some((n) => n.type === "image" && n.status === "done")) { fr.had = new Set(); fr.i = 1; } // a picture is already there
   frTick(); clearInterval(fr.t); fr.t = setInterval(frTick, 300);
 };
@@ -17146,18 +21644,52 @@ function frTick() {
   const el = canvasUp && s.sel() ? firstOn(s.sel()) : null;
   if (fr.scrolled !== fr.i && el) { fr.scrolled = fr.i; el.scrollIntoView({ block: "nearest", inline: "nearest" }); }
   const r = el ? el.getBoundingClientRect() : null;
-  const over = !!document.querySelector(".cmdk:not([hidden]), .modal:not([hidden]), .keysheet:not([hidden]), .review:not([hidden])"); // (v3.69 viewer fixer: and Review) (C1: Ctrl+K, a window or the keys sheet on top: the guide waits under it)
+  const over = !!document.querySelector(".cmdk:not([hidden]), .modal:not([hidden]), .keysheet:not([hidden]), .review:not([hidden]), .stpanel:not([hidden]), #ctx:not([hidden]), .ctx:not([hidden]), .tool-menu:not([hidden]), .summenu, .libmenu, .undopop") || !!(V.presentFlowOpen && V.presentFlowOpen()); // (final review: the Make a presentation stepper has its own steps; the guide waits under it)// (v3.74 D2: and any pop-up or menu: the ring and card never sit over one) // (v3.69 viewer fixer: and Review) (C1: Ctrl+K, a window or the keys sheet on top: the guide waits under it)
   frRing.hidden = !r || (tourEl && !tourEl.hidden) || over;
   if (r) Object.assign(frRing.style, { left: r.left - 5 + "px", top: r.top - 5 + "px", width: r.width + 10 + "px", height: r.height + 10 + "px" });
-  const key = fr.i + "|" + s.text();
+  // (B3 fixer-2, NB3-2) rebuilt only for a new step or new buttons; changed words go into the <p> in place (so a focused
+  // Skip button keeps focus), and the time left into its own line outside the status region's words (aria-hidden)
+  const txt = s.text(), btns = s.buttons ? s.buttons() : [], live = s.live ? s.live() : "";
+  const key = fr.i + "|" + btns.map((b) => b[0]).join("|");
   if (frCard._k !== key) {
     frCard._k = key; frCard.innerHTML = "";
-    const bs = (s.buttons ? s.buttons() : []).map(([l, run, pri]) => h("button", { class: "mini" + (pri ? " primary" : ""), type: "button", onclick: run }, l));
-    frCard.append(h("b", {}, s.title), h("p", {}, s.text()), bs.length ? h("div", { class: "row wrap frbtns" }, ...bs) : "", h("div", { class: "row end" }, h("button", { class: "mini", type: "button", onclick: () => frEnd(false) }, "Skip the guide")));
+    const bs = btns.map(([l, run, pri]) => h("button", { class: "mini" + (pri ? " primary" : ""), type: "button", onclick: run }, l));
+    frCard.append(h("b", {}, s.title), h("p", { class: "frtext" }, txt), h("p", { class: "frlive", "aria-hidden": "true", hidden: !live }, live), bs.length ? h("div", { class: "row wrap frbtns" }, ...bs) : "", h("div", { class: "row end" }, h("button", { class: "mini", type: "button", onclick: () => frEnd(false) }, "Skip the guide")));
+  } else {
+    const p = frCard.querySelector(".frtext"), lv = frCard.querySelector(".frlive");
+    if (p && p.textContent !== txt) p.textContent = txt;
+    if (lv && lv.textContent !== live) { lv.textContent = live; lv.hidden = !live; }
   }
-  frCard.hidden = !canvasUp || (tourEl && !tourEl.hidden) || V.welcomeOpen() || over;
-  frRing.hidden = frRing.hidden || !canvasUp;
-  if (!frCard.hidden) placeCard(frCard, r, s.side, s.place);
+  // (v3.74 A2, robust-06) put away (not ended) while a failure is showing: a red message or a failed picture on screen
+  const failing = !!document.querySelector("#toast .toast.err:not(.out)") || V.G.nodes.some((n) => n.status === "error" && (n.failedAt || 0) > (fr.t0 || 0) && V.onScreen && V.onScreen(n));
+  frCard.hidden = !canvasUp || (tourEl && !tourEl.hidden) || V.welcomeOpen() || over || failing;
+  frRing.hidden = frRing.hidden || !canvasUp || failing;
+  if (!frCard.hidden) {
+    // (B3 fixer, P5) s.at: the card is placed from another element (the action row) while the ring stays on the target
+    const atEl = s.at && el ? $(s.at) : null, ar = atEl && atEl.offsetParent ? atEl.getBoundingClientRect() : r;
+    placeCard(frCard, ar, s.side, s.place);
+    // never over the messages, the selected picture, the Make button or the canvas tools: (A2-06) it moves up the canvas
+    // column (it never crosses onto the right panel), else it waits out of the way until they have gone
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, cr = () => frCard.getBoundingClientRect();
+    // (v3.74 B3 fixer, IB-5) and never over a picture being made (its placeholder card, ring and time left) nor, in Picture
+    // view, over the stage picture, its toolbar or the film-strip: in Picture view the free part of the stage column is used
+    const pv = V.pictureView && V.pictureView(), making = V.G.nodes.filter((n) => isJob(n) || n.status === "capturing").map((n) => document.querySelector(`.node[data-id="${n.id}"]`));
+    const stageBits = pv ? [...document.querySelectorAll("#viewer .stimg, #viewer button, .pvstrip > *")] : [];
+    const keep = [...document.querySelectorAll("#toast .toast:not(.out)"), $("#btnMake"), $(".nextbar"), $(".ctools"), $("#tCapture"), $("#ehCapture"), $("#ehUpload"), ...V.sel.map((id) => document.querySelector(`.node[data-id="${id}"]`)), ...making, ...stageBits].filter((x) => x && x.offsetParent && x !== el && !(el && x.contains(el))).map((x) => x.getBoundingClientRect()).filter((k) => k.width > 0 && k.height > 0).map((k) => ({ left: k.left - 6, right: k.right + 6, top: k.top - 6, bottom: k.bottom + 6 })); // (a little clear space round each)
+    const cvEl = pv ? $("#viewer") : $("#canvas"), cv = cvEl && cvEl.offsetParent ? cvEl.getBoundingClientRect() : null;
+    if (pv && !cv) frCard.hidden = true;
+    else if (cv && keep.some((k) => hit(cr(), k))) {
+      // the nearest clear slot in the canvas (or stage) column, left of the canvas tools; none: it waits out of the way
+      const c = cr(), w = c.width, hgt = c.height, tools = $(".ctools"), right = !pv && tools && tools.offsetParent ? tools.getBoundingClientRect().left - 12 : cv.right - 12;
+      const x0 = Math.max(cv.left + 12, Math.min(c.left, right - w));
+      let best = null, bd = Infinity;
+      for (let x = cv.left + 12; x <= right - w; x += 16) for (let t = cv.top + 12; t <= cv.bottom - hgt - 12; t += 12) {
+        const box = { left: x, right: x + w, top: t, bottom: t + hgt }, d = Math.abs(x - x0) + Math.abs(t - c.top);
+        if (d < bd && !keep.some((k) => hit(box, k))) { bd = d; best = box; }
+      }
+      if (!best) frCard.hidden = true; else Object.assign(frCard.style, { left: best.left + "px", top: best.top + "px" });
+    }
+  }
 
 }
 
@@ -17212,6 +21744,9 @@ const prevVersion = (n) => {
   const k = V.pictureKind(n), cap = V.captureOf(n), p = V.parents(n.id).find((x) => x.type === "image");
   const sibs = V.G.nodes.filter((m) => m.id !== n.id && m.status === "done" && m.type === "image" && V.pictureKind(m) === k && (cap ? V.captureOf(m) === cap : p && V.parents(m.id).some((x) => x.id === p.id)));
   const at = V.G.nodes.indexOf(n), before = sibs.filter((m) => V.G.nodes.indexOf(m) < at);
+  // v3.74 C1 (RET-2): an edit made from another picture (not the view) is compared with that picture, its "before"
+  const par = V.parents(n.id).find((x) => x.type === "image" && x.status === "done" && x.url);
+  if (par && n.kind === "edit" && !V.isCapture(par)) return { node: par, before: true };
   const cp = V.cmpPartner, pn = cp && cp.id !== n.id && cap && cap.id === cp.cap && (n.created || 0) >= cp.t ? V.node(cp.id) : null; // (C1, RN1)
   if (pn && pn.status === "done") return pn;
 
@@ -17235,9 +21770,15 @@ const NEXT = (n) => {
 
     if (V.comparePair && V.comparePair()) add("Compare before and after", "", () => V.setViewerMode("compare"));
   }
+  // v3.74 C1 (loop-11): renders of this picture still on their way: say so, and don't offer another paid round meanwhile
+  const onWay = V.children(n.id).filter((c) => c.status === "queued" || c.status === "running" || c.status === "uploading");
+  if (onWay.length) add(`${onWay.length} on the way: show ${onWay.length > 1 ? "them" : "it"}`, "", () => (V.fit ? V.fit([n, ...onWay], true, Math.max(0.5, V.G.view.z)) : V.centerOn(onWay[0])));
+  // v3.74 C1 (N9): two or more versions of the same view or picture: pick the best, two at a time (review.js Duel)
+  const vers = V.versionsOf ? V.versionsOf(n) : [];
+  if (vers.length >= 2 && V.openDuel && k !== "view") add(`Pick the best (${vers.length})`, "", () => V.openDuel());
   if (k === "view") {
     const views = V.visibleNodes().filter((m) => V.isCapture(m) && m.status === "done" && m.type === "image");
-    add("Render it", V.needsRenderPreset() ? "+ " + (V.renderItPreset()?.name || "View to render") : "", () => V.renderIt(n));
+    if (!onWay.length) add("Render it", V.needsRenderPreset() ? "+ " + (V.renderItPreset()?.name || "View to render") : "", () => V.renderIt(n));
     add("Choose a scene…", "", () => V.openScenes());
     add("Try materials", "", () => STEP.materials(n));
     if (views.length > 1) add(`Render all ${views.length} views`, "", () => STEP.renderAll(views));
@@ -17259,8 +21800,8 @@ const NEXT = (n) => {
     if (mats.length > 1) add(`Compare options (${mats.length})`, "", () => V.openReview({ sideBySide: true }));
     add("Fix one area…", "", () => STEP.fixArea(n));
     if (V.redesignSource && V.redesignSource(n)) add("Update the design…", "", () => V.openRedesign(n)); // v3.70 the client changed the design
-    const prev = (k === "render" || k === "new") && prevVersion(n);
-    if (prev) add(`Compare with ${V.nodeTitle(prev)}`, "", () => V.compareWith(n, prev));
+    const pv0 = (k === "render" || k === "new") && prevVersion(n), prev = pv0 && pv0.before ? pv0.node : pv0;
+    if (prev) add(`Compare with ${V.nodeTitle(prev)}${pv0.before ? " (before)" : ""}`, "", () => V.compareWith(n, prev));
     if (V.tab === "video") add("Pick a camera move", "", () => seeIt("#vidPresets", "start")); // C1 (J-video3d N4)
     else add("Make a video", "", () => STEP.video(n));
     add("Make 3D model", "", () => STEP.model3d(n));
@@ -17301,17 +21842,48 @@ const NEXT = (n) => {
   }
   // never twice: a step whose button (or the same words) is already on screen is left out
   const have = onScreen(), dupe = ([label, , , same]) => have.has(norm(label)) || (same || []).some((q) => (typeof q === "function" ? q() : seen($(q)))); // a selector, or a test
+  if (V.nextExtra) (V.nextExtra(n) || []).reverse().forEach((x) => { if (!out.some((o) => o[0] === x[0])) out.splice(1, 0, x); }); // (v3.74 C2 hook, presentflow.js: after the picks, the sheet and the client pack)
   return out.filter((x) => !dupe(x)).slice(0, 5);
 };
+let nextAll = null, fitNext = () => {}; // (IB-6) the picture whose What next row was opened with "+N"; the fold for the row shown
+if (window.ResizeObserver) new ResizeObserver(() => fitNext()).observe(bar); // the panel's width changes with the window
 function paintNext() {
   const n = V.selNodes()[0];
-  const ok = V.sel.length === 1 && n && n.status === "done" && /^(image|video|model|world)$/.test(n.type) && V.viewerMode !== "draw" && V.viewerMode !== "touch" && V.store.get("nextBar", true);
+  const multi = V.sel.length > 1 && V.nextMulti ? V.nextMulti(V.selNodes()) : null; // (v3.74 C2 hook, presentflow.js: 2+ pictures selected: Make a presentation, Options board, Client pack)
+  const ok = ((V.sel.length === 1 && n && n.status === "done" && /^(image|video|model|world)$/.test(n.type)) || (multi && multi.length)) && V.viewerMode !== "draw" && V.viewerMode !== "touch" && V.store.get("nextBar", true);
   bar.hidden = !ok; if (!ok) return;
-  const steps = NEXT(n);
-  bar.innerHTML = ""; bar.hidden = !steps.length; if (!steps.length) return;
-  bar.append(h("span", { class: "nlabel" }, "What next?"));
-  steps.forEach(([label, sub, fn]) => bar.append(h("button", { class: "nchip", onclick: () => { try { fn(); } catch (e) { V.toast("Couldn't do that: " + e.message, true); } } }, label, sub ? h("small", {}, sub) : null)));
-  bar.append(h("button", { class: "nhide", title: "Hide these suggestions (Ctrl+K → Show What next? suggestions brings them back)", onclick: () => { V.store.set("nextBar", false); paintNext(); V.toast("Suggestions hidden. Ctrl+K → \"Show What next? suggestions\" brings them back.", false, 4500); } }, "×"));
+  const steps = multi && multi.length ? multi : NEXT(n), tw = !(multi && multi.length) && V.twNext ? V.twNext(n) : null; // (v3.74 C1: on a short screen the tweak chips share this row)
+  bar.innerHTML = ""; bar.hidden = !steps.length && !tw; if (bar.hidden) return;
+  // v3.74 B3 (N4, ia-09, visual:V03): ONE row: the label, the chips, the x at the end. (B3 fixer, IB-6) only whole chips
+  // show: the ones that don't fit fold into a "+N" chip, which opens the row onto a second line (kept open for that picture).
+  // In a narrow window (style.css, under 900 px) the chips wrap under the label instead.
+  bar.append(tw ? tw.seg : h("span", { class: "nlabel" }, "What next?"));
+  bar.classList.toggle("nall", !tw && nextAll === n.id); // (v3.74 C1: the tweak chips open their "+N" as a pop-up, never as a wrapped block)
+  const track = h("div", { class: "ntrack" });
+  if (tw && tw.chips) tw.chips.forEach((c) => track.append(c));
+  // (the chips are made by stepBtn, so the "+N" pop-up can make the folded ones again)
+  const stepBtn = ([label, sub, fn]) => h("button", { class: "nchip", type: "button", onclick: () => { try { fn(); } catch (e) { V.toast("Couldn't do that: " + e.message, true); } } }, label, sub ? h("small", {}, sub) : null);
+  if (!(tw && tw.chips)) steps.forEach((s) => track.append(stepBtn(s)));
+  // (v3.74 C1 fixer: "+N" opens the folded chips in a pop-up anchored to it, for What next and the tweaks alike, so the
+  // row never turns into a tall wrapped block; B3's open-the-row stays only for the narrow-window layout)
+  const more = h("button", { class: "nchip nmore", type: "button", hidden: true, "aria-haspopup": "true", onclick: (e) => {
+    if (innerWidth > 900) {
+      e.stopPropagation(); if ($(".twmorepop")) return twMoreClose();
+      const folded = $$(".nchip[data-folded]", track);
+      if (tw && tw.chips) { const ids = folded.map((c) => c.dataset.tw); return twMorePop(n, more, V.tweaks().filter((t) => ids.includes(t.id))); }
+      const all = $$(".nchip:not(.nmore)", track); return twMorePop(n, more, folded.map((c) => stepBtn(steps[all.indexOf(c)])), "More suggestions");
+    } const c = track.querySelector(".nchip[data-folded]"); /* (B3 fixer-2, NB3-1: noted before fitNext clears the marks) */ nextAll = n.id; bar.classList.add("nall"); fitNext(); if (c) c.focus(); } });
+  track.append(more);
+  bar.append(track);
+  fitNext = () => {
+    const chips = $$(".nchip:not(.nmore)", track);
+    chips.forEach((c) => { c.hidden = false; delete c.dataset.folded; }); more.hidden = true;
+    if (bar.hidden || bar.classList.contains("nall") || track.scrollWidth <= track.clientWidth + 1) return;
+    more.hidden = false; let k = chips.length;
+    while (k > 0 && track.scrollWidth > track.clientWidth + 1) { k--; chips[k].hidden = true; chips[k].dataset.folded = "1"; const m = chips.length - k; more.textContent = "+" + m; more.setAttribute("aria-label", `Show ${m} more suggestion${m > 1 ? "s" : ""}`); more.title = chips.slice(k).map((c) => c.firstChild.textContent).join(" · "); }
+  };
+  bar.append(h("button", { class: "nhide", type: "button", "aria-label": "Hide these suggestions", title: "Hide these suggestions (Ctrl+K → Show What next? suggestions brings them back)", onclick: () => { V.store.set("nextBar", false); paintNext(); V.toast("Suggestions hidden. Ctrl+K → \"Show What next? suggestions\" brings them back.", false, 4500); } }, "×"));
+  fitNext(); // (with the x in place: it takes its own slot at the end of the row)
 }
 // the viewer's own buttons (the action row, the model viewer's bar) are drawn in the same moment: look again once they are
 let nextT = 0;
@@ -17326,6 +21898,192 @@ V.paintNext = () => paintNext();
 const sp0 = V.setPrompt;
 V.setPrompt = (...a) => { const r = sp0(...a); paintNext(); return r; };
 $("#prompt").addEventListener("input", () => paintNext());
+
+// ---------- v3.74 C1 (N8, loop:big:2, journey-returning:big:1-2): tweak and relight chips ----------
+// Under a selected render: in the inspector one row right under What next (a Tweak | Relight switch as its label, so the
+// presets stay where N4 put them), and in Picture view both rows under the stage. Each chip is an edit of THIS picture
+// (panel.js V.tweak); Shift+click puts its words in the prompt. Whole chips only, the rest fold into "+N" as What next does.
+// A chip shows a small progress ring while its job runs (V.jobClock). The result opens compared with the picture it came
+// from, with Keep / Discard / Keep both.
+const VD = window.VLD || {}, PK = () => VD.piconParts || null, PI = (id) => (VD.picons && VD.picons[id]) || "";
+const TW_ICON = {
+  lighter: () => PK() ? PK().C(["sun", 0, 0, 0.8], ["plus", 28, 28, 0.42]) : "", darker: () => PK() ? PK().C(["moon", 0, 2, 0.8], ["star", 30, 2, 0.32]) : "",
+  warmer: () => PK() ? PK().C(["thermo", 0, 2, 0.84], ["sun", 26, 0, 0.46]) : "", cooler: () => PK() ? PK().C(["thermo", 0, 2, 0.84], ["flake", 26, 0, 0.46]) : "",
+  sunnier: () => PI("x-sun"), overcast: () => PI("x-overcast"), dusk: () => PI("dusk"), people: () => PI("people"),
+  nopeople: () => PK() ? PK().C(["person", 0, 2, 0.86], ["cross", 26, 24, 0.44]) : "", planting: () => PK() ? PK().C(["tree", 0, 4, 0.8], ["bush", 24, 22, 0.5]) : "",
+  wet: () => PK() ? PK().C(["drops", 2, 0, 0.6], ["puddle", 4, 22, 0.86]) : "", sharper: () => PK() ? PK().C(["magnifier", 0, 2, 0.84], ["sparkle", 28, 0, 0.42]) : "",
+  more: () => PK() ? PK().C(["layers", 0, 4, 0.84], ["sparkle", 28, 0, 0.42]) : "",
+  sunrise: () => PI("x-sunrise"), midday: () => PI("x-midday"), rovercast: () => PI("x-overcast"), golden: () => PI("gold"), blue: () => PI("dusk"), night: () => PI("night"),
+};
+const TW_KINDS = ["render", "new", "upscale", "touchup", "photo"];
+const twOk = (n) => !!n && V.sel.length === 1 && n.status === "done" && n.type === "image" && !!n.url && TW_KINDS.includes(V.pictureKind(n)) && !!V.tweak && V.viewerMode !== "draw" && V.viewerMode !== "touch";
+const RING = 2 * Math.PI * 9;
+const twChip = (n, t) => {
+  const run = V.tweakRunning(n, t.id), on = run.length > 0, p = on && V.jobClock ? V.jobClock.state(run[0]).p || 0 : 0;
+  const b = h("button", { class: "nchip twchip" + (on ? " run" : ""), type: "button", "data-tw": t.id, title: `${t.row === "relight" ? "Relight" : "Tweak"}: ${t.name}. An edit of this picture, the rest kept; it opens compared with it. Shift+click: add the words to the prompt instead`,
+    onclick: (e) => { if (!on || e.shiftKey) V.tweak(n, t.id, { words: e.shiftKey }); } },
+    h("i", { class: "twic", "aria-hidden": "true", html: on ? `<svg viewBox="0 0 24 24" class="twring"><circle class="rbg" cx="12" cy="12" r="9"/><circle class="rfg" cx="12" cy="12" r="9" style="stroke-dasharray:${RING.toFixed(1)};stroke-dashoffset:${(RING * (1 - p)).toFixed(1)}"/></svg>` : (TW_ICON[t.id] ? TW_ICON[t.id]() : "") }), t.name);
+  if (on) b.setAttribute("aria-busy", "true");
+  return b;
+};
+// a row of whole chips with "+N" at the end that opens the folded chips in a small pop-up anchored to it (as What next's
+// "+N" does), so the row never wraps into a block
+const twMoreClose = () => { $$(".twmorepop").forEach((x) => { if (x._off) removeEventListener("pointerdown", x._off, true); x.remove(); }); };
+function twMorePop(n, btn, list, label = "More tweaks") {
+  twMoreClose();
+  const r = btn.getBoundingClientRect(), m = h("div", { class: "tool-menu twmorepop", role: "group", "aria-label": label }); m._nid = n.id;
+  list.forEach((t) => { const c = t instanceof Element ? t : twChip(n, t), go = c.onclick; c.onclick = (e) => { twMoreClose(); if (go) go(e); }; m.append(c); });
+  document.body.append(m);
+  const w = m.offsetWidth, hh = m.offsetHeight, below = r.bottom + 6 + hh <= innerHeight - 8;
+  Object.assign(m.style, { position: "fixed", left: Math.round(Math.max(8, Math.min(r.right - w, innerWidth - w - 8))) + "px", top: Math.round(below ? r.bottom + 6 : Math.max(8, r.top - 6 - hh)) + "px" });
+  m._off = (ev) => { if (!m.contains(ev.target) && ev.target !== btn) twMoreClose(); }; setTimeout(() => m.isConnected && addEventListener("pointerdown", m._off, true), 0);
+  m.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); twMoreClose(); btn.focus(); }
+    else if (ev.key === "ArrowDown" || ev.key === "ArrowUp" || ev.key === "ArrowRight" || ev.key === "ArrowLeft") { const b = $$("button", m), i = b.indexOf(document.activeElement), d = ev.key === "ArrowDown" || ev.key === "ArrowRight" ? 1 : -1; ev.preventDefault(); (b[(i + d + b.length) % b.length] || b[0]).focus(); }
+  });
+  const f = m.querySelector("button"); if (f) f.focus();
+}
+addEventListener("resize", twMoreClose); addEventListener("scroll", (e) => { if (!(e.target instanceof Element && e.target.closest(".twmorepop"))) twMoreClose(); }, true);
+function twRow(n, list, key, label) {
+  const row = h("div", { class: "twrow", "data-row": key }), track = h("div", { class: "ntrack" });
+  list.forEach((t) => track.append(twChip(n, t)));
+  const more = h("button", { class: "nchip nmore", type: "button", hidden: true, "aria-haspopup": "true", onclick: (e) => {
+    e.stopPropagation(); if ($(".twmorepop")) return twMoreClose();
+    twMorePop(n, more, list.filter((t) => track.querySelector(`.nchip[data-folded][data-tw="${t.id}"]`)));
+  } });
+  track.append(more); if (label) row.append(label); row.append(track);
+  const fit = () => {
+    const chips = $$(".nchip:not(.nmore)", track); chips.forEach((c) => { c.hidden = false; delete c.dataset.folded; }); more.hidden = true;
+    if (!row.isConnected || track.scrollWidth <= track.clientWidth + 1) return;
+    more.hidden = false; let k = chips.length;
+    while (k > 0 && track.scrollWidth > track.clientWidth + 1) { k--; chips[k].hidden = true; chips[k].dataset.folded = "1"; const m = chips.length - k; more.textContent = "+" + m; more.setAttribute("aria-label", `Show ${m} more`); more.title = chips.slice(k).map((c) => c.textContent).join(" · "); }
+  };
+  row._fit = fit; return row;
+}
+const twBar = h("div", { class: "twbar", hidden: true, role: "group", "aria-label": "Tweak or relight this picture" });
+bar.after(twBar);
+const twPv = h("div", { class: "twbar twpv", hidden: true, role: "group", "aria-label": "Tweak or relight this picture" });
+if ($("#pvStrip")) $("#pvStrip").before(twPv);
+const twFits = [];
+if (window.ResizeObserver) { const ro = new ResizeObserver(() => twFits.forEach((f) => f())); ro.observe(twBar); ro.observe(twPv); }
+let twTimer = 0, twKey = "";
+// a short window (under 820 px, e.g. 1366 x 768): no second row in the inspector; What next's label becomes a
+// What next | Tweak | Relight switch and the chips take its row, so the presets start where N4 put them
+const twCompact = () => innerHeight < 820;
+V.twNext = (n) => {
+  if (!twCompact() || !twOk(n)) return null;
+  const m0 = V.store.get("nextMode", "next"), mode = m0 === "tweak" || m0 === "relight" ? m0 : "next";
+  // (one button naming the row, with a small menu: the chips keep the room)
+  const NAMES = { next: "What next?", tweak: "Tweak", relight: "Relight" };
+  const seg = h("button", { class: "twmode", type: "button", "aria-haspopup": "menu", title: "Show What next, the tweaks or the relights in this row", onclick: (e) => {
+    e.stopPropagation(); // (panel.js hides every .tool-menu on a click that bubbles up)
+    $$(".twmenu").forEach((x) => x.remove());
+    const r = e.currentTarget.getBoundingClientRect(), m = h("div", { class: "tool-menu twmenu", role: "menu" }, ...Object.entries(NAMES).map(([v, l]) => h("button", { type: "button", role: "menuitemradio", "aria-checked": String(v === mode), class: v === mode ? "on" : "", onclick: () => { m.remove(); V.store.set("nextMode", v); paintNext(); } }, l.replace("?", ""))));
+    document.body.append(m); Object.assign(m.style, { position: "fixed", left: Math.round(r.left) + "px", top: Math.round(r.bottom + 4) + "px" });
+    const off = (ev) => { if (!m.contains(ev.target)) { m.remove(); removeEventListener("pointerdown", off, true); } }; setTimeout(() => addEventListener("pointerdown", off, true), 0);
+    m.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); m.remove(); seg.focus(); } });
+    (m.querySelector(".on") || m.querySelector("button")).focus();
+  } }, NAMES[mode], h("i", { class: "ic ic-chev", "aria-hidden": "true" }));
+  return { mode, seg, chips: mode === "next" ? null : V.tweaks().filter((t) => t.row === mode).map((t) => twChip(n, t)) };
+};
+addEventListener("resize", () => { const c = twCompact(); if (c !== twCompact.was) { twCompact.was = c; twKey = ""; paintTweaks(); paintNext(); } });
+const twSeg = (which) => h("div", { class: "shseg twseg", role: "group", "aria-label": "Tweak or relight" },
+  ...[["tweak", "Tweak"], ["relight", "Relight"]].map(([v, l]) => h("button", { type: "button", class: v === which ? "on" : "", "aria-pressed": String(v === which), onclick: () => { V.store.set("twRow", v); twKey = ""; paintTweaks(); } }, l)));
+function paintTweaks() {
+  const n = V.selNodes()[0], ok = twOk(n) && V.store.get("nextBar", true) !== false, pv = V.pictureView();
+  const all = ok ? V.tweaks() : [], tw = all.filter((t) => t.row === "tweak"), rl = all.filter((t) => t.row === "relight");
+  const which = V.store.get("twRow", "tweak") === "relight" ? "relight" : "tweak";
+  const runs = ok ? V.tweakRunning(n).map((c) => c.retry.settings.tweak.id + ":" + Math.round((V.jobClock ? V.jobClock.state(c).p : 0) * 40)).join(",") : "";
+  const key = [ok ? n.id : "", which, pv ? 1 : 0, V.viewerMode, runs, twCompact() ? 1 : 0].join("|");
+  if (key === twKey) return;
+  if (runs && twCompact() && twKey) paintNext(); // (the rings in What next's row move on too)
+  twKey = key; twFits.length = 0;
+  const pop = $(".twmorepop"); if (pop && pop._nid !== (n ? n.id : "")) twMoreClose(); // (another picture: its pop-up goes)
+  // the inspector: one row (Tweak | Relight picks which); not while Picture view shows both under the stage
+  // (loop-14) hidden in every Picture view mode, so the panel never jumps when a result opens compared
+  twBar.replaceChildren(); twBar.hidden = !ok || pv || twCompact();
+  if (!twBar.hidden) { const r = twRow(n, which === "relight" ? rl : tw, which, twSeg(which)); twBar.append(r); twFits.push(r._fit); }
+  // Picture view: both rows under the stage (Preview only: Compare, Draw and Touch-ups have their own bars)
+  twPv.replaceChildren(); twPv.hidden = !ok || !pv || V.viewerMode !== "preview";
+  // (a short window: one row with the Tweak | Relight switch, so the picture keeps its room)
+  if (!twPv.hidden && twCompact()) { const r = twRow(n, which === "relight" ? rl : tw, "pv" + which, twSeg(which)); twPv.append(r); twFits.push(r._fit); }
+  else if (!twPv.hidden) [[tw, "tweak", "Tweak"], [rl, "relight", "Relight"]].forEach(([l, k, t]) => { const r = twRow(n, l, "pv" + k, h("span", { class: "nlabel" }, t)); twPv.append(r); twFits.push(r._fit); });
+  requestAnimationFrame(() => twFits.forEach((f) => f()));
+  clearTimeout(twTimer); if (runs) twTimer = setTimeout(paintTweaks, 700); // (the rings move on while a job runs)
+  paintDecide();
+}
+V.paintTweaks = () => { twKey = ""; paintTweaks(); };
+
+// the result of a tweak, relight or brush change opens compared with the picture it came from (journey-returning:big:2):
+// Keep (carry on from the new one), Discard (take it off; Undo brings it back), Keep both (both selected)
+let decide = null;
+const decideBar = h("div", { class: "twdecide", hidden: true, role: "group", "aria-label": "Keep the change?" });
+if ($("#pvStrip")) $("#pvStrip").before(decideBar);
+function paintDecide() {
+  const n = decide && V.node(decide.id), p = decide && V.node(decide.parent);
+  const on = !!(n && p && V.viewerMode === "compare" && V.sel.length === 1 && V.sel[0] === n.id);
+  decideBar.hidden = !on; if (!on) return;
+  if (decideBar.dataset.id === n.id + "|" + (n.url || "").length) return; decideBar.dataset.id = n.id + "|" + (n.url || "").length;
+  const back = () => { if (V.viewerMode === "compare") V.setViewerMode("preview"); };
+  decideBar.replaceChildren(h("span", { class: "twdq", title: `${V.nodeTitle(n)} compared with ${V.nodeTitle(p)}` }, V.titleEl ? V.titleEl(n, "b") : h("b", {}, V.nodeTitle(n)), h("span", { class: "twdqw" }, ` compared with ${V.nodeTitle(p)}`)),
+    h("button", { class: "mini twkeep", type: "button", title: "Keep the new version and carry on from it", onclick: () => { decide = null; back(); } }, "Keep"),
+    h("button", { class: "mini", type: "button", title: "Take the new version off (Undo brings it back)", onclick: () => { decide = null; back(); V.setSel([n.id]); V.deleteSelected && V.deleteSelected(); if (V.node(p.id)) V.setSel([p.id]); } }, "Discard"),
+    // (loop-17) only the new version stays selected: selecting both made the next Edit use the parent as a reference
+    h("button", { class: "mini", type: "button", title: "Keep both in the picture's versions; carry on from the new one", onclick: () => { decide = null; back(); V.setSel([n.id]); V.toast(`Both kept: ${V.nodeTitle(n)} is on top of the stack, ${V.nodeTitle(p)} is one of its versions (Space spreads them)`, false, 4500); } }, "Keep both"));
+}
+// Esc on the Keep / Discard / Keep both bar in Picture view = Keep, back to Preview; only the next Esc leaves Picture
+// view. (draw.js's Picture view keys ask this after a message on top has had its Esc; true = handled)
+V.pvEscape = () => {
+  if (decideBar.hidden || !decide || V.viewerMode !== "compare") return false;
+  decide = null; V.setViewerMode("preview"); return true;
+};
+// (C1v-01) while the bar shows, a plain note on top goes with the same Esc that Keeps (a red failure still takes its own Esc)
+const ctt = V.closeTopToast;
+if (ctt) V.closeTopToast = () => {
+  if (decideBar.hidden || !decide || V.viewerMode !== "compare") return ctt();
+  const live = [...$("#toast").children].filter((x) => !x._gone && x._close), top = live[live.length - 1];
+  if (top && top._err) return ctt();
+  if (top) top._close(); return false;
+};
+const handled = new Set();
+let tweakLanded = 0;
+const applyJob1 = V.applyJob;
+V.applyJob = (j) => {
+  const r = applyJob1(j);
+  if (j && j.status === "done" && !handled.has(j.id)) {
+    const nn = V.G.nodes.find((x) => x.jobId === j.id && x.type === "image" && x.status === "done"), st = (nn && nn.retry && nn.retry.settings) || {};
+    if (nn && (st.tweak || st.brush) && (!V.autoCompare || V.autoCompare())) { // (v3.74 D2: Settings › Open new versions compared)
+      handled.add(j.id); tweakLanded = Date.now();
+      const p = V.parents(nn.id).find((x) => x.type === "image" && x.url);
+      // once the hero card (if any) has had its moment, and only while it is still the picture you are looking at
+      if (p) setTimeout(function go(k = 0) {
+        if (document.querySelector(".hero") && k < 20) return setTimeout(() => go(k + 1), 150);
+        if (!(V.sel.length === 1 && V.sel[0] === nn.id) || V.viewerMode !== "preview" || document.querySelector(".modal:not([hidden]), .review:not([hidden])") || (document.body.dataset.view && document.body.dataset.view !== "canvas")) return;
+        // (whole-14) at once, with a short (--t-med) switch instead of the 0.5 s view crossfade (style.css html.c1quick)
+        const root = document.documentElement; root.classList.add("c1quick"); setTimeout(() => root.classList.remove("c1quick"), 700);
+        decide = { id: nn.id, parent: p.id }; delete decideBar.dataset.id; V.compareWith(nn, p); closeKept();
+      }, 60);
+    }
+  }
+  if (j && (j.status === "done" || j.status === "error")) setTimeout(() => V.paintTweaks(), 0);
+  return r;
+};
+// (whole-14) a tweak, relight or brush result opens compared straight away, so it gets no big result card first (the card
+// held the compare back about 3 s and overlapped it); true = "shown", so core.js only notes "ready" in Recent messages
+const heroC = V.heroReveal;
+if (heroC) V.heroReveal = (n, ...a) => { const s = (n && n.retry && n.retry.settings) || {}; return (s.tweak || s.brush) && (!V.autoCompare || V.autoCompare()) ? true : heroC(n, ...a); };
+// (RET-8) a relight or tweak changes the whole picture by design: cutout.js's "kept the whole result" note is expected, not a warning
+const toast1 = V.toast;
+// (C1v-01) the "Kept only what changed" note too: the result opens compared with the picture it came from, which shows that,
+// and the note on top took the first Esc meant for Keep. It still goes into Recent messages.
+const KEPT_RE = /^Kept only what changed/;
+V.toast = (msg, ...a) => (typeof msg === "string" && Date.now() - tweakLanded < 30000 && /^The AI changed most of the picture, so the whole (result|layer) was kept/.test(msg) ? null
+  : typeof msg === "string" && KEPT_RE.test(msg) && (decide || Date.now() - tweakLanded < 30000) ? (V.logMsg && V.logMsg(msg)) : toast1(msg, ...a));
+const closeKept = () => { const t = $("#toast"); if (t) [...t.children].forEach((x) => { if (!x._gone && KEPT_RE.test(x._msg || "")) x._close(true); }); };
+const selC = V.selectionChanged;
+V.selectionChanged = (...a) => { const r = selC(...a); if (decide && !(V.sel.length === 1 && V.sel[0] === decide.id)) decide = null; paintTweaks(); return r; };
+const svmC = V.setViewerMode;
+V.setViewerMode = (...a) => { const r = svmC(...a); if (decide && V.viewerMode !== "compare") decide = null; twKey = ""; paintTweaks(); return r; };
 
 // ---------- help topics for Ctrl+K ----------
 // (v3.69 B5: a topic's words without its "Show me" button and "More detail" label, plus its data-kw old names, so Ctrl+K
@@ -17406,7 +22164,7 @@ const helpBtn = $("#btnHelp");
 if (helpBtn) helpBtn.onclick = (e) => {
   const r = e.currentTarget.getBoundingClientRect(), quick = () => { V.setView("help"); setTimeout(() => { const q = $("#ovHelp .qhead"); if (q) q.scrollIntoView({ block: "start" }); }, 60); };
   const items = [["Quick start", quick], ["Search help", () => V.searchHelp()], ["Keyboard shortcuts", () => V.showShortcuts(), "?"], ["Take the tour", () => V.startTour()], ["What's new", () => V.showNews()]];
-  if (V.flatMenu) { V.flatMenu(r.left, r.bottom + 4, items); const m = document.querySelector(".ctx:not([hidden])"); if (m) { const w = m.offsetWidth; m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px"; } }
+  if (V.flatMenu) { V.flatMenu(r.left, r.bottom + 4, items, helpBtn, e.detail === 0); const m = document.querySelector(".ctx:not([hidden])"); if (m) { const w = m.offsetWidth; m.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px"; } }
   else quick();
 };
 // v3.67 the Tutorial's folding chapters: how many topics each holds, and one button to open or fold them all
@@ -17421,37 +22179,96 @@ paintAll();
 const KEYS = [
   // v3.69 C1: every key that works, grouped by where it works (checked against each keydown handler: canvas.js, draw.js,
   // touchup.js, matbucket.js, nav.js, review.js, sheets.js, scenes.js, shell.js, palette.js, core.js, guide.js)
-  ["Everywhere", [["Ctrl+K", "Search presets, tools, scenes, projects, pictures and help"], ["?", "This list of keys"], ["Ctrl+Enter", "The big button (Render, Edit, Render 4 views…)"], ["Ctrl+Z / Ctrl+Y", "Undo / redo (Ctrl+Shift+Z redoes too)"], ["Ctrl+S", "Save now (VizLab also saves by itself)"], ["Esc", "Close the menu, message or window on top"], ["Esc (in the prompt)", "Leave the prompt for the canvas, so the picture keys work"], ["Enter / Esc (a question)", "OK / Cancel"]]],
-  ["Ctrl+K", [["↑ ↓", "Move through the list"], ["Enter", "Run it"], ["Shift+Enter", "Add the preset to the prompt (not replace)"], ["Esc", "Close"]]],
-  ["Canvas", [["V", "Capture the SketchUp view"], ["Drag on empty space", "Move around (any direction)"], ["Shift or Ctrl + drag", "Select a box of pictures"], ["Ctrl or Shift + click", "Add a picture to the selection, or take it out"], ["Touchpad: two fingers / pinch", "Move / zoom"], ["F", "Fit everything (or the selection)"], ["+ / − (or Ctrl+= / Ctrl+−)", "Zoom in / out"], ["1", "Zoom to 100%"], ["T", "Tidy up the layout"], ["Space + drag", "Move around"], ["Ctrl+F", "Find on the canvas (Enter: the next one, Shift+Enter: the previous one)"], ["Ctrl+A", "Select all"], ["Ctrl+G", "Group (Ctrl+Shift+G ungroup)"], ["Delete", "Remove from the canvas (with Undo)"], ["Esc", "Close a message or menu, then clear the selection"]]],
-  ["The selected picture", [["D", "Draw on the picture"], ["G", "Draw with the Material bucket"], ["C", "Compare (with the view or the original)"], ["U", "Touch-ups"], ["E", "Enlarge / back to canvas"], ["R", "Review versions"], ["Shift+F", "Favourite (again: take the star off)"], ["← →", "The picture it came from / the newest made from it"], ["↑ ↓", "The one before / after it"], ["S", "Scenes"], ["Shift+S", "Adjust the scene"], ["L", "Project look"], ["/", "Search the presets"], ["Alt+1 / 2 / 3", "Image / Video / 3D & CAD tab"]]],
+  ["Everywhere", [["Ctrl+K", "Search presets, tools, scenes, projects, pictures and help"], ["?", "This list of keys"], ["Ctrl+Enter", "The big button (Render, Edit, Render 4 views…)"], ["Ctrl+Z / Ctrl+Y", "Undo / redo (Ctrl+Shift+Z redoes too); the canvas tools' Changes lists every step"], ["Ctrl+.", "Do the last action again"], ["Ctrl+Shift+P", "Present: full screen (on Sheets, the sheets' pictures)"], ["Ctrl+S", "Save now (VizLab also saves by itself)"], ["Esc", "Close the menu, message or window on top"], ["Esc (in the prompt)", "Leave the prompt for the canvas, so the picture keys work"], ["Enter / Esc (a question)", "OK / Cancel"]]],
+  ["Ctrl+K", [["↑ ↓", "Move through the list"], ["Enter", "Run it"], ["Shift+Enter", "Add the preset to the prompt (not replace)"], ["4k · versions 2 · chatgpt · 16:9", "Type settings: Enter sets them"], ["dusk all views", "A scene, every view, then Render"], ["upscale favourites", "An action on a set of pictures"], ["Esc", "Close"]]],
+  ["Canvas", [["V", "Capture the SketchUp view"], ["Drag on empty space", "Move around (any direction)"], ["Shift or Ctrl + drag", "Select a box of pictures"], ["Ctrl or Shift + click", "Add a picture to the selection, or take it out"], ["Touchpad: two fingers / pinch", "Move / zoom"], ["F", "Fit everything (or the selection)"], ["+ / − (or Ctrl+= / Ctrl+−)", "Zoom in / out"], ["1", "Zoom to 100%"], ["T", "Tidy up the layout"], ["Space + drag", "Move around"], ["Space (tap)", "Spread or gather the selected picture's stack of versions (the badge does too)"], ["Esc (a spread stack)", "Gather it again (rows laid out by Tidy stay: their badge gathers them)"], ["Ctrl+F", "Find on the canvas (Enter: the next one, Shift+Enter: the previous one)"], ["Ctrl+A", "Select all"], ["Shift+A", "Select every SketchUp view"], ["Shift+V", "Batch render"], ["Ctrl+G", "Group (Ctrl+Shift+G ungroup)"], ["Delete", "Remove from the canvas (with Undo)"], ["Esc", "Close a message or menu, then clear the selection"]]],
+  ["The selected picture", [["D", "Draw on the picture"], ["G", "Draw with the Material bucket"], ["C", "Compare (with the view or the original)"], ["U", "Touch-ups"], ["E or Enter", "Picture view: the picture big with its versions (E or Esc: back to the canvas)"], ["P", "Present: full screen, no controls"], ["R", "Review versions"], ["Shift+F", "Favourite (every selected picture; again: take the star off)"], ["Shift+U", "Upscale ×2 (every selected picture)"], ["X", "Set aside (versions)"], ["F2", "Rename"], ["Ctrl+C", "Copy the picture (paste it into an email, Teams or Word)"], ["Ctrl+Shift+S", "Download the selected pictures"], ["← →", "The picture it came from / the newest made from it"], ["↑ ↓", "The one before / after it"], ["S", "Scenes"], ["Shift+S", "Adjust the scene"], ["L", "Project look"], ["/", "Search the presets"], ["Alt+1 / 2 / 3", "Image / Video / 3D & CAD tab"]]],
   ["Right-click menu", [["Right-click / long-press", "The picture's menu"], ["↑ ↓", "Move through it"], ["→ / ←", "Open a group / back"], ["Enter", "Run it"], ["Esc", "Close"]]],
   ["Scene panel (S)", [["Type", "Find a scene (dusk, rain, snow…)"], ["Arrow keys", "Move between the scenes"], ["Enter or Space", "Use the scene"], ["Esc", "Clear the search, then close"]]],
-  ["Review (R)", [["← →", "Previous / next version"], ["↑ ↓", "Next / previous view (several views; one view: versions)"], ["F", "Favourite"], ["X or Delete", "Set aside"], ["S", "Side by side / one at a time"], ["Hold C", "See the original"], ["Enter", "Show it on the canvas"], ["Esc, R or Space", "Close"]]],
-  ["History (full screen)", [["← →", "Previous / next"], ["F", "Favourite"], ["Esc", "Close"]]],
-  ["Sheets", [["L", "Leader tool"], ["M", "Dimension tool"], ["Alt (drawing)", "Any angle / no snapping"], ["Arrow keys (Shift: 10 mm)", "Nudge the frame"], ["Delete", "Remove the selection"], ["Ctrl+D", "Duplicate a frame"], ["Esc", "Stop the tool, then deselect"], ["Ctrl+Z / Ctrl+Y", "Undo / redo (kept until another project opens)"], ["Ctrl+P or Ctrl+E", "Export the PDF"], ["PageUp / PageDown", "Previous / next page"]]],
+  ["Review (R)", [["← →", "Previous / next version"], ["↑ ↓", "Next / previous view (several views; one view: versions)"], ["F", "Favourite"], ["X or Delete", "Set aside"], ["S", "Side by side / one at a time"], ["U / D", "Upscale ×2 / Download this version (one at a time, not side by side)"], ["Hold C", "See the original"], ["A", "Pick the best: two at a time, ← or → keeps the better one (A or Esc stops)"], ["P", "Pick: this view's one pick, then on to the next view"], ["H", "Hero: the one picture of the project (again: take it off; on the end card too)"], ["Enter", "Show it on the canvas (several views: pick and next view, as P)"], ["Shift+B", "Background behind the picture"], ["Esc (end card)", "Back to Review"], ["Esc, R or Space", "Close"]]],
+  ["Picture view (E)", [["← →", "Previous / next version along the film strip"], ["Click / Shift+click a version", "Show it / compare it with the one on the stage"], ["Z or double-click", "Fit / 100%"], ["Wheel / drag", "Zoom in at the pointer / move around"], ["Shift+B", "Background behind the picture: dark, grey, white"], ["B", "Brush: paint an area and say what goes there (Alt+drag paints too; the wheel sets the size)"], ["Ctrl+Z (brush)", "Take off the last brush stroke"], ["D / C / U", "Draw / Compare / Touch-ups on the picture shown"], ["P", "Present"], ["E", "Back to the canvas, the same picture selected"], ["Esc", "A message first, then Keep on the Keep / Discard bar, then the brush; then back to the canvas"]]],
+  ["Present (P)", [["← → / click / swipe", "Next / previous picture (↑ ↓, Space, Enter, PageUp / PageDown and Backspace too)"], ["Home / End", "First / last picture"], ["Hold C or the mouse button", "The view or photo it came from"], ["Esc", "Leave"]]],
+  ["History (full screen)", [["← →", "Previous / next"], ["F", "Favourite"], ["Z", "Fit / 100%"], ["Shift+B", "Background"], ["Esc", "Close"]]],
+  ["Sheets", [["L", "Leader tool"], ["M", "Dimension tool"], ["Alt (drawing)", "Any angle / no snapping"], ["Arrow keys (Shift: 10 mm)", "Nudge the frame"], ["Delete", "Remove the selection"], ["Ctrl+D", "Duplicate a frame"], ["Esc", "Stop the tool, then deselect"], ["Ctrl+Z / Ctrl+Y", "Undo / redo (kept until another project opens)"], ["Ctrl+P or Ctrl+E", "Export the PDF"], ["PageUp / PageDown", "Previous / next page"], ["P", "Present the sheets' pictures, in page order"]]],
+  ["Make a presentation", [["Esc", "Fold the steps to one line (its arrow opens them again)"], ["P (Pick step)", "Pick the version in focus, or open Review to pick"]]],
   ["Draw and Touch-ups: moving round", [["Alt + wheel", "Zoom at the pointer"], ["Wheel / Ctrl or Shift + wheel", "Scroll up-down / sideways"], ["Space or H (hold)", "Hand tool"], ["Z (Alt+click)", "Zoom tool (zoom out)"], ["Ctrl+Space / Alt+Space + click", "Zoom in / out"], ["Ctrl+= / Ctrl+−", "Zoom in / out a step"], ["Ctrl+0 / Ctrl+1", "Fit / 100%"], ["Middle-drag", "Move around"], ["Esc", "Cancel the selection or tool, back to Move or the brush"], ["Esc twice", "Done: back to Preview"]]],
   ["Draw tools (D)", [["V", "Move"], ["M", "Rectangle selection"], ["L", "Lasso selection"], ["P", "Polygon selection (Enter closes it)"], ["B", "Brush selection"], ["A", "Arrow and note"], ["N", "Pen"], ["G", "Materials (bucket)"], ["Ctrl+D", "Deselect"], ["Ctrl+I", "Invert the selection"], ["Delete", "Remove the layer"], ["H / [ ] (placed picture)", "Flip / rotate 1° (Shift: 15°)"], ["Right-click", "The selection's menu, or a note's own menu"]]],
   ["Material bucket (G)", [["Click", "Paint a face"], ["Shift + click", "Every face of that colour"], ["Alt + click", "Pick up a material"], ["Ctrl + click", "Take a face out (Brush: rub out)"], ["[ ]", "Brush size"], ["1–8", "Choose a material"]]],
   ["Touch-ups (U)", [["X", "Paint in / Paint out"], ["B", "Back to the brush"], ["[ ]", "Brush size"], ["Shift+[ ]", "Brush hardness"], ["1–0", "Flow 10–100%"], ["Alt + right-drag", "Brush size and hardness"]]],
   ["Tour and windows", [["→ or Enter / ←", "Next / back in the tour"], ["Esc", "End the tour, close a window"], ["Enter (Batch render)", "Start the batch"], ["Tab", "Move round a question's buttons"]]],
 ];
-let sheet = null;
+// v3.74 D1 (power:PW-22): the keys for where you are come first, marked "Here" (Draw, the bucket, Touch-ups, Picture view,
+// Review, Present, History full screen, Sheets, or the canvas), and "Find a key" filters every row as you type. (PW-14) Opening
+// it closes the plain messages, so none sits over the sheet (failures stay until closed).
+const placeNow = () => {
+  const up = (s) => { const el = $(s); return !!el && !el.hidden; }, page = document.body.dataset.view, mv = " moving round";
+  if (V.presentOpen && V.presentOpen()) return ["Present (P)"];
+  if (V.reviewOpen && V.reviewOpen()) return ["Review (R)"];
+  if (up("#fsModal")) return ["History (full screen)"];
+  if (page === "sheets") return ["Sheets", "Make a presentation"];
+  if (page && page !== "canvas") return [];
+  if (V.viewerMode === "draw") return (V.drawApi && V.drawApi.D && V.drawApi.D.tool === "bucket" ? ["Material bucket (G)"] : []).concat(["Draw tools (D)", "Draw and Touch-ups:" + mv]);
+  if (V.viewerMode === "touch") return ["Touch-ups (U)", "Draw and Touch-ups:" + mv];
+  if (V.pictureView && V.pictureView()) return ["Picture view (E)", "The selected picture"];
+  return ["Canvas", "The selected picture"];
+};
+let sheet = null, keyFind = null, keyNone = null;
+const keyFilter = () => {
+  const words = keyFind.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let hits = 0;
+  sheet.querySelectorAll(".keygroup").forEach((g) => {
+    let any = 0; const gname = g.dataset.g.toLowerCase();
+    g.querySelectorAll(".keyrow").forEach((r) => { const t = gname + " " + r.textContent.toLowerCase(), ok = words.every((w) => t.includes(w)); r.hidden = !ok; if (ok) any++; });
+    g.hidden = !any; hits += any;
+  });
+  keyNone.hidden = !words.length || hits > 0;
+};
 V.showShortcuts = () => {
   if (!sheet) {
+    keyFind = h("input", { type: "search", class: "keyfind", autocomplete: "off", placeholder: "Find a key, e.g. download, favourite, brush", "aria-label": "Find a key", oninput: keyFilter });
+    keyNone = h("p", { class: "hint keynone", hidden: true }, "No key matches. Ctrl+K finds every action, with its key where it has one.");
     sheet = h("div", { class: "modal keysheet", hidden: true, onclick: (e) => { if (e.target === sheet) sheet.hidden = true; } },
-      h("div", { class: "mbox keybox" }, h("button", { class: "mclose", onclick: () => (sheet.hidden = true) }, "×"), h("h3", {}, "Keyboard shortcuts"),
-        h("div", { class: "keycols" }, KEYS.map(([g, rows]) => h("div", { class: "keygroup" }, h("b", {}, g), rows.map(([k, d]) => h("div", { class: "keyrow" }, h("kbd", {}, k), h("span", {}, d)))))),
+      h("div", { class: "mbox keybox" }, h("button", { class: "mclose", type: "button", "aria-label": "Close", onclick: () => (sheet.hidden = true) }, V.icoEl ? V.icoEl("close") : "×"),
+        h("div", { class: "keyhead" }, h("h3", {}, "Keyboard shortcuts"), keyFind), keyNone,
+        h("div", { class: "keycols" }),
         h("div", { class: "keyfoot" }, h("button", { class: "linkbtn", type: "button", onclick: () => { sheet.hidden = true; V.setView("help"); } }, "Tutorial"), h("span", {}, "·"), h("button", { class: "linkbtn", type: "button", onclick: () => { sheet.hidden = true; V.startTour(); } }, "Take the tour"))));
     document.body.append(sheet);
+    if (V.modal) V.modal(sheet, { label: "Keyboard shortcuts" });
   }
+  const here = placeNow(), order = [...here.map((g) => KEYS.find((x) => x[0] === g)).filter(Boolean), ...KEYS.filter((x) => !here.includes(x[0]))];
+  sheet.querySelector(".keycols").replaceChildren(...order.map(([g, rows]) => h("div", { class: "keygroup" + (here.includes(g) ? " here" : ""), "data-g": g },
+    h("b", {}, g, here[0] === g ? h("span", { class: "keyhere" }, "Here") : null), rows.map(([k, d]) => h("div", { class: "keyrow" }, h("kbd", {}, k), h("span", {}, d))))));
+  keyFind.value = ""; keyFilter();
+  const fs = document.fullscreenElement, home = fs || document.body; // (Present is full screen: the sheet goes inside it, or it would sit behind)
+  if (sheet.parentNode !== home) home.append(sheet);
+  sheet.classList.toggle("ontop", !!((V.presentOpen && V.presentOpen()) || (V.reviewOpen && V.reviewOpen()))); // (above Review and Present, style.css D1)
+  const t = $("#toast"); if (t) [...t.children].forEach((x) => { if (!x._gone && x._close && !x._err && !x._stay) x._close(); });
   sheet.hidden = false;
+  const box = sheet.querySelector(".keybox"); if (box) box.scrollTop = 0;
 };
 document.addEventListener("keydown", (e) => {
-  if (e.key === "?" && !(e.target instanceof Element && e.target.matches("input,textarea,select,[contenteditable]"))) { e.preventDefault(); sheet && !sheet.hidden ? (sheet.hidden = true) : V.showShortcuts(); }
+  if (e.key === "?" && (!(e.target instanceof Element && e.target.matches("input,textarea,select,[contenteditable]")) || (e.target === keyFind && !keyFind.value))) { e.preventDefault(); sheet && !sheet.hidden ? (sheet.hidden = true) : V.showShortcuts(); } // (? closes it again from an empty Find a key)
 });
 // Esc closes the sheet and nothing behind it (before Sheets, Draw or the canvas see the key)
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sheet && !sheet.hidden) { e.preventDefault(); e.stopImmediatePropagation(); sheet.hidden = true; } }, true);
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !sheet || sheet.hidden) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (e.target === keyFind && keyFind.value) { keyFind.value = ""; keyFilter(); return; } // (Esc in Find a key empties it first)
+  sheet.hidden = true;
+}, true);
+// v3.74 D1 fix (D1-1): Review and Present swallow every key they don't use, so they let "?" through and step aside while the
+// sheet is open (their one-line hook: V.keySheetOpen). Over them the sheet takes the keyboard here, before the overlay sees it:
+// "?" opens / closes it, Esc closes only the sheet, Tab moves round it, and typing in Find a key still types.
+V.keySheetOpen = () => !!sheet && !sheet.hidden;
+window.addEventListener("keydown", (e) => {
+  const over = (V.presentOpen && V.presentOpen()) || (V.reviewOpen && V.reviewOpen());
+  if (!over) return;
+  const open = V.keySheetOpen(), inFind = e.target === keyFind;
+  if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey && (!inFind || !keyFind.value)) { e.preventDefault(); e.stopPropagation(); open ? (sheet.hidden = true) : V.showShortcuts(); return; }
+  if (!open) return;
+  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (inFind && keyFind.value) { keyFind.value = ""; keyFilter(); } else sheet.hidden = true; return; }
+  if (e.key !== "Tab") e.stopPropagation(); // (nothing behind the sheet acts on the key; the default, typing, still happens)
+}, true);
 })();
 
 ;
@@ -18384,6 +23201,303 @@ V.canRedesign = (n) => !!(n && (V.redesignSource(n) || V.redesignMatch(n)));
 
 ;
 
+/* ===== web/setups.js ===== */
+/* VizLab Setups and the History of changes (v3.74 C4, NEXT-LEVEL N14, critique power:big:2 and power:big:3).
+   SETUPS. A setup keeps what you set up for a kind of shot, so it comes back in one click: the words (your own and the presets'),
+   the scene, the project look, the Library furniture and materials in use, the AI model, the resolution, the number of versions,
+   the picture shape and "Keep my SketchUp camera and model". Save one from Tools › Save as a setup… or Ctrl+K (a tick box per
+   part); use one from Tools › Setups… (big tiles with a picture and a line of what it sets) or Ctrl+K "Setup: <name>". Using one
+   is ONE undo step on the canvas timeline and says what changed. A project can start from a setup (the project menu's New project
+   from a setup…, the tile's New project button, Ctrl+K), and one setup can be the default for every new project. Stored on this
+   PC: kv "setups" in IndexedDB with a copy in vl_setups. Library items are kept as references (an office catalogue item is copied
+   into the new project; a project-only item only applies in its own project), so no big pictures are copied (Drive-only mode).
+   HISTORY OF CHANGES. The canvas undo steps by name (core.js V.undoList): a pop-up from the canvas tools' Changes button (whole-05: not "History", which is the page of every render), Ctrl+K,
+   or a right-click on Undo; click a step to go back (or forward) to it. Undo / Redo tooltips say what they will do. Scene
+   changes go on the same timeline ("Scene: Blue hour"). */
+(() => {
+const V = window.V, D = V.D, { $, h } = V;
+const KV = "setups";
+let list = [];
+const say = (m, err, ms, o) => V.toast(m, err, ms, o);
+// ---------- storage ----------
+function load() {
+  try { const l = V.store.get(KV, null); if (Array.isArray(l)) list = l; } catch (e) {}
+  if (V.localDB) V.localDB.get("kv", KV).then((r) => { if (r && Array.isArray(r.data) && (r.at || 0) > (V.store.get("setupsAt", 0) || 0)) { list = r.data; try { V.store.set(KV, list); } catch (e) {} } }).catch(() => {});
+}
+function persist() {
+  const at = Date.now();
+  try { V.store.set(KV, list); V.store.set("setupsAt", at); } catch (e) {}
+  if (V.localDB) V.localDB.put("kv", { id: KV, data: list, at }).catch(() => {});
+  // (Drive: "setups" and "setupDefault" are in drive.js's settings file (SYNCK, v3.74 D2): V.store.set above sends them)
+}
+load();
+// (v3.74 D2) setups brought from another device by Google Drive: take them, and date this PC's own copy so an older one in
+// IndexedDB never wins over them at the next start
+document.addEventListener("vl-settings", (e) => {
+  const ks = (e.detail && e.detail.keys) || []; if (ks.indexOf(KV) < 0) return;
+  const l = V.store.get(KV, null); if (!Array.isArray(l)) return;
+  list = l; const at = Date.now();
+  try { V.store.set("setupsAt", at); } catch (er) {}
+  if (V.localDB) V.localDB.put("kv", { id: KV, data: list, at }).catch(() => {});
+});
+V.setups = () => list.slice();
+const byId = (id) => list.find((s) => s.id === id) || null;
+const defId = () => V.store.get("setupDefault", null);
+// ---------- what is set now ----------
+const ENG = () => D.imageEngines.find((x) => x.id === V.engines.image);
+const versionsNow = () => (V.versions ? V.versions() : +(($("#numImage") || {}).value || 1)); // (C1's Versions switch, when there)
+const arName = (v) => { const s = $("#arImage"), o = s && [...s.options].find((x) => x.value === v); return v === "auto" ? "the view's shape" : o ? o.textContent : v; };
+const ownWordsNow = () => { const t = ($("#prompt").value || "").trim(); return V.stripEnv ? V.stripEnv(t).trim() : t; };
+const libNow = () => ((V.G.library && V.G.library.items) || []).filter((i) => i.use).map((i) => ({ id: i.id, catId: i.catId || null, name: i.name || "item", kind: i.kind }));
+const lookNow = () => { const L = V.G.look; if (!L || !L.on) return null; const c = JSON.parse(JSON.stringify(L)); if (c.refUrl && /^data:/.test(c.refUrl) && c.refUrl.length > 30000) delete c.refUrl; c._pid = V.project.id || null; return c; };
+const sceneNow = () => (V.G.scene ? (({ added, ...rest }) => JSON.parse(JSON.stringify(rest)))(V.G.scene) : null);
+const PARTS = [
+  ["words", "Words and presets", () => { const w = ownWordsNow(); return w ? `"${w.slice(0, 60)}${w.length > 60 ? "…" : ""}"` : ""; }],
+  ["scene", "Scene", () => (V.G.scene ? V.G.scene.name : "")],
+  ["look", "Project look", () => (V.G.look && V.G.look.on ? V.G.look.name || "on" : "")],
+  ["library", "Furniture and materials", () => { const l = libNow(); return l.length ? l.map((i) => i.name).slice(0, 3).join(", ") + (l.length > 3 ? ` and ${l.length - 3} more` : "") : ""; }],
+  ["engine", "AI model", () => (ENG() ? ENG().name : "")],
+  ["res", "Resolution", () => ($("#resImage") || {}).value || ""],
+  ["num", "Versions", () => `${versionsNow()}`],
+  ["ar", "Picture shape", () => arName(($("#arImage") || {}).value || "auto")],
+  ["keep", "Keep my SketchUp camera and model", () => (V.keepModel ? (V.keepModel() ? "on" : "off") : "")],
+];
+// one line of what a setup sets ("Scene Blue hour · 4K · 2 versions · ChatGPT Images")
+const lineOf = (s) => [s.parts.scene && s.scene ? "Scene " + s.scene.name : "", s.parts.look && s.look ? "Look " + (s.look.name || "on") : "", s.parts.library && s.library && s.library.length ? `${s.library.length} Library item${s.library.length > 1 ? "s" : ""}` : "",
+  s.parts.res ? s.res : "", s.parts.num ? `${s.num} version${s.num > 1 ? "s" : ""}` : "", s.parts.ar && s.ar !== "auto" ? arName(s.ar) : "", s.parts.engine ? ((D.imageEngines.find((x) => x.id === s.engine) || {}).name || "") : "",
+  s.parts.words && s.words ? "own words" : "", s.parts.keep ? (s.keep ? "camera kept" : "camera may move") : ""].filter(Boolean).join(" · ");
+V.setupLine = lineOf;
+// a small picture for the tile (C4-7: of the setup's scene when it has one): the selected picture or the newest finished
+// render made with that scene, else the scene's own picture; with no scene, the selected picture or the newest render
+const sceneOfNode = (x) => (x.scene && x.scene.name) || ((/\[Scene: ([^\]]*)\]/.exec(x.prompt || "") || [])[1]) || "";
+const sceneIcon = (name) => { const c = name && (V.sceneCommands ? V.sceneCommands() : []).find((x) => x.label === "Scene: " + name), svg = c && c.icon; return svg && /^\s*<svg/.test(svg) ? svg : ""; };
+async function thumbNow(parts) {
+  const fin = (x) => x.type === "image" && x.status === "done" && (x.thumb || x.url), newest = (a, b) => (b.created || 0) - (a.created || 0);
+  const scName = parts && parts.scene && V.G.scene ? V.G.scene.name : "";
+  let n = null;
+  if (scName) {
+    const by = (x) => fin(x) && sceneOfNode(x) === scName;
+    n = V.selImages().find(by) || V.G.nodes.filter(by).sort(newest)[0] || null;
+    if (!n && sceneIcon(scName)) return ""; // (then the tile shows the scene's own picture, sceneIcon)
+  }
+  n = n || V.selImages()[0] || V.G.nodes.filter(fin).sort(newest)[0];
+  if (!n) return "";
+  try { const im = await V.loadImg(n.thumb || n.url), k = Math.min(1, 360 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); let u = c.toDataURL("image/jpeg", 0.72); for (const q of [0.6, 0.5]) if (u.length > 24000) u = c.toDataURL("image/jpeg", q); return u; } catch (e) { return ""; } // (kept under ~18 KB: setups travel in the Drive settings file, v3.74 D2)
+}
+// ---------- applying ----------
+let applying = 0;
+const setSel = (id, v) => { const el = $("#" + id); if (!el || el.value === String(v)) return; if (![...el.options].some((o) => o.value === String(v))) return; el.value = String(v); el.dispatchEvent(new Event("change")); };
+function stateNow() { return { words: $("#prompt").value, scene: V.G.scene ? JSON.parse(JSON.stringify(V.G.scene)) : null, look: V.G.look ? JSON.parse(JSON.stringify(V.G.look)) : null, lib: ((V.G.library && V.G.library.items) || []).map((i) => [i.id, !!i.use]), engine: V.engines.image, res: ($("#resImage") || {}).value, num: versionsNow(), ar: ($("#arImage") || {}).value, keep: V.keepModel ? V.keepModel() : true }; }
+function setEngine(id) { if (!id || !D.imageEngines.some((x) => x.id === id) || V.engines.image === id) return; V.engines.image = id; V.store.set("engines", { ...V.store.get("engines", {}), image: id }); V.engRedraw && V.engRedraw(); }
+function setVersions(n) { if (V.setVersions) V.setVersions(n); else setSel("numImage", n); }
+const quietly = (fn) => { const t0 = V.toast; V.toast = (m, err, ms, o) => (err ? t0(m, err, ms, o) : V.logMsg && V.logMsg(m)); try { return fn(); } finally { V.toast = t0; } };
+const repaint = () => { V.render(); V.updateMake && V.updateMake(); V.paintNext && V.paintNext(); if (V.catalogue && V.catalogue.refresh) V.catalogue.refresh(); };
+// put back what stateNow() saw (the setup's undo)
+function putBack(st) {
+  quietly(() => {
+    if ($("#prompt").value !== st.words) V.setPrompt(st.words);
+    if (JSON.stringify(V.G.scene || null) !== JSON.stringify(st.scene)) { V.G.scene = st.scene; V.changed(); V.refreshScenes && V.refreshScenes(true); }
+    V.G.look = st.look;
+    if (V.G.library) { const m = new Map(st.lib); V.G.library.items = V.G.library.items.filter((i) => m.has(i.id)); V.G.library.items.forEach((i) => (i.use = m.get(i.id))); }
+    setEngine(st.engine); setSel("resImage", st.res); setVersions(st.num); setSel("arImage", st.ar);
+    if (V.setKeepModel && V.keepModel() !== st.keep) V.setKeepModel(st.keep);
+  });
+  V.changed(); repaint();
+}
+// apply setup s; returns the list of what changed. o.step false: no undo step (a new project's own start)
+function applySetup(s, o = {}) {
+  const before = stateNow(), P = s.parts, did = [], miss = [];
+  applying++;
+  try {
+    quietly(() => {
+      if (P.words) { const t = s.words || ""; if (ownWordsNow() !== t.trim()) { V.setPrompt(t); did.push(t ? "words" : "words cleared"); } }
+      if (P.scene) { const sc = s.scene; if (JSON.stringify(sceneNow()) !== JSON.stringify(sc)) { setScene0(sc ? JSON.parse(JSON.stringify(sc)) : null, { keepFurniture: true }); did.push(sc ? "scene " + sc.name : "no scene"); } }
+      if (P.look) { const L = s.look ? JSON.parse(JSON.stringify(s.look)) : null; if (L) { if (L._pid !== (V.project.id || null) && L.ref && !V.node(L.ref)) { delete L.ref; if (!L.refUrl) miss.push("the look's reference picture (it stays with its own project)"); } delete L._pid; L.on = true; } V.G.look = L; did.push(L ? "look " + (L.name || "on") : "no look"); }
+      if (P.library) {
+        const items = (V.G.library = V.G.library || { items: [] }).items, want = s.library || [], cat = V.catalogue && V.catalogue.CAT ? V.catalogue.CAT.items : [];
+        items.forEach((i) => (i.use = false));
+        let k = 0;
+        for (const w of want) {
+          let it = items.find((i) => i.id === w.id) || (w.catId && items.find((i) => i.catId === w.catId));
+          if (!it && w.catId && V.libraryAdopt) { const c = cat.find((x) => x.id === w.catId); if (c) try { it = V.libraryAdopt(c); } catch (e) { miss.push(w.name); continue; } }
+          if (!it) { miss.push(w.name); continue; }
+          if (k < (V.catalogue ? V.catalogue.MAX_USE : 6)) { it.use = true; k++; }
+        }
+        did.push(k ? `${k} Library item${k > 1 ? "s" : ""}` : "no Library items");
+      }
+      if (P.engine && s.engine && s.engine !== V.engines.image) { setEngine(s.engine); if (V.engines.image === s.engine) did.push((ENG() || {}).name || "AI model"); }
+      if (P.res && s.res && s.res !== ($("#resImage") || {}).value) { setSel("resImage", s.res); did.push(s.res); }
+      if (P.num && s.num && +s.num !== versionsNow()) { setVersions(+s.num); did.push(`${s.num} version${s.num > 1 ? "s" : ""}`); }
+      if (P.ar && s.ar && s.ar !== ($("#arImage") || {}).value) { setSel("arImage", s.ar); did.push(arName(s.ar)); }
+      if (P.keep && V.setKeepModel && V.keepModel() !== !!s.keep) { V.setKeepModel(!!s.keep); did.push(s.keep ? "camera kept" : "camera may move"); }
+    });
+  } finally { applying--; }
+  V.changed(); repaint();
+  const after = stateNow();
+  if (o.step !== false && did.length) V.pushStep(`Setup "${s.name}"`, { undo: () => putBack(before), redo: () => putBack(after) });
+  s.used = Date.now(); persist();
+  return { did, miss, undo: () => putBack(before) };
+}
+V.useSetup = (s, o = {}) => {
+  if (typeof s === "string") s = byId(s); if (!s) return;
+  V.setView && V.setView("canvas");
+  if (V.tab !== "image") { const b = document.querySelector('#modeTabs button[data-v="image"]'); if (b) b.click(); }
+  const r = applySetup(s, o);
+  const msg = r.did.length ? `Setup "${s.name}": ${r.did.join(", ")}` : `Setup "${s.name}": all of it was set already`;
+  say(msg + (r.miss.length ? `. Not here: ${r.miss.join(", ")}` : ""), false, 6000, r.did.length ? { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true } : {});
+  return r;
+};
+// ---------- saving ----------
+let saveBox = null;
+V.saveSetup = async (o = {}) => {
+  if (saveBox) saveBox.remove();
+  const now = Object.fromEntries(PARTS.map(([k, , val]) => [k, val()]));
+  const ticks = {};
+  const rows = PARTS.map(([k, name]) => {
+    const has = !!now[k], cb = h("input", { type: "checkbox" }); cb.checked = has && k !== "words" ? true : has && k === "words"; cb.disabled = !has && !["scene", "look", "library"].includes(k);
+    ticks[k] = cb;
+    return h("label", { class: "surow" + (cb.disabled ? " off" : "") }, cb, h("span", {}, h("b", {}, name), h("small", {}, has ? now[k] : ["scene", "look", "library"].includes(k) ? "None now. Tick it to have the setup clear it" : "not set")));
+  });
+  // (loop-11) a name from the scene or the project ("Blue hour setup", "Test house setup"), else empty with an example
+  const base = V.G.scene ? V.G.scene.name : (V.realProjectName ? V.realProjectName() : "") || "";
+  const name = h("input", { value: o.name || (base ? `${base.slice(0, 40)} setup` : ""), placeholder: "e.g. Planning daylight 4K", maxlength: 50 });
+  const def = h("input", { type: "checkbox" });
+  const close = () => { saveBox.remove(); saveBox = null; };
+  const go = async () => {
+    const nm = name.value.trim(); if (!nm) { name.focus(); return say("Give the setup a name", true); }
+    const parts = Object.fromEntries(PARTS.map(([k]) => [k, !!ticks[k].checked && !ticks[k].disabled]));
+    if (!Object.values(parts).some(Boolean)) return say("Tick at least one thing to keep", true);
+    const same = list.find((x) => x.name.toLowerCase() === nm.toLowerCase());
+    if (same && !(await V.confirm(`Replace the setup "${same.name}"?`, "A setup of that name exists. Replace it with what is set now?", "Replace"))) return;
+    const s = { id: same ? same.id : V.uid(), name: nm, created: Date.now(), parts, words: ownWordsNow(), scene: sceneNow(), look: lookNow(), library: libNow(), engine: V.engines.image, res: ($("#resImage") || {}).value, num: versionsNow(), ar: ($("#arImage") || {}).value, keep: V.keepModel ? V.keepModel() : true, thumb: await thumbNow(parts) }; if (!s.thumb && parts.scene && s.scene) s.icon = sceneIcon(s.scene.name) || undefined;
+    list = [s, ...list.filter((x) => x !== same)]; if (def.checked) V.store.set("setupDefault", s.id); persist(); close();
+    say(`Setup "${nm}" saved: ${lineOf(s) || "words"}. Tools › Setups… or Ctrl+K "${nm}" uses it`, false, 6000, { action: { label: "See setups", run: () => V.openSetups() } });
+  };
+  saveBox = h("div", { class: "modal setupmodal", onclick: (e) => { if (e.target === saveBox) close(); }, onkeydown: (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } else if (e.key === "Enter" && e.target === name) { e.preventDefault(); go(); } } },
+    h("div", { class: "mbox subox" },
+      h("button", { class: "mclose", title: "Close (Esc)", "aria-label": "Close", onclick: close }, V.icoEl("close")),
+      h("h3", {}, "Save as a setup"),
+      h("p", { class: "hint" }, "Keep these choices to use again in one click, in this project or a new one. Tick what the setup should set."),
+      h("label", { class: "fl" }, "Name", name),
+      h("div", { class: "surows" }, rows),
+      h("label", { class: "surow sudef" }, def, h("span", {}, h("b", {}, "Start every new project with it"), h("small", {}, "New project then sets it for you (Undo takes it off)"))),
+      h("div", { class: "row end" }, h("button", { class: "mini", onclick: close }, "Cancel"), h("button", { class: "mini primary", onclick: go }, "Save setup"))));
+  document.body.append(saveBox); V.modal(saveBox, { label: "Save as a setup" });
+  setTimeout(() => { name.focus(); name.select(); }, 30);
+};
+// ---------- the chooser ----------
+let chooser = null;
+V.openSetups = (o = {}) => {
+  if (chooser) chooser.remove();
+  const close = () => { if (chooser) chooser.remove(); chooser = null; };
+  const grid = h("div", { class: "sugrid", role: "list" });
+  const paint = () => {
+    grid.innerHTML = "";
+    if (!list.length) grid.append(h("div", { class: "suempty" }, h("b", {}, "No setups yet"), h("p", {}, "Set things up for a kind of shot (a scene, the look, furniture, AI model, 4K, versions), then Save as a setup. Next time it is one click.")));
+    list.slice().sort((a, b) => (b.used || b.created || 0) - (a.used || a.created || 0)).forEach((s) => {
+      const isDef = defId() === s.id;
+      const use = () => { close(); if (o.forNew) V.newProjectFrom(s); else V.useSetup(s); };
+      const tile = h("div", { class: "sutile" + (isDef ? " def" : ""), role: "listitem" },
+        h("button", { class: "suuse", title: o.forNew ? `Start a new project from "${s.name}"` : `Use "${s.name}": ${lineOf(s)}`, onclick: use },
+          h("span", { class: "suimg" }, s.thumb ? h("img", { src: s.thumb, alt: "" }) : s.icon ? h("span", { class: "suph suscene", html: s.icon }) : h("span", { class: "suph", html: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="7" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="13" width="8" height="7" rx="1"/></svg>' })),
+          h("b", {}, s.name), h("small", {}, lineOf(s) || "words only"), isDef ? h("em", {}, "Default for new projects") : null),
+        h("div", { class: "suacts" },
+          h("button", { class: "mini", title: o.forNew ? `Start a new project from "${s.name}"` : `Use "${s.name}" now: ${lineOf(s)}`, onclick: use }, o.forNew ? "Start with it" : "Use"), // (final review: a plain button to use it, not only the picture)
+          o.forNew ? null : h("button", { class: "mini", title: "A new project that starts with this setup", onclick: () => { close(); V.newProjectFrom(s); } }, "New project"),
+          h("button", { class: "mini", title: isDef ? "New projects start blank again" : "Every new project starts with this setup", onclick: () => { V.store.set("setupDefault", isDef ? null : s.id); paint(); say(isDef ? "New projects start blank" : `New projects start with "${s.name}"`, false, 3000); } }, isDef ? "Not the default" : "Make it the default"),
+          h("button", { class: "mini", title: `Delete the setup "${s.name}"`, onclick: async () => { if (!(await V.confirm(`Delete the setup "${s.name}"?`, "Pictures and projects made with it stay as they are.", "Delete", { danger: true }))) return; list = list.filter((x) => x !== s); if (isDef) V.store.set("setupDefault", null); persist(); paint(); } }, "Delete")));
+      grid.append(tile);
+    });
+  };
+  paint();
+  chooser = h("div", { class: "modal setupmodal", onclick: (e) => { if (e.target === chooser) close(); }, onkeydown: (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } } },
+    h("div", { class: "mbox suchooser" },
+      h("button", { class: "mclose", title: "Close (Esc)", "aria-label": "Close", onclick: close }, V.icoEl("close")),
+      h("h3", {}, o.forNew ? "New project from a setup" : "Setups"),
+      h("p", { class: "hint" }, o.forNew ? "The new project starts with the setup's scene, look, furniture, AI model, size, versions and shape. No pictures are copied." : "One click sets everything the setup keeps. Undo (Ctrl+Z) puts it all back."),
+      grid,
+      h("div", { class: "row end" }, o.forNew ? h("button", { class: "mini", onclick: () => { close(); $("#newProject").click(); } }, "Blank project") : null, h("button", { class: "mini", onclick: () => { close(); V.saveSetup(); } }, "Save as a setup…"))));
+  document.body.append(chooser); V.modal(chooser, { label: o.forNew ? "New project from a setup" : "Setups" });
+  setTimeout(() => { const b = chooser && chooser.querySelector(".suuse, .mini"); if (b) b.focus(); }, 30);
+};
+// Esc closes the setup windows even when the control that had the keyboard was redrawn (Make it the default)
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const top = saveBox || chooser; if (!top || (V.topModal && V.topModal() !== top) || document.querySelector(".cmdk:not([hidden])")) return;
+  e.preventDefault(); e.stopPropagation(); top.remove(); if (top === saveBox) saveBox = null; else chooser = null;
+}, true);
+// ---------- new projects ----------
+let pendingNew = null;
+V.newProjectFrom = (s) => { pendingNew = { s, t: Date.now() }; $("#newProject").click(); setTimeout(() => { if (pendingNew && Date.now() - pendingNew.t > 55000) pendingNew = null; }, 60000); };
+const np0 = V.newProject;
+V.newProject = (...a) => {
+  const r = np0.apply(V, a);
+  const p = pendingNew && Date.now() - pendingNew.t < 60000 ? pendingNew.s : null; pendingNew = null;
+  const user = !navigator.userActivation || navigator.userActivation.isActive; // (a default setup only for a New project someone asked for, not the start-up one)
+  const s = p || (user && defId() ? byId(defId()) : null);
+  if (s) setTimeout(() => {
+    const res = applySetup(s, { step: false });
+    say(`New project from the setup "${s.name}": ${res.did.join(", ") || "nothing to change"}${res.miss.length ? `. Not here: ${res.miss.join(", ")}` : ""}`, false, 7000, p ? {} : { action: { label: "Start blank", run: () => res.undo() } });
+  }, 0);
+  return r;
+};
+V.setupMenuItems = () => (list.length ? [["New project from a setup…", () => V.openSetups({ forNew: true })]] : []);
+V.setupCommands = () => list.flatMap((s) => [
+  { id: "su:" + s.id, label: "Setup: " + s.name, kind: "Setup", hint: lineOf(s) || "words", run: () => V.useSetup(s) },
+  { id: "sn:" + s.id, label: "New project from setup: " + s.name, kind: "Setup", hint: "A new project that starts with it", run: () => V.newProjectFrom(s) }]);
+const bind = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+bind("#btnSetups", () => V.openSetups());
+bind("#btnSaveSetup", () => V.saveSetup());
+// ---------- scenes on the timeline ----------
+const setScene0 = V.setScene;
+if (setScene0) V.setScene = (next, o = {}) => {
+  const r = setScene0(next, o);
+  if (!applying && r && r.undo && r.undo.action) {
+    let cur = r;
+    V.pushStep(next ? `Scene "${next.name}"` : "No scene", { undo: () => cur.undo.action.run(), redo: () => { cur = setScene0(next, o); } }); // (v3.74 D2: "Undone: Scene "Dusk"", not "Undone: Scene: Dusk")
+  }
+  return r;
+};
+// ---------- History of changes ----------
+let pop = null;
+const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 50 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
+const closePop = () => { if (pop) { pop.remove(); pop = null; document.removeEventListener("pointerdown", outside, true); } };
+const outside = (e) => { if (pop && !pop.contains(e.target) && !(e.target.closest && e.target.closest("#tHist"))) closePop(); };
+V.openUndoTimeline = (anchor) => {
+  if (pop) return closePop();
+  V.setView && V.setView("canvas");
+  const steps = V.undoList(), now = steps.filter((x) => x.done).length - 1;
+  const rows = [];
+  const row = (i, label, sub, cls) => { const b = h("button", { class: "uhrow " + cls, onclick: () => { closePop(); V.undoTo(i); }, title: i === now ? "This is where you are now" : i < now ? "Go back to just after this step" : "Go forward to this step again" }, h("span", { class: "uhdot" }), h("span", { class: "uhtx" }, h("b", {}, label), h("small", {}, sub))); rows.push(b); return b; };
+  steps.slice().reverse().forEach((x) => row(x.i, x.label, (x.i === now ? "Now · " : x.done ? "" : "Undone: click to redo · ") + ago(x.t), x.i === now ? "now" : x.done ? "" : "ahead"));
+  row(-1, "As the project opened", now === -1 ? "Now" : "Before every step listed", now === -1 ? "now start" : "start");
+  pop = h("div", { class: "undopop", role: "dialog", "aria-label": "History of changes", onkeydown: (e) => {
+    const bs = [...pop.querySelectorAll(".uhrow")], i = bs.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePop(); const hb = $("#tHist"); if (hb) hb.focus(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); bs[Math.max(0, Math.min(bs.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))].focus(); }
+  } },
+    h("div", { class: "uhhead" }, h("b", {}, "History of changes"), h("small", {}, steps.length ? `${steps.length} step${steps.length > 1 ? "s" : ""} · click one to go back to it` : "Nothing changed yet")),
+    h("div", { class: "uhlist" }, rows),
+    h("div", { class: "uhfoot" }, "Ctrl+Z undoes one step, Ctrl+Y redoes it. The last 40 steps are kept while this project is open; the list starts again when another project opens."));
+  document.body.append(pop);
+  const a = anchor || $("#tHist"), r = a && a.offsetParent ? a.getBoundingClientRect() : { left: innerWidth - 80, top: 120, right: innerWidth - 80, bottom: 120 };
+  const w = pop.offsetWidth, ht = pop.offsetHeight;
+  pop.style.left = Math.max(8, (r.left - w - 10 > 8 ? r.left - w - 10 : r.right + 10)) + "px";
+  pop.style.top = Math.max(8, Math.min(r.top - 40, innerHeight - ht - 8)) + "px";
+  setTimeout(() => { document.addEventListener("pointerdown", outside, true); const cur = pop && pop.querySelector(".uhrow.now"); if (cur) { cur.scrollIntoView({ block: "nearest" }); cur.focus(); } }, 0);
+};
+bind("#tHist", (e) => V.openUndoTimeline(e.currentTarget));
+// right-click on Undo or Redo opens it too; their tooltips name the step they will undo / redo
+["#tUndo", "#tRedo"].forEach((id) => { const b = $(id); if (!b) return;
+  b.addEventListener("contextmenu", (e) => { e.preventDefault(); e.stopPropagation(); V.openUndoTimeline($("#tHist") || b); });
+  const tip = () => { const u = id === "#tUndo", nm = u ? V.undoName() : V.redoName(), t = nm ? `${u ? "Undo" : "Redo"}: ${nm} (${u ? "Ctrl+Z" : "Ctrl+Y"}). Right-click: History of changes` : `${u ? "Undo" : "Redo"} on the canvas (${u ? "Ctrl+Z" : "Ctrl+Y or Ctrl+Shift+Z"})`; if (b.hasAttribute("data-tipt")) b.setAttribute("data-tipt", t); else b.title = t; };
+  b.addEventListener("pointerenter", tip, true); b.addEventListener("focus", tip, true);
+});
+V.paintUndo && V.paintUndo();
+})();
+
+;
+
 /* ===== web/drive.js ===== */
 /* VizLab: Save to Google Drive (v3.71, code/DRIVE-SETUP.md). With Drive connected, every project kept on this device is also
    copied into a "VizLab" folder in the user's own Google Drive: one folder per project holding "<name>.vizlab.json" (the canvas
@@ -19175,6 +24289,48 @@ async function backCat() {
 // isn't goes to VizLab/History. When a project drops a picture History still lists, the file moves to History instead of
 // the bin. History cards show the preview; full screen, Download and Add to canvas fetch the picture (V.drive.fullUrl).
 const jobPend = new Map(); // job id -> the whole job, until Drive has its pictures
+// ---------- v3.74 A2 (robust-04, robust:big:2a): the outbox ----------
+// What isn't in Google Drive yet (memOnly projects, jobPend History pictures) is also written to this device at once, as
+// kv "outbox:p:<id>" / "outbox:j:<id>", so a closed window, a crash or a phone dropping the page loses nothing. Each one
+// goes the moment Drive has it (the same checked moments that take it out of memOnly / jobPend). On the next start,
+// anything still there is put back in memory and sent (obRestore). The 20 KB rule stays for everything already on Drive.
+const OB = "outbox:", obWritten = new Map(); // kv id -> what was written (updated_at / outputs)
+let obT = null, obBusy = false, obErr = "";
+const obKick = () => { if (!obT) obT = setTimeout(obFlush, 300); };
+async function obFlush() {
+  obT = null; if (obBusy) return obKick(); obBusy = true;
+  try {
+    const want = new Map();
+    if (!st.keepCopy) {
+      for (const pid of memOnly) { const row = mem.get(pid); if (row) want.set(OB + "p:" + pid, { v: row, sig: String(row.updated_at || "") }); }
+      for (const [id, job] of jobPend) want.set(OB + "j:" + id, { v: job, sig: (job.outputs || []).length + ":" + (job.status || "") });
+    }
+    for (const [k, w] of want) if (obWritten.get(k) !== w.sig) { await L.put("kv", { id: k, at: Date.now(), kind: k.charAt(OB.length), v: w.v }); obWritten.set(k, w.sig); }
+    for (const k of [...obWritten.keys()]) if (!want.has(k)) { await L.del("kv", k); obWritten.delete(k); }
+    obErr = "";
+  } catch (e) { obErr = (e && e.message) || "storage error"; console.warn("outbox", e); }
+  obBusy = false;
+}
+for (const [o, ms] of [[memOnly, ["add", "delete", "clear"]], [jobPend, ["set", "delete", "clear"]]]) for (const m of ms) { const f = o[m].bind(o); o[m] = function () { const r = f.apply(null, arguments); obKick(); return r; }; }
+async function obRestore() {
+  let rows = []; try { rows = (await L.all("kv")).filter((r) => typeof r.id === "string" && r.id.indexOf(OB) === 0 && r.v && r.v.id); } catch (e) { return; }
+  let p = 0, j = 0;
+  for (const r of rows) {
+    if (r.kind === "p") {
+      p++;
+      if (!only()) { applying++; try { await L.put("projects", r.v); } finally { applying--; } await L.del("kv", r.id); continue; } // (mode off now: the full copy goes back on this device)
+      obWritten.set(r.id, "restored");
+      if (!mem.has(r.v.id)) { mem.set(r.v.id, r.v); memOnly.add(r.v.id); const m = metas.get(r.v.id) || { pid: r.v.id, blobs: {}, baseRev: 0, seq: 0 }; m.dirty = true; m.seq = (m.seq || 0) + 1; await putMeta(m); }
+    } else if (r.kind === "j") {
+      j++;
+      if (!only()) { await L.put("jobs", r.v); await L.del("kv", r.id); continue; }
+      obWritten.set(r.id, "restored"); if (!jobPend.has(r.v.id)) jobPend.set(r.v.id, r.v);
+    }
+  }
+  if (p + j && only()) { soon(2500); V.toast(`${[p ? plural(p, "project change") : "", j ? plural(j, "History picture") : ""].filter(Boolean).join(" and ")} hadn't reached Google Drive when VizLab last closed. ${p + j > 1 ? "They were" : "It was"} kept safely on this ${deviceName()} and ${p + j > 1 ? "are" : "is"} being sent now.`, false, 9000, { key: "outbox" }); }
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) { clearTimeout(obT); obT = null; obFlush(); } });
+window.addEventListener("pagehide", () => { clearTimeout(obT); obT = null; obFlush(); });
 let histIds = {}, histUse = new Set(), histFolder = null;
 const keepHist = () => L.put("kv", { id: "drivehist", ids: histIds }).catch(() => {});
 const knownId = (k) => { if (histIds[k]) return histIds[k]; for (const m of metas.values()) if (m.blobs && m.blobs[k]) return m.blobs[k]; return null; };
@@ -19323,7 +24479,7 @@ async function backAll() {
 // (Settings › Google Drive, on any device): the file goes to the Drive bin and every device stops (the VizLab folder
 // remembers it: appProperties keysync / keysyncAt).
 const SETN = "VizLab settings (private).json";
-const SYNCK = ["gkey", "fkey", "tkey", "google", "gFallback", "textAI", "engines", "logo", "motion", "nextBar", "keepModel", "toolbarLabels", "showCosts", "favPresets", "combos"];
+const SYNCK = ["gkey", "fkey", "tkey", "google", "gFallback", "textAI", "engines", "logo", "motion", "nextBar", "keepModel", "toolbarLabels", "showCosts", "favPresets", "combos", "setups", "setupDefault", "autoCompare"]; // (v3.74 D2: saved Setups too; setups.js keeps their pictures small)
 const KEYK = { gkey: "Google key", fkey: "fal.ai key", tkey: "Tripo key" };
 let setApplying = 0;
 const rawGet = (k) => { try { return localStorage.getItem("vl_" + k); } catch (e) { return null; } };
@@ -19502,11 +24658,13 @@ function paintSaveDrive() {
   if (st2 === "saved") return V.paintSave("saved", `Saved to Google Drive at ${hhmm(Date.now())}. VizLab saves by itself after every change; this ${deviceName()} keeps only a small preview.`, "Saved to Drive");
   if (st2 === "saving") return V.paintSave("saving", "Copying your changes to Google Drive", "Saving to Drive…");
   const why = !navigator.onLine ? "You're offline." : state === "offline" ? "Google Drive can't be reached just now." : state === "needsauth" ? "The Google Drive sign-in ran out (click to reconnect)." : lastErr ? "Google Drive: " + lastErr + "." : "Google Drive hasn't got it yet.";
-  V.paintSave("bad", `${why} Your changes are kept in this window${st.keepCopy ? " and in a copy on this device" : ""} until Google Drive has them. VizLab tries again by itself; click to try now.`, "Not saved to Drive yet · Retry");
+  V.paintSave("bad", `${why} Not saved to Drive yet: ${st.keepCopy || (obWritten.size && !obErr) ? `kept safely on this ${deviceName()} until Drive has it` : "kept in this window until Google Drive has it"}. VizLab tries again by itself; click to try now.`, "Not saved to Drive yet · Retry");
 }
 function tellReauth() {
   if (reauthTold || st.route === "desk") return; reauthTold = true;
-  V.toast("Google Drive: your sign-in has run out (Google asks again every hour in a browser). Your work is kept on this device until you reconnect.", false, 12000, { key: "drivereauth", action: { label: "Reconnect", run: () => reconnect() } });
+  // (v3.74 A2, robust-18) one message that stays until it is dealt with, saying what is waiting; it goes by itself once reconnected
+  const u = unsaved(), k = u.projects + u.library + u.history, what = k ? ` · ${[u.projects ? plural(u.projects, "project") : "", u.library ? plural(u.library, "Library picture") : "", u.history ? plural(u.history, "History picture") : ""].filter(Boolean).join(", ")} waiting` : "";
+  V.toast(`Google Drive needs you to sign in again${what}. Google asks every hour in a browser; your work is kept safely on this ${deviceName()} until you reconnect.`, true, 0, { key: "drivereauth", action: { label: "Reconnect", run: () => reconnect() } });
 }
 const soon = (ms) => { clearTimeout(timer); timer = setTimeout(() => syncAll(), ms); };
 
@@ -19654,7 +24812,24 @@ V.drive = {
   // v3.73: projects and pictures only in Google Drive
   only: () => st.only !== false, onlyNow: only, setOnly, unsaved, keepCopy: keepCopyNow,
   fullUrl: async (o) => (o && o.ref ? picFromDrive(o.ref.slice(7), o.fid || knownId(o.ref.slice(7)), o.mime) : o ? o.url : ""), // a History picture kept in Drive
-  _test: { metas, remote: () => remote, state: () => state, cm, cat: () => catInfo, mem, memOnly, catPend, jobPend, liteIds, hydrateCat, histIds: () => histIds }, // (for the tests)
+  _test: { metas, remote: () => remote, state: () => state, cm, cat: () => catInfo, mem, memOnly, catPend, jobPend, liteIds, hydrateCat, histIds: () => histIds, obFlush, obRestore, obWritten }, // (for the tests)
+  // v3.74 A2: for the status panel: what is kept on this device until Drive has it (the outbox)
+  outbox: () => ({ projects: [...obWritten.keys()].filter((k) => k.charAt(OB.length) === "p").length, history: [...obWritten.keys()].filter((k) => k.charAt(OB.length) === "j").length, err: obErr }),
+  needsAuth: () => state === "needsauth",
+  state: () => (st.on ? (state === "idle" && !navigator.onLine ? "offline" : state) : "off"),
+  // v3.74 C2 (N12, features:big:1): a file made for someone else (the Client pack) into VizLab/<project>/<sub>/, through the
+  // same upload as the project's pictures. Resolves to { id, link, folder }. Sharing is NOT changed: with drive.file the file
+  // is the owner's alone until they share it from Drive (Share > Anyone with the link).
+  put: async (blob, name, sub = "Client packs") => {
+    if (!st.on || blocked()) throw new Error("Google Drive isn't connected (Settings > Google Drive)");
+    const pid = (V.project && V.project.id) || "";
+    if (pid && !(metas.get(pid) || {}).folderId) { try { await syncAll(); } catch (e) { /* the pack goes in VizLab/Client packs instead */ } }
+    const root = await ensureRoot(), m = pid && metas.get(pid), parent = (m && m.folderId) || root;
+    const f = await list(`'${qs(parent)}' in parents and name='${qs(sub)}' and mimeType='${FOLDER}' and trashed=false`, "id");
+    const dir = f.length ? f[0].id : (await mkFolder(sub, parent, { vizlab: "client", pid })).id;
+    const r = await upload({ name: clean(name), parents: [dir], mimeType: blob.type || "text/html", appProperties: { vizlab: "clientpack", pid } }, blob);
+    return { id: r.id, link: "https://drive.google.com/file/d/" + encodeURIComponent(r.id) + "/view", folder: parent === root ? "" : clean((V.project && V.project.name) || "") };
+  },
 };
 // switched on: what is here moves up (checked); off: full copies come back
 async function setOnly(on) {
@@ -19735,6 +24910,7 @@ const bind = () => {
 // ---------- when it syncs ----------
 ready = init().then(async () => {
   bind(); paintSettings();
+  try { await obRestore(); } catch (e) { console.warn("outbox restore", e); } // (v3.74 A2: what a closed window hadn't sent yet)
   if (st.on && st.only !== false && st.move === undefined) { st.move = true; saveSt(); } // (connected before v3.73: on by default, moved and checked first)
   try { const h = await L.get("kv", "drivehist"); if (h && h.ids) histIds = h.ids; } catch (e) {}
   if (st.on && !blocked()) { if (st.route !== "desk" && !(tok && Date.now() < tok.exp - 60000)) setState("needsauth"); soon(2000); }
@@ -19801,7 +24977,7 @@ if ($("#spendBtn")) $("#spendBtn").onclick = () => setView("account"); // v3.69 
 // session total; hidden at $0.00 and when Settings › Preferences › Show running costs is off (body.nocost also hides the
 // estimate under Make). panel.js / draw.js still add each finished job to V.spend and #spend (hidden): that change asks again.
 let monthCost = 0, monthT = 0;
-const paintSpend = () => { const b = $("#spendBtn"); if (!b) return; $("#spendMonth").textContent = "~" + V.money(monthCost); b.hidden = !(monthCost >= 0.005); paintGlance(); };
+const paintSpend = () => { const b = $("#spendBtn"); if (!b) return; $("#spendMonth").textContent = "~" + V.money(monthCost); b.hidden = false; paintGlance(); }; // (B fixer 2, whole-02b) shown from the start, "~$0.00 this month" in a fresh month, so the first render's cost does not push the job chip and the search box along
 V.refreshSpend = () => { clearTimeout(monthT); monthT = setTimeout(async () => { try { const s = await V.api("stats"); monthCost = Number(s.month) || 0; } catch {} paintSpend(); }, 400); };
 if ($("#spend")) new MutationObserver(() => V.refreshSpend()).observe($("#spend"), { childList: true, characterData: true, subtree: true });
 V.showCosts = () => V.store.get("showCosts", true) !== false;
@@ -19827,7 +25003,15 @@ const projSub = (p) => [p.drive === "remote" && !p.only ? "Not on this device ye
 // leaving this project: save it first; if that fails, say so before its unsaved changes are dropped
 async function leaveOk() {
   if (!V.project.id && !V.G.nodes.length) return true;
-  if (await V.save()) return true;
+  if (await V.save()) {
+    // (v3.74 final, loop-01) a save that left pictures out (not uploaded yet) is not safe: they would be gone on the reopen
+    for (let k = V.project.left || 0; k; ) {
+      k = V.retryUploads ? await V.retryUploads(true) : k; if (!k) return true;
+      const a = await V.confirm("Pictures not uploaded", `${k} picture${k > 1 ? "s are" : " is"} still only in this window (not uploaded yet). If you leave this project now, ${k > 1 ? "they" : "it"} will be lost. Download ${k > 1 ? "them" : "it"} first to keep a copy.`, "Leave anyway", { alt: "Upload again", danger: true });
+      if (a !== "alt") return !!a;
+    }
+    return true;
+  }
   return V.confirm("Not saved", "This project couldn't be saved, so changes since its last save would be lost. Leave it anyway?", "Leave anyway");
 }
 V.openProject = async (id) => {
@@ -19855,6 +25039,8 @@ async function duplicateProject(p) {
   V.toast(`Made "${name}", a copy of "${p.name}" (for an option A / B)`, false, 5000);
 }
 async function deleteProject(p) {
+  // (v3.74 A2, robust-14) no question first: it goes to Recently deleted (30 days) with Undo on the message (trust.js)
+  if (V.binProject) { if (p.id === V.project.id && !(await V.save())) { if (!(await leaveOk())) return; } return V.binProject(p); }
   if (!(await V.confirm("Delete project", `Delete "${p.name}"? Its canvas and sheets are deleted. Its renders stay in History.${V.drive && V.drive.on() ? " Its folder in Google Drive goes to the Drive bin." : ""}`))) return;
   await V.api("project_delete", { id: p.id }); if (p.id === V.project.id) V.newProject();
 }
@@ -19871,6 +25057,8 @@ function paintProjects() {
   else if (!list.length) g.append(h("p", { class: "hint" }, `No project name has "${q}" in it.`));
   list.forEach((p) => {
     const open = p.id === V.project.id;
+    // (v3.74 final, deliver-project-card-empty) the open project with no saved cover yet shows its newest picture
+    if (open && !p.thumb) { const c = V.G.nodes.slice().reverse().find((n) => n.thumb && n.kind !== "source" && !n.rejected) || V.G.nodes.find((n) => n.thumb); if (c) p = Object.assign({}, p, { thumb: c.thumb }); }
     const act = (label, title, fn) => h("button", { class: "mini", title, onclick: async (e) => { e.stopPropagation(); try { await fn(); } catch (er) { V.toast(er.message, true, 0); } loadProjects(); } }, label);
     g.append(h("div", { class: "pcard" + (open ? " open" : ""), tabindex: 0, role: "button", "aria-label": "Open " + p.name, onclick: () => V.openProject(p.id), onkeydown: (e) => { if (e.key === "Enter" && e.target === e.currentTarget) V.openProject(p.id); } },
       h("div", { class: "pthumb" }, p.thumb ? h("img", { src: p.thumb, alt: "" }) : p.drive === "remote" ? "On Google Drive" : "Empty", open ? h("span", { class: "popen" }, "Open now") : null,
@@ -19883,6 +25071,7 @@ function paintProjects() {
   });
 }
 $("#projSearch").oninput = paintProjects;
+V.reloadProjects = loadProjects; // (v3.74 A2: trust.js Recently deleted, after a restore)
 // (v3.71) Google Drive (drive.js): the list follows a sync (projects from other devices, covers, badges)
 document.addEventListener("vl-drive", () => { if (document.body.dataset.view === "projects") fetchProjects().then(paintProjects).catch(() => {}); if (!$("#ovSettings").hidden) paintGlance(); });
 $("#projSearch").onkeydown = (e) => { if (e.key === "Escape" && e.target.value) { e.stopPropagation(); e.target.value = ""; paintProjects(); } };
@@ -19900,9 +25089,10 @@ async function projMenu() {
   V.flatMenu(r.left, r.bottom + 4, [
     [V.realProjectName() ? "Rename…" : "Name this project…", () => V.askProjectName()],
     ["New project", newProject],
+    ...(V.setupMenuItems ? V.setupMenuItems() : []), // (v3.74 C4 setups.js: New project from a setup…)
     ["Save now", () => V.saveNow(), "Ctrl+S"],
     ...(recent.length ? ["-", ...recent.map(row)] : []),
-    "-", ["All projects…", () => setView("projects")]]);
+    "-", ["All projects…", () => setView("projects")]], $("#projName")); // (v3.74 D2: Esc and its dialogs give the keyboard back to the project name)
   const ctx = $("#ctx"); ctx.classList.add("projmenu"); const off = () => { if (ctx.hidden) { ctx.classList.remove("projmenu"); mo.disconnect(); } }, mo = new MutationObserver(off); mo.observe(ctx, { attributes: true, attributeFilter: ["hidden"] });
   const first = ctx.querySelector("button"); if (first) first.focus();
 }
@@ -19944,6 +25134,7 @@ $("#backupBtn").onclick = async () => {
     const r = await V.api("backup_export"), url = URL.createObjectURL(r.blob), mb = sizeText(r.size);
     await V.download(url, `VizLab-backup-${new Date().toISOString().slice(0, 10)}.vizlab-backup.json`, { msg: (nm) => `Backup saved: "${nm}" (${mb}, ${plural(r.count.projects, "project")}, ${plural(r.count.jobs, "History item")}) in your Downloads folder. Copy it somewhere safe.` });
     setTimeout(() => URL.revokeObjectURL(url), 60000);
+    V.store.set("lastBackup", Date.now()); // (v3.74 A2: the status panel and Free up space show it)
   } catch (e) { V.toast("Couldn't make the backup: " + e.message, true, 0); }
   b.disabled = false; b.textContent = "Back up all projects";
 };
@@ -20051,7 +25242,7 @@ function histCard(it, k) {
   const { j, o, th } = it, sc = sceneOf(j), pn = jobProjName(j);
   const media = o.type === "video" ? h("video", { src: o.url, muted: true, preload: "metadata" }) : h("img", { src: o.type === "model" || o.type === "world" ? th?.url || "" : o.url, loading: "lazy", alt: "" });
   const btn = (title, html, fn, cls = "") => h("button", { class: cls, title, "aria-label": title, html, onclick: (e) => { e.stopPropagation(); fn(e.currentTarget); } });
-  const fav = btn(j.favourite ? "Favourite (click to take it off)" : "Make it a favourite", j.favourite ? "★" : "☆", (b) => toggleFav(it, b), "hfav" + (j.favourite ? " on" : ""));
+  const fav = btn(j.favourite ? "Favourite (click to take it off)" : "Make it a favourite", V.ico(j.favourite ? "star-fill" : "star"), (b) => toggleFav(it, b), "hfav" + (j.favourite ? " on" : ""));
   return h("div", { class: "hcard", tabindex: 0, role: "button", "aria-label": `${histTitle(it)}${pn ? ", " + pn : ""}, ${whenText(j.created_at)}: full screen`, onclick: () => fullscreen(k), onkeydown: (e) => { if (e.key === "Enter" && e.target === e.currentTarget) fullscreen(k); } },
     h("div", { class: "hmedia" }, media,
       h("div", { class: "hov" },
@@ -20059,8 +25250,9 @@ function histCard(it, k) {
           h("button", { class: "use", title: "Put it on this project's canvas", onclick: (e) => { e.stopPropagation(); addFromHistory(it); } }, "Add to canvas"),
           btn("Download", ICON.dl, () => histDownload(it)), btn("Full screen (← → to step through)", ICON.full, () => fullscreen(k)), fav,
           projOfJob(j) && projOfJob(j).id !== V.project.id ? btn("Open its project: " + projOfJob(j).name, ICON.open, () => V.openProject(projOfJob(j).id)) : null),
-        h("div", { class: "hbot" }, h("b", {}, V.engineName(j.engine) + (o.type === "model" ? " · 3D" : o.type === "video" ? " · Video" : "")), V.historyPrompt(j).slice(0, 90)))),
-    h("div", { class: "hcap" }, h("b", {}, histTitle(it) + (sc ? " · " + sc : "")), h("span", {}, [pn, whenText(j.created_at)].filter(Boolean).join(" · "))));
+        h("div", { class: "hbot" }, h("b", {}, V.engineName(j.engine) + (o.type === "model" ? " · 3D" : o.type === "video" ? " · Video" : "")), j.asked_engine && j.asked_engine !== j.engine ? h("small", { class: "hasked" }, "asked for " + V.engineName(j.asked_engine)) : null, V.historyPrompt(j).slice(0, 90)))),
+    h("div", { class: "hcap" }, h("b", {}, histTitle(it) + (sc ? " · " + sc : "")), h("span", {}, [pn, whenText(j.created_at)].filter(Boolean).join(" · ")),
+      j.asked_engine && j.asked_engine !== j.engine ? h("span", { class: "hcasked" }, `Made by ${V.engineName(j.engine)} (asked for ${V.engineName(j.asked_engine)})`) : null)); // (final, deliver-history-asked-hidden: in sight without hover)
 }
 // v3.73: a History picture kept only in Google Drive shows its small preview (o.url); the full picture is fetched for
 // full screen, Download and Add to canvas
@@ -20071,21 +25263,23 @@ async function toggleFav(it, b) {
   try { await V.api("favourite", { id: it.j.id, value: v }); } catch (e) { return V.toast(e.message, true); }
   it.j.favourite = v;
   V.G.nodes.filter((n) => n.jobId === it.j.id && (n.outIndex || 0) === it.i).forEach((n) => (n.fav = v)); // the same picture on this canvas
-  if (b) { b.textContent = v ? "★" : "☆"; b.classList.toggle("on", v); b.title = v ? "Favourite (click to take it off)" : "Make it a favourite"; }
+  if (b) { b.innerHTML = V.ico(v ? "star-fill" : "star"); b.classList.toggle("on", v); b.title = v ? "Favourite (click to take it off)" : "Make it a favourite"; }
   if (fsAt != null) paintFsBar();
 }
 // full screen: the result, a bar with what it is and the card's buttons; ← → step through the cards loaded
-let fsAt = null;
+let fsAt = null, fsStg = null; // (fsStg: the gallery stage showing a picture, v3.74 B2)
 function fullscreen(k) {
   const it = histItems[k]; if (!it) return;
-  fsAt = k; const { o, th } = it, st = $("#fsStage");
-  V.disposeViews(); st.innerHTML = ""; st.style.position = "";
+  fsAt = k; const { o, th, j } = it, st = $("#fsStage");
+  V.disposeViews(); if (fsStg) { fsStg.destroy(); fsStg = null; } st.innerHTML = ""; st.style.position = ""; st.className = "fs-stage";
   if (o.type === "video") st.append(h("video", { src: o.url, controls: true, autoplay: true, loop: true }));
   else if (o.type === "model") { V.ensureModelViewer(); st.append(h("model-viewer", { src: o.url, poster: th?.url || "", "camera-controls": true, "auto-rotate": true })); }
   else if (o.type === "world") { st.style.position = "relative"; V.splatView(st, { url: o.url }); }
   else {
-    const im = h("img", { src: o.url, alt: "" }); st.append(im);
-    if (o.ref) { st.classList.add("fsload"); histFull(o).then((u) => { if (fsAt === k && im.isConnected) im.src = u; }, (e) => V.toast(e.message, true, 6000)).finally(() => st.classList.remove("fsload")); } // (the preview first, then the picture from Drive)
+    // v3.74 B2: on the gallery stage (padding, radius, shadow, background Shift+B, Z fit / 100%, the facts on hover)
+    fsStg = V.stage ? V.stage(st, { url: o.url, label: histTitle(it), engine: j.engine, askedEngine: j.asked_engine || undefined, created: new Date(j.created_at).getTime(), cost: +j.cost_estimate || 0 }, { src: o.url, title: histTitle(it), info: [jobProjName(j)] }) : null;
+    const im = fsStg ? fsStg.img : h("img", { src: o.url, alt: "" }); if (!fsStg) st.append(im);
+    if (o.ref) { st.classList.add("fsload"); histFull(o).then((u) => { if (fsAt === k && im.isConnected) { if (fsStg) fsStg.setSrc(u); else im.src = u; } }, (e) => V.toast(e.message, true, 6000)).finally(() => st.classList.remove("fsload")); } // (the preview first, then the picture from Drive)
   }
   paintFsBar(); $("#fsModal").hidden = false;
 }
@@ -20095,13 +25289,13 @@ function paintFsBar() {
   const { j } = it, pn = jobProjName(j), p = projOfJob(j), b = (label, fn, cls = "", title = "") => h("button", { class: "mini " + cls, title, onclick: fn }, label);
   bar.innerHTML = "";
   bar.append(h("span", { class: "fstitle" }, h("b", {}, histTitle(it) + (sceneOf(j) ? " · " + sceneOf(j) : "")), [pn, whenText(j.created_at), `${fsAt + 1} of ${histItems.length}`].filter(Boolean).join(" · ")),
-    b("‹", () => stepFs(-1), "icon", "Previous (←)"), b("›", () => stepFs(1), "icon", "Next (→)"),
+    b(V.icoEl("chev-left"), () => stepFs(-1), "icon", "Previous (←)"), b(V.icoEl("chev-right"), () => stepFs(1), "icon", "Next (→)"),
     b("Add to canvas", () => { closeFs(); addFromHistory(it); }, "primary"), b("Download", () => histDownload(it)),
-    b(j.favourite ? "★ Favourite" : "☆ Favourite", () => toggleFav(it), j.favourite ? "on" : "", "Favourite (F)"),
+    b([V.icoEl(j.favourite ? "star-fill" : "star"), " Favourite"], () => toggleFav(it), j.favourite ? "on" : "", "Favourite (F)"),
     ...(p && p.id !== V.project.id ? [b("Open its project", () => { closeFs(); V.openProject(p.id); })] : []));
 }
 function stepFs(d) { if (fsAt == null || !histItems.length) return; fullscreen((fsAt + d + histItems.length) % histItems.length); }
-function closeFs() { $("#fsModal").hidden = true; fsAt = null; V.disposeViews(); $("#fsStage").innerHTML = ""; }
+function closeFs() { $("#fsModal").hidden = true; fsAt = null; V.disposeViews(); if (fsStg) { fsStg.destroy(); fsStg = null; } $("#fsStage").innerHTML = ""; $("#fsStage").className = "fs-stage"; }
 $("#fsClose").onclick = closeFs;
 document.addEventListener("keydown", (e) => {
   if ($("#fsModal").hidden || fsAt == null || (V.isTopPopup && !V.isTopPopup($("#fsModal")))) return;
@@ -20109,6 +25303,8 @@ document.addEventListener("keydown", (e) => {
   if (k === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); closeFs(); }
   else if ((k === "ArrowLeft" || k === "ArrowRight") && !overView) { e.preventDefault(); e.stopImmediatePropagation(); stepFs(k === "ArrowLeft" ? -1 : 1); }
   else if (k.toLowerCase() === "f" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); e.stopImmediatePropagation(); toggleFav(histItems[fsAt]); }
+  else if (k.toLowerCase() === "z" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && fsStg) { e.preventDefault(); e.stopImmediatePropagation(); fsStg.toggleZoom(); } // v3.74 B2: fit / 100%
+  else if (k.toLowerCase() === "b" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && V.stageCycleBg) { e.preventDefault(); e.stopImmediatePropagation(); V.stageCycleBg(); } // the stage's background
 }, true);
 // Add to canvas: a picture already on this canvas is shown, not copied; a new one goes in a free place near the middle
 async function addFromHistory(it) {
@@ -20119,7 +25315,7 @@ async function addFromHistory(it) {
   if (there) { V.sel = [there.id]; V.render(); V.selectionChanged(); V.centerOn && V.centerOn(there); return V.toast("It is already on this canvas: selected", false, 3000); }
   V.snapshot();
   const [cx, cy] = V.freeSpot ? V.freeSpot(...V.viewCenter()) : V.viewCenter();
-  const n = V.addNode({ x: cx - V.NODE_W / 2, y: cy - V.NODE_H / 2, kind: V.kindOf(j.kind, j.settings), engine: j.engine, label: V.engineName(j.engine), prompt: V.historyPrompt(j), status: "done", type: o.type, url: o.url, jobId: j.id, outIndex: i, fav: j.favourite, poster: th?.url, downloads: j.outputs.filter((x) => x.type === "file") });
+  const n = V.addNode({ x: cx - V.NODE_W / 2, y: cy - V.NODE_H / 2, kind: V.kindOf(j.kind, j.settings), engine: j.engine, askedEngine: j.asked_engine || undefined, label: V.engineName(j.engine), prompt: V.historyPrompt(j), status: "done", type: o.type, url: o.url, jobId: j.id, outIndex: i, fav: j.favourite, poster: th?.url, downloads: j.outputs.filter((x) => x.type === "file") });
   n.thumb = o.type === "image" ? await V.makeThumb(o.url) : th ? await V.makeThumb(th.url) : null;
   V.sel = [n.id]; V.render(); V.selectionChanged(); V.changed(); V.centerOn && V.centerOn(n); V.toast("Added to the canvas");
 }
@@ -20156,7 +25352,7 @@ function fillSettings() {
   $("#setGoogle").checked = !!V.cfg.google; $("#setGFallback").checked = V.cfg.gFallback !== false;
   $("#setGkey").value = V.cfg.gkey || ""; $("#setFkey").value = V.cfg.fkey || ""; $("#setTkey").value = V.cfg.tkey || "";
   $("#setMotion").checked = V.cfg.motion !== false; $("#setNextBar").checked = V.store.get("nextBar", true);
-  $("#setKeep").checked = !V.keepModel || V.keepModel(); $("#setTlabels").checked = !V.toolbarLabels || V.toolbarLabels(); $("#setCosts").checked = V.showCosts();
+  $("#setKeep").checked = !V.keepModel || V.keepModel(); $("#setTlabels").checked = !V.toolbarLabels || V.toolbarLabels(); $("#setCosts").checked = V.showCosts(); if ($("#setAutoCmp")) $("#setAutoCmp").checked = V.autoCompare();
   $$("#ovSettings .keystat").forEach((s) => (s.textContent = "")); $("#setGoRender").hidden = true;
   $$("#ovSettings .keyeye").forEach((b) => { const i = $(b.dataset.eye); i.type = "password"; b.textContent = "Show"; });
   fillLogo(); fillLinks(); fillModly(); paintKeys(); paintCloud(); paintGlance(); paintBackup();
@@ -20183,6 +25379,12 @@ function keysDirty() { return KEYIN.some(([s, k]) => (k === "api" ? $(s).value.t
 function paintKeys() {
   const d = keysDirty(); $$("#ovSettings .unsaved").forEach((x) => (x.hidden = !d));
   $("#keyRow").classList.toggle("needkey", V.cfg.mode !== "cloud" && !V.aiReady()); // first run: the box to fill lights up
+  // (v3.74 D2, amber budget) a key row's Save is filled amber only while a box in that row has been changed; otherwise it
+  // is a plain button, so Settings never shows two amber Saves at once
+  $$("#ovSettings .keysave").forEach((b) => {
+    const row = b.closest(".srow"), mine = KEYIN.filter(([s]) => row && $(s) && row.contains($(s)));
+    b.classList.toggle("primary", mine.some(([s, k]) => (k === "api" ? $(s).value.trim() || D.API_URL : $(s).value.trim()) !== (V.cfg[k] || "")));
+  });
   paintCloud(); paintGlance();
 }
 // v3.69 B5 (FR13): Show / Hide on a key box, so a pasted key can be checked
@@ -20204,11 +25406,13 @@ function paintGlance() {
     V.SU ? line(V.cfg.autosave && V.cfg.folder ? "ok" : "off", "Save folder", V.cfg.autosave ? V.cfg.folder || "not set" : "off", "#setAutosave") : null,
     V.drive && V.cfg.mode !== "cloud" ? line(V.drive.on() ? (/sign-in ran out|failed/.test(V.drive.line()) ? "bad" : "ok") : "off", "Google Drive", V.drive.on() ? (V.drive.info().unsaved && V.drive.info().unsaved.atRisk ? "not saved yet" : V.drive.info().last ? (V.drive.info().only ? "only in Drive · " : "synced ") + new Date(V.drive.info().last).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "on") : "off", "#sDrive") : null,
     V.desk && V.cfg.mode !== "cloud" ? (() => { const cx = linkState && linkState.codex; return !cx ? line("", "ChatGPT", "checking…", "#cxBtn") : !cx.installed ? line("off", "ChatGPT", "Codex not installed", "#cxBtn") : cx.signedIn ? line("ok", "ChatGPT", "signed in", "#cxBtn") : line("off", "ChatGPT", cx.busy ? "finish in the browser…" : "Sign in to ChatGPT", () => V.codexSignIn()); })() : null, // v3.72: one click signs in (per PC)
+    V.storageGlance ? V.storageGlance(line) : null, // (v3.74 A2, robust-08: "1.2 GB of about 6 GB", amber over 80%; opens Free up space)
     line(o.on ? "ok" : "off", "Clarman logo", o.on ? "on, " + corner : "off", "#setLogo"),
     line("", "This month", "~" + V.money(monthCost), () => setView("account")),
     line("", "Version", D.VERSION, "#sAbout")].filter(Boolean)); // (the save-folder line only in SketchUp or the desktop app)
 }
 V.onBridgePaint = (on) => { paintGlance(); if (V.paintWelcomeSU) V.paintWelcomeSU(on); };
+V.paintGlance = paintGlance; // (v3.74 A2: trust.js repaints it once the storage figure arrives)
 $$("#ovSettings .keyin").forEach((x) => { x.addEventListener("input", paintKeys); x.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); x.closest(".srow").querySelector(".keysave").click(); } }); }); // Enter = Save (and nothing else: not the tour offer it may open)
 // switches and choices are kept at once: a brief "Saved" beside the one changed
 $("#ovSettings").addEventListener("change", (e) => {
@@ -20234,8 +25438,10 @@ function readSettings() {
 async function checkGoogle() {
   if (!(V.cfg.gkey || (V.cfg.gauth === "oauth" && V.desk))) { keyState = ""; return ""; }
   try {
-    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", { headers: await V.gHeaders() });
-    if (r.ok) { keyState = "ok"; return "✓ The key works"; }
+    // (v3.74 A2, robust-15) listing the models proves Google accepts the key, not that it can make pictures: say only that,
+    // and warn when no picture model is offered to it (a free-tier project's first render fails with "limit: 0")
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", { headers: await V.gHeaders() });
+    if (r.ok) { keyState = "ok"; let img = true; try { const d = await r.json(); img = !Array.isArray(d.models) || d.models.some((m) => /image/i.test(m.name || "")); } catch {} return img ? "✓ Key accepted by Google" : "✓ Key accepted by Google, but it lists no picture models yet: the first render may say the project needs the paid tier"; }
     let m = ""; try { m = (await r.json()).error?.message || ""; } catch {} keyState = "bad"; return "✗ Google didn't accept this key" + (m ? ": " + m : "");
   } catch (e) { keyState = "bad"; return "✗ Couldn't reach Google (" + e.message + ")"; }
 }
@@ -20256,6 +25462,9 @@ $("#setMotion").onchange = () => V.setMotion($("#setMotion").checked);
 $("#setKeep").onchange = () => V.setKeepModel && V.setKeepModel($("#setKeep").checked);
 $("#setTlabels").onchange = () => V.setToolbarLabels && V.setToolbarLabels($("#setTlabels").checked);
 $("#setCosts").onchange = () => { V.store.set("showCosts", $("#setCosts").checked); paintCosts(); };
+// (v3.74 D2, journey-returning:big:2 note) a tweak, relight or brush result opens compared (guide.js); off = it opens on its own
+V.autoCompare = () => V.store.get("autoCompare", true) !== false;
+if ($("#setAutoCmp")) $("#setAutoCmp").onchange = () => V.store.set("autoCompare", $("#setAutoCmp").checked);
 
 // ---------- sign-in links (VizLab.exe): Google sign-in for Gemini, ChatGPT via Codex, Gemini CLI ----------
 // v3.69 B5 (FR11): Google sign-in shows only in the desktop app (row .desk-only). It is a button, not a switch: gauth turns
@@ -20442,7 +25651,7 @@ async function saveKeys(st) {
     // checked by Check all keys under More AI services)
     let msg;
     if (V.cfg.mode === "cloud") { await V.api("ping"); msg = "✓ Saved. Cloud server connected."; }
-    else if (st.id === "setStatus") { const g = await checkGoogle(); msg = !g ? (V.aiReady() ? "Saved." : "Saved. Paste the Google key to start.") : /✓/.test(g) ? "✓ The key works. You're ready to render." : g; }
+    else if (st.id === "setStatus") { const g = await checkGoogle(); msg = !g ? (V.aiReady() ? "Saved." : "Saved. Paste the Google key to start.") : /✓/.test(g) ? (/lists no picture/.test(g) ? g : "✓ Key accepted by Google. You're ready to render.") : g; }
     else msg = "Saved. " + (await checkKeys());
     st.textContent = msg; paintGlance();
     const good = !/✗/.test(msg) && V.aiReady();
@@ -20497,6 +25706,7 @@ paintBackup();
 $("#tCapture").onclick = () => {
   if (V.bridge && V.bridge.ok) return V.bridgeCapture(); // plugin's local service: works from any browser
   V.suCall("capture", JSON.stringify({ style: "current", size: 2560 })); V.toast("Capturing view…", false, 1500);
+  if (V.capturePlaceholder) V.capturePlaceholder("SketchUp"); // (v3.74 B1: a card of the right shape at once; onCapture fills it)
 };
 window.VL = {
   hello(prefsJson) {
@@ -20537,6 +25747,381 @@ async function boot(goCanvas = true) {
 V.render(); V.applyView(); V.selectionChanged();
 suDetect(); setTimeout(suDetect, 600);
 setTimeout(() => { if (!V.SU || V.cfg.pass || V.cfg.gkey) boot(); }, 300);
+})();
+
+;
+
+/* ===== web/trust.js ===== */
+/* VizLab v3.74 A2 "Trust and reliability" (N15; design/critique-3.73.json robust:big:1-4). Loaded last (after shell.js).
+   - The status pill in the title bar ("All good", "Offline", "Not saved", "Drive: reconnect", "SketchUp not connected",
+     "Rendering 2…") and its panel: one row each for Internet, Google key (or the cloud server), ChatGPT (VizLab.exe),
+     SketchUp (with the model's name), Google Drive, this project's save, Storage and Recently deleted, each with a state,
+     a time and one Fix button. V.paintStatus() repaints it (core.js calls it from the save state).
+   - Recently deleted, kept 30 days on this device (IndexedDB vizlab-local kv "bin:*", index "bin:index"): a deleted
+     project (V.binProject: Undo on the message) and pictures removed from the canvas (V.binPictures, canvas.js removeIds),
+     listed in a fold at the end of Projects, in the status panel and in Ctrl+K, with Bring back and Delete for good.
+   - Free up space (V.freeUpSpace): how much VizLab uses, emptying Recently deleted, the biggest projects, older History.
+   - The failed card's countdown ("Try again in 0:45") and its fixes (V.failFix: Open Settings, Change the words, Free up
+     space), the offline line under Make, and SketchUp's connection in words (robust-17).
+   The plain-words explainer (V.explainError), messages with Details, offline waiting, Stop, V.modal and the save retry
+   are in core.js; the Google retry engine in local.js; the Drive outbox in drive.js; tooltip names in tip.js. */
+(() => {
+const V = window.V, { $, h } = V, L = V.localDB;
+const DAY = 864e5, KEEP_DAYS = 30;
+const plural = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+const hhmm = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const dayOf = (t) => { const d = (Date.now() - t) / DAY; return d < 1 && new Date(t).getDate() === new Date().getDate() ? "today " + hhmm(t) : new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+const size = (b) => (b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? Math.round(b / 1e6) + " MB" : Math.max(1, Math.round(b / 1e3)) + " KB");
+const device = () => (V.desk ? "this PC" : /iPhone/.test(navigator.userAgent) ? "this iPhone" : /iPad|Android/.test(navigator.userAgent) ? "this device" : "this PC");
+const ICON = {
+  ok: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path d="M4.6 8.3l2.2 2.2 4.6-4.8"/></svg>',
+  warn: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6l6.8 12.2H1.2z"/><path d="M8 6v3.6M8 11.6v.4"/></svg>',
+  bad: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2"/></svg>',
+  off: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/></svg>',
+  run: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" class="strk"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2"/></svg>',
+};
+
+// ---------- Recently deleted (robust-14, robust:big:2b) ----------
+const IDX = "bin:index";
+let binList = null; // [{key, kind "p"|"n", at, name, pid, pname, thumb, n}]
+const binLoad = async () => { if (binList) return binList; try { const r = await L.get("kv", IDX); binList = (r && Array.isArray(r.list)) ? r.list : []; } catch (e) { binList = []; } return binList; };
+const binSave = () => L.put("kv", { id: IDX, list: binList || [] }).catch((e) => console.warn("bin", e));
+async function smallThumb(u) { if (!u || typeof u !== "string") return null; if (u.length < 16000) return u; try { return (await V.resize(u, 400, "image/jpeg", 0.72)).dataUrl; } catch (e) { return null; } }
+async function binPut(key, rec, meta) {
+  await binLoad();
+  await L.put("kv", Object.assign({ id: key }, rec));
+  binList = binList.filter((x) => x.key !== key); binList.unshift(Object.assign({ key, at: rec.at }, meta)); await binSave();
+  paintBin(); V.paintStatus();
+}
+async function binDrop(key) { await binLoad(); try { await L.del("kv", key); } catch (e) {} binList = binList.filter((x) => x.key !== key); await binSave(); paintBin(); V.paintStatus(); }
+// older than 30 days: gone for good
+async function binPurge() { await binLoad(); const old = binList.filter((x) => Date.now() - x.at > KEEP_DAYS * DAY); for (const x of old) await binDrop(x.key); }
+// (A2-18) the open project is kept as it is on the canvas, with pictures not uploaded or not yet saved (a save leaves those
+// out in cloud mode); restoring sends them up first
+const openRow = (p, base) => {
+  const g = Object.assign({}, V.graphForSave(), { nodes: V.G.nodes.map((n) => Object.assign({}, n, { _local: undefined })) });
+  return Object.assign({}, base || {}, { id: p.id, name: V.project.name || p.name, graph: JSON.parse(JSON.stringify(g)), thumb: (base && base.thumb) || p.thumb || null, stats: (base && base.stats) || p.stats || null });
+};
+V.binProject = async (p) => {
+  let full = null, why = "";
+  try { full = await V.api("project_get", { id: p.id }); } catch (e) { why = V.errLine(e); }
+  if (p.id === V.project.id) { try { full = openRow(p, full); } catch (e) { console.warn("bin open project", e); } }
+  if (!full && !(await V.confirm("Delete for good?", `VizLab couldn't keep a copy of "${p.name}" to bring back later (${why}). Delete it for good anyway?`, "Delete for good", { danger: true }))) return;
+  if (full) { try { await binPut("bin:p:" + p.id, { kind: "p", at: Date.now(), row: full }, { kind: "p", name: p.name, pid: p.id, thumb: await smallThumb(p.thumb || full.thumb), n: (p.stats && p.stats.pictures) || 0 }); }
+    catch (e) { if (!(await V.confirm("Delete for good?", `There isn't room on ${device()} to keep "${p.name}" in Recently deleted (${V.errLine(e)}). Delete it for good anyway?`, "Delete for good", { danger: true }))) return; full = null; } }
+  await V.api("project_delete", { id: p.id });
+  if (p.id === V.project.id) V.newProject();
+  V.toast(full ? `Project "${p.name}" deleted · Recently deleted keeps it for 30 days` : `Project "${p.name}" deleted for good`, false, 10000, full ? { key: "bindel", action: { label: "Undo", run: () => restoreProject("bin:p:" + p.id) } } : {});
+  if (V.reloadProjects && document.body.dataset.view === "projects") V.reloadProjects();
+};
+async function restoreProject(key) {
+  const rec = await L.get("kv", key).catch(() => null); if (!rec || !rec.row) { await binDrop(key); return V.toast("That project isn't in Recently deleted any more", true, 4000); }
+  const r = rec.row;
+  try {
+    // (cloud mode) pictures that were never uploaded go up now, so the server keeps them
+    if (V.cfg.mode === "cloud" && r.graph && Array.isArray(r.graph.nodes)) for (const n of r.graph.nodes) if (/^data:image/.test(n.url || "")) n.url = await V.uploadDataUrl(n.url);
+    await V.api("project_save", { id: r.id, name: r.name, graph: r.graph, thumb: r.thumb, stats: r.stats });
+  }
+  catch (e) { return V.failToast(e, { what: `Couldn't bring back "${r.name}"` }); }
+  await binDrop(key);
+  V.toast(`"${r.name}" is back`, false, 7000, { action: { label: "Open it", run: () => V.openProject(r.id) } });
+  if (V.reloadProjects && document.body.dataset.view === "projects") V.reloadProjects();
+}
+// returns how many of them are kept (a failed or unfinished picture has nothing to keep), so the message can say so
+V.binPictures = (ns) => {
+  const keep = ns.filter((n) => n.status === "done" && (n.url || n.thumb)); if (!keep.length) return 0;
+  const ids = new Set(keep.map((n) => n.id)), edges = V.G.edges.filter((e) => ids.has(e.from) || ids.has(e.to));
+  const at = Date.now(), key = "bin:n:" + at.toString(36) + V.uid(), first = keep[0];
+  const rec = { kind: "n", at, pid: V.project.id || "", pname: V.project.name, nodes: JSON.parse(JSON.stringify(keep)), edges: JSON.parse(JSON.stringify(edges)) };
+  const name = keep.length === 1 ? (V.nodeTitle ? V.nodeTitle(first) : first.label) : plural(keep.length, "picture");
+  smallThumb(first.thumb || first.url).then((thumb) => binPut(key, rec, { kind: "n", name, pid: rec.pid, ids: keep.map((n) => n.id), pname: V.project.name === "unsaved" ? "New project" : V.project.name, thumb, n: keep.length }))
+    .catch((e) => console.warn("bin pictures", e));
+  return keep.length;
+};
+async function restorePictures(key) {
+  const rec = await L.get("kv", key).catch(() => null); if (!rec || !rec.nodes) { await binDrop(key); return; }
+  if (rec.pid && rec.pid !== V.project.id) { await V.openProject(rec.pid); if (V.project.id !== rec.pid) return; }
+  V.setView && V.setView("canvas");
+  const back = rec.nodes.filter((n) => !V.node(n.id));
+  if (back.length) {
+    V.snapshot();
+    back.forEach((n) => V.G.nodes.push(n));
+    rec.edges.forEach((e) => { if (V.node(e.from) && V.node(e.to) && !V.G.edges.some((x) => x.from === e.from && x.to === e.to)) V.G.edges.push(e); });
+    V.sel = back.map((n) => n.id); V.render(); V.selectionChanged(); V.changed(true);
+    setTimeout(() => (V.fit ? V.fit(back, true) : V.centerOn(back[0])), 80);
+  }
+  await binDrop(key);
+  V.toast(back.length ? `Brought back ${plural(back.length, "picture")}` : "Those pictures are already on the canvas", false, 5000, back.length ? { action: { label: "Undo", run: () => V.undo() }, canvasOnly: true } : {});
+}
+V.binOpen = async () => { V.setView("projects"); await binLoad(); const f = $("#binFold"); if (f) { f.open = true; paintBin(); setTimeout(() => f.scrollIntoView({ block: "start", behavior: "smooth" }), 120); } };
+V.binCount = () => (binList || []).length;
+// the fold at the end of Projects
+let binEl = null;
+function paintBin() {
+  const grid = $("#projGrid"); if (!grid) return;
+  if (!binEl) {
+    binEl = h("details", { class: "binfold", id: "binFold", ontoggle: () => paintBin() }, h("summary", {}, h("span", { class: "bintitle" }, "Recently deleted"), h("span", { class: "hint binsub" })), h("div", { class: "binlist" }));
+    grid.after(binEl);
+  }
+  // (pictures brought back with Undo on the message are on the canvas again: their entry goes)
+  (binList || []).filter((x) => x.kind === "n" && x.pid === (V.project.id || "") && x.ids && x.ids.length && x.ids.every((id) => V.node(id))).forEach((x) => binDrop(x.key));
+  const L0 = (binList || []).filter((x) => !(x.kind === "n" && x.pid === (V.project.id || "") && x.ids && x.ids.every((id) => V.node(id))));
+  binEl.hidden = !L0.length;
+  binEl.querySelector(".binsub").textContent = L0.length ? ` · ${plural(L0.length, "item")}, kept for 30 days` : "";
+  if (!binEl.open) return;
+  const list = binEl.querySelector(".binlist"); list.innerHTML = "";
+  L0.forEach((x) => {
+    const left = Math.max(0, KEEP_DAYS - Math.floor((Date.now() - x.at) / DAY));
+    const what = x.kind === "p" ? `Project${x.n ? " · " + plural(x.n, "picture") : ""}` : `${x.n > 1 ? plural(x.n, "picture") : "Picture"} removed from ${x.pname || "a project"}`;
+    list.append(h("div", { class: "binrow" },
+      x.thumb ? h("img", { src: x.thumb, alt: "" }) : h("i", { class: "binnone" }),
+      h("span", { class: "bintx" }, h("b", {}, x.name || "Untitled"), h("small", {}, `${what} · deleted ${dayOf(x.at)} · ${left} day${left === 1 ? "" : "s"} left`)),
+      h("button", { class: "mini binback", type: "button", onclick: () => (x.kind === "p" ? restoreProject(x.key) : restorePictures(x.key)) }, /* (A2-14: outlined; "+ New project" is this page's amber button) */ x.kind === "p" ? "Restore" : x.pid && x.pid !== V.project.id ? "Open and bring back" : "Bring back"),
+      h("button", { class: "mini", type: "button", onclick: async () => { if (await V.confirm("Delete for good?", `"${x.name}" can't be brought back after this.`, "Delete for good", { danger: true })) binDrop(x.key); } }, "Delete for good")));
+  });
+  if (L0.length > 1) list.append(h("div", { class: "row end" }, h("button", { class: "mini", type: "button", onclick: async () => { if (await V.confirm("Empty Recently deleted?", `${plural(L0.length, "item")} can't be brought back after this.`, "Empty it", { danger: true })) { for (const x of L0.slice()) await binDrop(x.key); } } }, "Empty Recently deleted")));
+}
+new MutationObserver(() => { if (document.body.dataset.view === "projects") binLoad().then(paintBin); }).observe(document.body, { attributes: true, attributeFilter: ["data-view"] });
+
+// ---------- Free up space (robust-08) ----------
+let est = null; // {usage, quota, at}
+async function estimate(force) {
+  if (!navigator.storage || !navigator.storage.estimate) return null;
+  if (est && !force && Date.now() - est.at < 30000) return est;
+  try { const e = await navigator.storage.estimate(); est = { usage: e.usage || 0, quota: e.quota || 0, at: Date.now() }; } catch (e) { return est; }
+  return est;
+}
+const storeText = (e) => (e && e.quota ? `VizLab uses ${size(e.usage)} of about ${size(e.quota)} on ${device()}` : "");
+const storeLevel = (e) => (!e || !e.quota ? "" : e.usage / e.quota > 0.95 ? "bad" : e.usage / e.quota > 0.8 ? "warn" : "ok");
+V.storageGlance = (line) => { if (!est) { estimate().then(() => est && V.paintGlance && V.paintGlance()); return null; } const lv = storeLevel(est); return line(lv === "ok" ? "ok" : lv === "warn" ? "warn" : lv === "bad" ? "bad" : "", "Storage", est.quota ? `${size(est.usage)} of ~${size(est.quota)}` : "unknown", () => V.freeUpSpace()); };
+V.freeUpSpace = async () => {
+  const e = await estimate(true), box = h("div", { class: "mbox fubox" }), wrap = h("div", { class: "modal", hidden: true }, box);
+  const esc = (ev) => { if (ev.key === "Escape" && V.topModal && V.topModal() === wrap) { ev.preventDefault(); ev.stopImmediatePropagation(); close(); } };
+  const close = () => { document.removeEventListener("keydown", esc, true); wrap.remove(); };
+  document.addEventListener("keydown", esc, true);
+  box.append(h("button", { class: "mclose", type: "button", onclick: close }, "×"), h("h3", {}, "Free up space"),
+    h("p", { class: "hint" + (storeLevel(e) === "ok" ? "" : " fuwarn") }, (storeText(e) || "This browser doesn't say how much space VizLab may use.") + (V.store.get("lastBackup", 0) ? `. Last backup file made ${dayOf(V.store.get("lastBackup", 0))}.` : "")));
+  const body = h("div", { class: "fulist" }, h("p", { class: "hint" }, "Looking…")); box.append(body);
+  box.append(h("div", { class: "row end" }, h("button", { class: "mini", type: "button", onclick: () => { close(); V.openSettings && V.openSettings("#backupRow"); } }, "Back up everything to a file…"), h("button", { class: "mini primary", type: "button", onclick: close }, "Done")));
+  document.body.append(wrap); wrap.hidden = false;
+  wrap.addEventListener("mousedown", (ev) => { if (ev.target === wrap) close(); });
+  const rows = [];
+  await binLoad();
+  if (binList.length) rows.push(h("div", { class: "furow" }, h("span", {}, h("b", {}, "Recently deleted"), h("small", {}, plural(binList.length, "item") + " kept for 30 days")),
+    h("button", { class: "mini", type: "button", onclick: async () => { if (await V.confirm("Empty Recently deleted?", `${plural(binList.length, "item")} can't be brought back after this.`, "Empty it", { danger: true })) { for (const x of binList.slice()) await binDrop(x.key); close(); V.freeUpSpace(); } } }, "Empty it")));
+  if (V.drive && V.drive.info && V.cfg.mode !== "cloud") {
+    const di = V.drive.info();
+    if (di.on && !di.only && V.drive.setOnly) rows.push(h("div", { class: "furow" }, h("span", {}, h("b", {}, "Move to Google Drive"), h("small", {}, `Keep projects and pictures only in your Drive: ${device()} keeps the list and small previews`)),
+      h("button", { class: "mini", type: "button", onclick: () => { close(); V.openSettings("#setDriveOnly"); } }, "Choose…")));
+  }
+  // the biggest projects on this device (local mode)
+  if (V.cfg.mode !== "cloud") {
+    try {
+      const out = [];
+      for (const id of await L.keys("projects")) { const p = await L.get("projects", id); if (p) out.push({ id, name: p.name, bytes: JSON.stringify(p.graph || {}).length + String(p.thumb || "").length }); }
+      out.sort((a, b) => b.bytes - a.bytes).slice(0, 5).filter((p) => p.bytes > 2e6).forEach((p) => rows.push(h("div", { class: "furow" }, h("span", {}, h("b", {}, p.name), h("small", {}, "about " + size(p.bytes) + (p.id === V.project.id ? " · open now" : ""))),
+        h("button", { class: "mini", type: "button", onclick: () => { close(); V.setView("projects"); } }, "See projects"))));
+      let old = 0, oldB = 0; const cut = Date.now() - 182 * DAY;
+      for (const id of await L.keys("jobs")) { const j = await L.get("jobs", id); if (j && new Date(j.created_at).getTime() < cut) { old++; oldB += JSON.stringify(j.outputs || []).length; } }
+      if (old) rows.push(h("div", { class: "furow" }, h("span", {}, h("b", {}, "History older than 6 months"), h("small", {}, `${plural(old, "item")}, about ${size(oldB)} (pictures on the canvas of a project stay there)`)),
+        h("button", { class: "mini", type: "button", onclick: async () => {
+          if (!(await V.confirm("Delete older History?", `${plural(old, "History item")} older than 6 months are deleted for good. Pictures in your projects stay. Back up first if you might need them.`, "Delete them", { danger: true }))) return;
+          for (const id of await L.keys("jobs")) { const j = await L.get("jobs", id); if (j && new Date(j.created_at).getTime() < cut) await V.api("delete", { id }); }
+          close(); V.freeUpSpace();
+        } }, "Delete them")));
+    } catch (er) { rows.push(h("p", { class: "hint" }, V.errLine(er, "Couldn't look through the projects"))); }
+  }
+  body.innerHTML = ""; body.append(...(rows.length ? rows : [h("p", { class: "hint" }, "Nothing big to clear here. Downloading what you need and backing up keeps your work safe.")]));
+};
+
+// ---------- the failed card: countdown and fixes (robust-10) ----------
+setInterval(() => {
+  let again = false;
+  document.querySelectorAll(".node [data-until]").forEach((b) => { const s = Math.ceil((+b.dataset.until - Date.now()) / 1000); if (s <= 0) again = true; else b.textContent = "Try again in " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); });
+  if (again) V.render();
+}, 1000);
+V.failFix = (what, n) => {
+  if (what === "settings") return V.openSettings && V.openSettings(V.cfg.mode === "cloud" ? "#setPass" : "#setGkey");
+  if (what === "space") return V.freeUpSpace();
+  if (what === "words" && n) { // the picture it was made from, with the words ready to change
+    const p = V.parents(n.id)[0]; if (p) { V.sel = [p.id]; V.render(); V.selectionChanged(); }
+    setTimeout(() => { const t = $("#prompt"); if (!t) return; const w = (n.retry && n.retry.settings && n.retry.settings.words) || ""; if (!t.value.trim() && w) { t.value = w; t.dispatchEvent(new Event("input", { bubbles: true })); } t.focus(); t.select(); V.toast("Change the words (leave out people, logos or brand names), then press Render again", false, 6000); }, 120);
+  }
+};
+
+// ---------- the offline line under Make (robust:big:3) ----------
+function paintOffline() {
+  const m = $("#makeWhat"); if (!m) return;
+  let el = $("#makeOffline");
+  if (!el) { el = h("span", { class: "mwhat moff", id: "makeOffline", role: "status", hidden: true }, "Offline: renders wait for the internet"); m.after(el); } // (A2-12: fits at 1366)
+  el.hidden = navigator.onLine !== false;
+}
+
+// ---------- SketchUp's connection in words (robust-17) ----------
+const hostWas = {};
+function bridgeWords() {
+  const cap = $("#tCapture"); if (!cap || !V.bridge) return;
+  const su = V.bridge.host("sketchup"), on = V.bridge.hosts.filter((x) => x.ok);
+  const words = on.length ? on.map((x) => `${x.name} connected${x.info && x.info.model ? " · " + x.info.model : ""}`).join(", ") : "SketchUp not connected";
+  cap.dataset.su = on.length ? "on" : "off";
+  cap.setAttribute("aria-description", words);
+  if (!/ · (SketchUp|Revit) (not )?connected/.test(cap.title)) cap.title = cap.title.replace(/ · .*connected.*$/, "") + " · " + words;
+  V.bridge.hosts.forEach((x) => {
+    if (hostWas[x.id] && !x.ok && !document.hidden) V.toast(`${x.name} disconnected · Capture works again when it reconnects`, false, 6000, { key: "hostgone" + x.id });
+    if (x.ok) V.closeToastKey("hostgone" + x.id);
+    hostWas[x.id] = x.ok;
+  });
+  if (su) V.paintStatus();
+}
+const bp0 = V.onBridgePaint; V.onBridgePaint = (on) => { if (bp0) bp0(on); try { bridgeWords(); } catch (e) { console.warn(e); } };
+
+// ---------- the status pill and panel (robust:big:3) ----------
+const pill = h("button", { class: "stpill", id: "statusPill", type: "button", "aria-haspopup": "dialog", "aria-expanded": "false" }, h("span", { class: "sticon" }), h("span", { class: "sttext", "aria-live": "polite" }, "All good"));
+const help = $("#btnHelp"); if (help) help.before(pill); else { const tb = $(".titlebar"); if (tb) tb.append(pill); }
+let codex = null, codexAt = 0;
+const suSeen = () => { const s = V.store.get("hostsSeen", []); return Array.isArray(s) && s.includes("sketchup"); };
+function rows() {
+  const out = [], cloud = V.cfg.mode === "cloud", ss = V.saveState ? V.saveState() : {};
+  const off = navigator.onLine === false;
+  // (A2-04) online, but a render can't reach the AI service: said as that, never as "offline"
+  const stuck = !off && V.G.nodes.some((n) => (n.waitNet || n.netWait) && (n.status === "queued" || n.status === "running"));
+  out.push({ id: "net", label: "Internet", lv: off ? "bad" : stuck ? "warn" : "ok", text: off ? "Offline: renders wait and start when you're back" : stuck ? "Online, but the AI service can't be reached: VizLab keeps trying" : "Online" });
+  if (cloud) out.push({ id: "key", label: "Cloud server", lv: V.cfg.pass ? "ok" : "warn", text: V.cfg.pass ? "Passcode saved" : "No passcode yet", fix: V.cfg.pass ? null : ["Open Settings", () => V.openSettings("#setPass")] });
+  else {
+    // (A2-03) a render Google turned down for the key counts too (core.js V.keyTrouble; gone once the key is changed or
+    // Google makes a picture)
+    const kt = V.keyTrouble && V.keyTrouble.key === (V.cfg.gkey || "") ? V.keyTrouble : null;
+    const ready = V.aiReady && V.aiReady(), bad = (V.keyRejected && V.keyRejected()) || !!kt;
+    const badText = kt && kt.kind === "freetier" ? "Its Google project is on the free tier: switch it to the paid tier in AI Studio" : kt && kt.kind === "denied" ? "Google says this key isn't allowed to make pictures" : "Google didn't accept the key";
+    out.push({ id: "key", label: "Google key", lv: !ready ? "warn" : bad ? "bad" : "ok", text: !ready ? "No key yet: paste the office key in Settings" : bad ? badText : V.cfg.gkey ? "Saved" : V.cfg.gauth === "oauth" ? "Google sign-in" : "Other AI services only", fix: !ready || bad ? ["Open Settings", () => V.openSettings("#setGkey")] : null, why: kt ? kt.kind : "" });
+  }
+  if (V.desk && !cloud) {
+    if (!codex || Date.now() - codexAt > 60000) { codexAt = Date.now(); if (V.codexState) V.codexState().then((c) => { codex = c; V.paintStatus(); }).catch(() => {}); }
+    out.push({ id: "gpt", label: "ChatGPT", lv: codex && codex.signedIn ? "ok" : "off", text: !codex ? "Checking…" : !codex.installed ? "Codex isn't installed on this PC (optional)" : codex.signedIn ? "Signed in on this PC" : "Not signed in on this PC (optional)", fix: codex && codex.installed && !codex.signedIn && V.codexSignIn ? ["Sign in", () => V.codexSignIn()] : null });
+  }
+  const hosts = V.bridge ? V.bridge.hosts : [], on = hosts.filter((x) => x.ok);
+  out.push({ id: "su", label: "SketchUp", lv: on.length ? "ok" : V.SU && !V.desk ? "ok" : "off", text: on.length ? on.map((x) => `${x.name} connected${x.info && x.info.model ? " · " + x.info.model : ""}`).join(", ") : V.SU && !V.desk ? "Inside SketchUp" : "Not connected", fix: on.length ? null : ["How to connect", () => V.openSettings("#sHosts")] });
+  if (V.drive && !cloud) {
+    const i = V.drive.info(), ob = V.drive.outbox ? V.drive.outbox() : { projects: 0, history: 0 }, kept = ob.projects + ob.history;
+    const ns = V.drive.needsAuth && V.drive.needsAuth();
+    const w = i.unsaved && i.unsaved.atRisk;
+    out.push({ id: "drive", label: "Google Drive", lv: !i.on ? "off" : ns ? "warn" : i.state === "error" ? "warn" : i.state === "offline" || w ? "warn" : "ok",
+      text: !i.on ? (i.why && /Not set up/.test(i.why) ? "Not set up on this device" : "Not connected (projects are kept on " + device() + ")") : ns ? "Needs you to sign in again" + (i.waiting ? ` · ${plural(i.waiting, "item")} waiting` : "") : i.state === "syncing" ? "Saving now…" : i.state === "offline" ? "Offline: changes go up when you're back" : w || i.waiting ? `${plural(i.waiting || w, "item")} not in Drive yet${kept ? `: kept safely on ${device()}` : ""}` : i.last ? `Saved ${hhmm(i.last)}` : "Connected",
+      fix: !i.on ? (i.why && !/Not set up/.test(i.why) ? null : ["Connect", () => V.openSettings("#sDrive")]) : ns ? ["Reconnect", () => V.drive.reconnect()] : i.waiting ? ["Save now", () => V.drive.sync()] : null });
+  }
+  if (V.project.id || V.G.nodes.length) out.push({ id: "save", label: "This project", lv: ss.bad ? "bad" : ss.left || ss.missing ? "warn" : ss.pending || ss.saving ? "run" : "ok", text: ss.bad ? "Not saved: VizLab tries again by itself" : ss.left ? plural(ss.left, "picture") + " not uploaded yet" + (ss.pending || ss.saving ? " (saving now…)" : "") : ss.missing ? plural(ss.missing, "picture") + " missing (never uploaded before the project closed)" : ss.pending || ss.saving ? "Saving…" : "Saved", fix: ss.bad ? ["Try again", () => V.save()] : ss.left && V.retryUploads ? ["Upload again", () => V.retryUploads()] : ss.missing && V.tellMissing ? ["What to do", () => V.tellMissing()] : null }); // (v3.74 final: expert-status-row-no-fix, expert-unuploaded) // (whole-02: pictures still not uploaded stay said while the next save runs, so the pill doesn't flip to All good and back)
+  const mk = V.G.nodes.filter((n) => n.status === "queued" || n.status === "running"), ids = new Set(mk.map((n) => n.jobId || n.sendId || n.id)), waitN = mk.filter((n) => n.waitNet || n.netWait).length;
+  if (ids.size) out.push({ id: "jobs", label: "Being made", lv: "run", text: waitN ? `${plural(ids.size, "picture")}: ${off ? "waiting for the internet" : "trying to reach the AI service"}` : `${plural(ids.size, "picture")} being made`, wait: !!waitN, fix: ["Show Activity", () => { const q = $("#queuePop"); if (q) { V.setView("canvas"); q.hidden = false; V.drawQueue(); } }] });
+  const failed = V.G.nodes.filter((n) => n.status === "error").length;
+  if (failed) out.push({ id: "fail", label: "Failed", lv: "warn", text: `${plural(failed, "picture")} couldn't be made`, fix: ["Remove them", () => V.removeFailed()] });
+  const lb = V.store.get("lastBackup", 0), lbText = lb ? ` · last backup ${dayOf(lb)}` : V.cfg.mode !== "cloud" ? " · no backup file made yet" : "";
+  if (est) { const lv = storeLevel(est); out.push({ id: "store", label: "Storage", lv: lv || "ok", text: (storeText(est) || "Unknown") + lbText, fix: lv && lv !== "ok" ? ["Free up space…", () => V.freeUpSpace()] : ["Details…", () => V.freeUpSpace()] }); }
+  if (binList && binList.length) out.push({ id: "bin", label: "Recently deleted", lv: "off", text: plural(binList.length, "item") + " kept for 30 days", fix: ["Open", () => V.binOpen()] });
+  return out;
+}
+// the one word in the title bar: the most important problem, else what is going on, else All good
+function headline(rs) {
+  const by = (id) => rs.find((r) => r.id === id);
+  const net = by("net"), save = by("save"), drive = by("drive"), key = by("key"), su = by("su"), jobs = by("jobs"), store = by("store"), fail = by("fail");
+  if (net && net.lv === "bad") return ["bad", "Offline"];
+  if (save && save.lv === "bad") return ["bad", "Not saved"];
+  if (drive && drive.text.indexOf("sign in again") >= 0) return ["warn", "Drive: reconnect"];
+  if (key && key.lv !== "ok") return ["warn", key.lv !== "bad" ? (V.cfg.mode === "cloud" ? "No passcode" : "No Google key") : key.why === "freetier" || key.why === "denied" ? "Key can't make pictures" : "Key not accepted"];
+  if (store && store.lv === "bad") return ["bad", "Storage full"];
+  if (net && net.lv === "warn") return ["warn", "Can't reach the AI"];
+  if (jobs && !(V.jobChipOn && V.jobChipOn())) { const k = +(/^\d+/.exec(jobs.text) || [1])[0]; return ["run", jobs.wait ? "Waiting for internet" : `Rendering ${k}…`]; } // (v3.74 B1: the chip beside the pill shows the ring and time left)
+  if (drive && drive.lv === "warn") return ["warn", "Drive: not saved yet"];
+  if (store && store.lv === "warn") return ["warn", "Storage nearly full"];
+  // (A2-03) never "All good" beside a problem the panel lists: pictures not uploaded, failed pictures, anything else
+  if (fail) { const k = +(/^\d+/.exec(fail.text) || [1])[0]; return ["warn", `${k} failed`]; }
+  if (save && save.lv === "warn") return ["warn", /missing/.test(save.text) ? "Pictures missing" : "Not uploaded"];
+  const other = rs.find((r) => (r.lv === "warn" || r.lv === "bad") && r.id !== "su");
+  if (other) return [other.lv, other.label];
+  if (su && su.lv !== "ok" && suSeen() && !V.SU) return ["off", "SketchUp not connected"];
+  return ["ok", "All good"];
+}
+let panel = null, lastKey = "";
+V.paintStatus = () => {
+  if (!pill.isConnected) return;
+  const rs = rows(), [lv, text] = headline(rs), key = lv + text;
+  if (key !== lastKey) {
+    lastKey = key; pill.className = "stpill " + lv; pill.querySelector(".sticon").innerHTML = ICON[lv] || ICON.ok; pill.querySelector(".sttext").textContent = text;
+    pill.title = text === "All good" ? "Everything is working: click for the details (Google key, SketchUp, Google Drive, storage…)" : text + ": click for what to do";
+  }
+  pill.setAttribute("aria-label", "Status: " + text);
+  if (panel && !panel.hidden) paintPanel(rs);
+  paintOffline();
+};
+// (repainted every 2 s while open: only when something changed, and the keyboard stays on the same row's button; the a11y
+// check found Tab dropping to the page when the focused button was rebuilt)
+let panelSig = "";
+function paintPanel(rs, force) {
+  const sig = JSON.stringify(rs.map((r) => [r.id, r.lv, r.text, r.fix && r.fix[0]]));
+  if (!force && sig === panelSig && panel.childElementCount) return;
+  panelSig = sig;
+  const a = document.activeElement, had = a && panel.contains(a) ? (a.closest(".strow") ? "row:" + a.closest(".strow").dataset.row : a.classList.contains("mclose") ? "close" : "") : "";
+  panel.innerHTML = "";
+  panel.append(h("div", { class: "sthead" }, h("b", { id: "stHeadT" }, "Is everything working?"), h("button", { class: "mclose", type: "button", "aria-label": "Close", title: "Close (Esc)", onclick: () => closePanel(true) }, "×")));
+  rs.forEach((r) => panel.append(h("div", { class: "strow " + r.lv, "data-row": r.id },
+    h("span", { class: "sticon", html: ICON[r.lv] || ICON.ok }), h("span", { class: "stl" }, h("b", {}, r.label), h("small", {}, r.text)),
+    r.fix ? h("button", { class: "mini", type: "button", onclick: () => { closePanel(); r.fix[1](); } }, r.fix[0]) : h("span"))));
+  panel.append(h("p", { class: "hint stfoot" }, "Checked " + hhmm(Date.now()) + ". Problems also show here before a render fails."));
+  if (had) { const b = had === "close" ? panel.querySelector(".mclose") : panel.querySelector(`.strow[data-row="${had.slice(4)}"] button`) || panel.querySelector(".strow button") || panel.querySelector(".mclose"); if (b) b.focus({ preventScroll: true }); }
+}
+function openPanel() {
+  // (data-vmback, A2-17: a window opened from a row, e.g. Free up space, gives the keyboard back to the pill: the row is gone)
+  if (!panel) { panel = h("div", { class: "stpanel", role: "dialog", "aria-labelledby": "stHeadT", "data-vmback": "#statusPill", hidden: true }); document.body.append(panel); }
+  estimate(true).then(() => V.paintStatus());
+  binLoad().then(() => V.paintStatus());
+  panel.hidden = false; pill.setAttribute("aria-expanded", "true");
+  paintPanel(rows(), true);
+  const r = pill.getBoundingClientRect(), w = Math.min(420, innerWidth - 24);
+  Object.assign(panel.style, { width: w + "px", top: r.bottom + 8 + "px", left: Math.max(12, Math.min(innerWidth - w - 12, r.right - w)) + "px" });
+  setTimeout(() => { const b = panel.querySelector(".strow button") || panel.querySelector(".mclose"); if (b && !panel.hidden) b.focus({ preventScroll: true }); }, 40);
+}
+function closePanel(focusBack) { if (!panel || panel.hidden) return; panel.hidden = true; pill.setAttribute("aria-expanded", "false"); if (focusBack) pill.focus({ preventScroll: true }); }
+V.openStatus = openPanel;
+pill.addEventListener("click", () => (panel && !panel.hidden ? closePanel() : openPanel()));
+document.addEventListener("mousedown", (e) => { if (panel && !panel.hidden && !panel.contains(e.target) && !pill.contains(e.target)) closePanel(); }, true);
+document.addEventListener("keydown", (e) => {
+  if (!panel || panel.hidden) return;
+  if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); closePanel(true); }
+  if (e.key === "Tab") { const f = [...panel.querySelectorAll("button")]; const i = f.indexOf(document.activeElement); if (i < 0 || (!e.shiftKey && i === f.length - 1) || (e.shiftKey && i === 0)) { e.preventDefault(); f[e.shiftKey ? f.length - 1 : 0].focus(); } }
+}, true);
+["online", "offline"].forEach((ev) => window.addEventListener(ev, () => V.paintStatus()));
+document.addEventListener("vl-drive", () => V.paintStatus());
+document.addEventListener("vl-settings", () => V.paintStatus());
+setInterval(() => { if (!document.hidden) V.paintStatus(); }, 2000);
+// renders running: the title bar says so (robust-05) and Activity changes repaint it
+const uq0 = V.updateQueue; V.updateQueue = function () { const r = uq0.apply(this, arguments); try { V.paintStatus(); } catch (e) {} return r; };
+
+// ---------- Ctrl+K ----------
+const svg24 = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const CMD_ICON = {
+  status: svg24('<circle cx="12" cy="12" r="9"/><path d="M8 12.4l2.7 2.7L16.2 9.5"/>'),
+  bin: svg24('<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/><path d="M10 13.5l2-2 2 2M12 11.6V17"/>'),
+  space: svg24('<ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>'),
+  fail: svg24('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9l6 6M15 9l-6 6"/>'),
+};
+const cc0 = V.catalogueCommands;
+V.catalogueCommands = () => {
+  // (A2-09) listed under Actions with an icon each (palette.js headOf files kind "Action" there)
+  const own = [
+    { id: "a2:status", label: "Status: is everything working?", kind: "Action", icon: CMD_ICON.status, hint: "Google key, SketchUp, Google Drive, storage, offline", run: () => setTimeout(openPanel, 60) },
+    { id: "a2:bin", label: "Recently deleted: bring back a project or a removed picture", kind: "Action", icon: CMD_ICON.bin, hint: binList && binList.length ? plural(binList.length, "item") + " kept for 30 days" : "Nothing deleted lately", run: () => V.binOpen() },
+    { id: "a2:space", label: "Free up space…", kind: "Action", icon: CMD_ICON.space, hint: est ? storeText(est) : "How much VizLab uses on " + device(), run: () => V.freeUpSpace() },
+  ];
+  const failed = V.G.nodes.filter((n) => n.status === "error").length;
+  if (failed) own.push({ id: "a2:fail", label: `Remove failed pictures (${failed})`, kind: "Action", icon: CMD_ICON.fail, hint: "Takes the pictures that couldn't be made off the canvas (Undo brings them back)", run: () => V.removeFailed() });
+  return own.concat(cc0 ? cc0() : []);
+};
+
+// ---------- start ----------
+const ssEl = $("#saveState"); if (ssEl && !ssEl.textContent) ssEl.setAttribute("aria-hidden", "true");
+binLoad().then(() => binPurge()).then(() => { paintBin(); V.paintStatus(); });
+estimate().then(() => V.paintStatus());
+setTimeout(() => { try { bridgeWords(); } catch (e) {} }, 1500);
+V.paintStatus();
 })();
 
 ;
